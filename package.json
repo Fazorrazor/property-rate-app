@@ -16,6 +16,7 @@
     "@prisma/adapter-better-sqlite3": "^7.9.1",
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
+    "@supabase/supabase-js": "^2.112.4",
     "better-sqlite3": "^13.0.3",
     "class-variance-authority": "^0.7.1",
     "framer-motion": "^13.1.1",
