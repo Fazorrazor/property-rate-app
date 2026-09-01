@@ -10,6 +10,6 @@ export default defineConfig({
     seed: "npx tsx ./prisma/seed.ts",
   },
   datasource: {
-    url: "file:./dev.db",
+    url: process.env.DATABASE_URL || "postgresql://postgres:P%4055word1243@127.0.0.1:5432/property_rate_db",
   },
 });

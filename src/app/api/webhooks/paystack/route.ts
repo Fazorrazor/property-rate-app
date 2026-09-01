@@ -122,18 +122,54 @@ export async function POST(req: Request) {
           },
         });
 
-        // Generate Receipt for this property
-        const uniqueSuffix = Math.floor(1000 + Math.random() * 9000);
-        const receiptNumber = `REC-KKMA-${new Date().getFullYear()}-${uniqueSuffix}`;
+        // 1. Claim next available GCR receipt number from municipal Value Book stock pool
+        const gcrRecord = await prisma.tGCRNr.findFirst({
+          where: { isUsed: false, isDamaged: false },
+          orderBy: { gcrNo: 'asc' },
+        });
 
+        const uniqueSuffix = Math.floor(1000 + Math.random() * 9000);
+        const receiptNumber: string = gcrRecord?.gcrNo || `GCR-KKMA-${new Date().getFullYear()}-${uniqueSuffix}`;
+        if (gcrRecord) {
+          // Gray out / mark receipt as consumed
+          await prisma.tGCRNr.update({
+            where: { id: gcrRecord.id },
+            data: {
+              isUsed: true,
+              allocatedAt: new Date(),
+            },
+          });
+        }
+
+        // 2. Create official FeePayment record (ARNOLD.BAK) stamped with APP_PAYMENT
+        await prisma.feePayment.create({
+          data: {
+            accountNo: prop.accountNumber,
+            arrearsPd: prop.arrears - newArrears,
+            curAmtPd: prop.currentFee - newCurrentFee,
+            amtPaid: propPaymentAmount,
+            pmtMode: 'Online App (Paystack)',
+            gcrNr: receiptNumber,
+            collectorsCollectorId: 'APP_PAYMENT',
+            cashiersCashierId: 'APP_PAYMENT',
+            userId: transaction.userId,
+            propertyId: prop.id,
+            transactionId: transaction.id,
+          },
+        });
+
+        // 3. Create digital portal Receipt record linked to transaction
         await prisma.receipt.create({
           data: {
             userId: transaction.userId,
             propertyId: prop.id,
             amount: propPaymentAmount,
             settlementType: transaction.settlementType,
-            paymentMethod: data.channel || 'Paystack',
-            status: 'PAID',
+            paymentMethod: data.channel || 'Paystack MoMo',
+            status: 'paid',
+            collectorName: 'APP_PAYMENT',
+            cashierName: 'APP_PAYMENT',
+            isPhysicalIssued: false,
             receiptNumber: receiptNumber,
             transactionId: transaction.id,
           },
@@ -160,12 +196,12 @@ export async function POST(req: Request) {
         } catch (err) {}
       }
 
-      // Send SMS Receipt (Fire and forget to keep webhook fast - Rule 3)
+      // Send SMS with official GCR Receipt and physical issuance notice (Rule 3)
       if (transaction.user && transaction.user.phoneNumber) {
         const smsGateway = new SMSGateway();
         smsGateway.getProvider().sendSMS(
           transaction.user.phoneNumber,
-          `Receipt from KKMA: We have successfully received your property rate payment of GHS ${amountPaid}. Thank you!`
+          `Payment Confirmed: GH₵${amountPaid.toFixed(2)} received. Official GCR Receipt #${transaction.receipt?.receiptNumber || 'Allocated'} issued. Your physical stamped copy will be issued out soon.`
         ).catch(smsErr => {
           console.error('Failed to send SMS receipt in background:', smsErr);
         });

@@ -778,9 +778,41 @@ export async function processPayment(data: {
         },
       });
 
-      const uniqueSuffix = Math.floor(1000 + Math.random() * 9000);
-      const receiptNumber = `REC-KKMA-${new Date().getFullYear()}-${uniqueSuffix}`;
+      // 1. Claim next available GCR receipt number from municipal Value Book stock pool
+      const gcrRecord = await prisma.tGCRNr.findFirst({
+        where: { isUsed: false, isDamaged: false },
+        orderBy: { gcrNo: 'asc' },
+      });
 
+      const uniqueSuffix = Math.floor(1000 + Math.random() * 9000);
+      const receiptNumber: string = gcrRecord?.gcrNo || `GCR-KKMA-${new Date().getFullYear()}-${uniqueSuffix}`;
+      if (gcrRecord) {
+        await prisma.tGCRNr.update({
+          where: { id: gcrRecord.id },
+          data: {
+            isUsed: true,
+            allocatedAt: new Date(),
+          },
+        });
+      }
+
+      // 2. Create official FeePayment record (ARNOLD.BAK) stamped with APP_PAYMENT
+      await prisma.feePayment.create({
+        data: {
+          accountNo: prop.accountNumber,
+          arrearsPd: prop.arrears - newArrears,
+          curAmtPd: prop.currentFee - newCurrentFee,
+          amtPaid: paymentAmount,
+          pmtMode: data.paymentMethod || 'Mobile Money',
+          gcrNr: receiptNumber,
+          collectorsCollectorId: 'APP_PAYMENT',
+          cashiersCashierId: 'APP_PAYMENT',
+          userId: user.id,
+          propertyId: prop.id,
+        },
+      });
+
+      // 3. Create digital portal Receipt record
       const receipt = await prisma.receipt.create({
         data: {
           userId: user.id,
@@ -789,7 +821,10 @@ export async function processPayment(data: {
           settlementType: settlementType,
           paymentMethod: data.paymentMethod,
           paymentPhoneNumber: data.paymentPhoneNumber,
-          status: 'PAID',
+          status: 'paid',
+          collectorName: 'APP_PAYMENT',
+          cashierName: 'APP_PAYMENT',
+          isPhysicalIssued: false,
           receiptNumber: receiptNumber,
         },
       });

@@ -1,7 +1,4 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
+// Complete Enterprise Municipal Schema from ARNOLD.BAK (PostgreSQL)
 
 generator client {
   provider = "prisma-client"
@@ -9,24 +6,29 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
 }
+
+// ==========================================
+// 1. CORE WEB APP AUTH & NOTIFICATIONS
+// ==========================================
 
 model User {
   id            String         @id @default(uuid())
   phoneNumber   String         @unique
   name          String?
-  role          String         @default("RATEPAYER") // RATEPAYER, ADMIN, SUPER_ADMIN
-  passwordHash  String? // For admin login authentication
+  role          String         @default("RATEPAYER") // RATEPAYER, ADMIN, SUPER_ADMIN, CASHIER, COLLECTOR
+  passwordHash  String?
   isVerified    Boolean        @default(false)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   properties    Property[]
   receipts      Receipt[]
+  feePayments   FeePayment[]
   transactions  Transaction[]
   notifications Notification[]
   sessions      Session[]
-  auditLogs     AuditLog[] // Logs of actions performed by this user (if admin)
+  auditLogs     AuditLog[]
 }
 
 model Notification {
@@ -37,97 +39,11 @@ model Notification {
   isRead            Boolean  @default(false)
   deliveryMethod    String   @default("IN_APP") // IN_APP, SMS
   deliveryStatus    String   @default("PENDING") // PENDING, DELIVERED, FAILED
-  externalMessageId String? // ID from SMS provider for tracking delivery
+  externalMessageId String?
   userId            String?
   user              User?    @relation(fields: [userId], references: [id])
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
-}
-
-model Property {
-  id                     String  @id @default(uuid())
-  // B. Property & Account Identifiers
-  accountNumber          String  @unique // Master Account Head (e.g. KKDA03188007)
-  ownerDigitalAddress    String // GhanaPost GPS / Taxpayer ID (e.g. GK-0010-9395)
-  physicalAddress        String? // Street address for manual delivery
-  municipality           String  @default("Kpone-Katamanso (KKMA)")
-  latitude               Float?
-  longitude              Float?
-  propertyClassification String // e.g. PRIVATE THIRD CLASS RESIDENTIAL
-
-  // D. Billing Timeline & Deadlines
-  billYear           Int      @default(2025)
-  billDate           DateTime @default(now())
-  settlementDeadline DateTime // Statutory cutoff date: e.g. 30-Jun-2025
-
-  // E. Valuation & Rate Computation
-  rateableValue Float // Property capital valuation
-  rateImposed   Float @default(0.00025) // Statutory rate multiplier factor
-
-  // F. Financial Breakdown & Ledger
-  previousYearBill   Float  @default(0.0)
-  amountPaidLastYear Float  @default(0.0)
-  arrears            Float  @default(0.0)
-  currentFee         Float // rateableValue * rateImposed
-  totalAmountDue     Float // arrears + currentFee
-  status             String @default("UNPAID") // UNPAID, PARTIALLY_PAID, PAID
-
-  users     User[]
-  receipts  Receipt[]
-  transactions Transaction[]
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-}
-
-model Receipt {
-  id             String   @id @default(uuid())
-  receiptNumber  String   @unique
-  amount         Float
-  settlementType String   @default("TOTAL") // TOTAL, ARREARS, CURRENT_FEE
-  paymentMethod  String   @default("Mobile Money (MTN)")
-  paymentPhoneNumber String?
-  status         String   @default("paid") // paid, pending, failed
-  datePaid       DateTime @default(now())
-  userId         String
-  user           User     @relation(fields: [userId], references: [id])
-  propertyId     String
-  property       Property     @relation(fields: [propertyId], references: [id])
-  transactionId  String?      @unique
-  transaction    Transaction? @relation(fields: [transactionId], references: [id])
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime @updatedAt
-}
-
-model AuditLog {
-  id         String   @id @default(uuid())
-  action     String // e.g., RECORD_PAYMENT, BATCH_BILLING, EDIT_PROPERTY
-  entityType String // e.g., Property, Receipt, Notification
-  entityId   String? // The ID of the affected record
-  details    String // JSON string or description of what changed
-  adminId    String
-  admin      User     @relation(fields: [adminId], references: [id])
-  createdAt  DateTime @default(now())
-}
-
-model Transaction {
-  id             String   @id @default(uuid())
-  reference      String   @unique // Provider's unique reference
-  provider       String   @default("PAYSTACK") // Orchestration tracking
-  amount         Float
-  currency       String   @default("GHS")
-  paymentPhoneNumber String?
-  status         String   @default("PENDING") // PENDING, SUCCESS, FAILED, ABANDONED
-  settlementType String   // TOTAL, ARREARS, CURRENT_FEE
-  userId         String
-  propertyId     String
-  
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  
-  // Relations
-  user           User     @relation(fields: [userId], references: [id])
-  property       Property @relation(fields: [propertyId], references: [id])
-  receipt        Receipt? // Created only upon successful reconciliation
 }
 
 model Session {
@@ -137,4 +53,566 @@ model Session {
   user      User     @relation(fields: [userId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  action     String // RECORD_PAYMENT, BATCH_BILLING, EDIT_PROPERTY, GCR_ALLOCATE
+  entityType String // Property, Receipt, Notification, TGCRNr
+  entityId   String?
+  details    String
+  adminId    String
+  admin      User     @relation(fields: [adminId], references: [id])
+  createdAt  DateTime @default(now())
+}
+
+model Transaction {
+  id                 String      @id @default(uuid())
+  reference          String      @unique
+  provider           String      @default("PAYSTACK")
+  amount             Float
+  currency           String      @default("GHS")
+  paymentPhoneNumber String?
+  status             String      @default("PENDING") // PENDING, SUCCESS, FAILED, ABANDONED
+  settlementType     String      // TOTAL, ARREARS, CURRENT_FEE
+  userId             String
+  propertyId         String
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+  user               User        @relation(fields: [userId], references: [id])
+  property           Property    @relation(fields: [propertyId], references: [id])
+  receipt            Receipt?
+  feePayment         FeePayment?
+}
+
+// ==========================================
+// 2. VALUE BOOKS & GCR RECEIPT POOL (ARNOLD.BAK)
+// ==========================================
+
+model TVBType {
+  code     String    @id
+  type     String
+  quantity Int       @default(100)
+  stocks   VBStock[]
+}
+
+model VBStock {
+  id             String          @id @default(uuid())
+  vbTypeCode     String
+  startSerial    String
+  endSerial      String
+  quantity       Int
+  voucherNo      String?
+  costPerSheet   Float?          @default(0.0)
+  date           DateTime        @default(now())
+  vbType         TVBType         @relation(fields: [vbTypeCode], references: [code])
+  collectorsGCRs CollectorsGCRs[]
+}
+
+model CollectorsGCRs {
+  id           String    @id @default(uuid())
+  collectorsId String
+  minGCRNr     String
+  maxGCRNr     String
+  quantity     Int
+  dateReturn   DateTime?
+  typeCode     String?
+  ownerType    String?   @default("COLLECTOR")
+  isReturned   Boolean   @default(false)
+  isDamaged    Boolean   @default(false)
+  isMissing    Boolean   @default(false)
+  isUsed       Boolean   @default(false)
+  inStock      Boolean   @default(true)
+  stockId      String?
+  collector    Collector @relation(fields: [collectorsId], references: [collectorId])
+  stock        VBStock?  @relation(fields: [stockId], references: [id])
+  gcrNumbers   TGCRNr[]
+}
+
+model TGCRNr {
+  id               String          @id @default(uuid())
+  gcrNo            String          @unique // e.g. GCR-104928
+  collectorsGCRsId String?
+  isUsed           Boolean         @default(false) // Grayed out when payment allocated
+  isDamaged        Boolean         @default(false)
+  allocatedAt      DateTime?
+  collectorsGCRs   CollectorsGCRs? @relation(fields: [collectorsGCRsId], references: [id])
+  feePayment       FeePayment?
+}
+
+model FeePayment {
+  id                    String       @id @default(uuid())
+  accountNo             String
+  arrearsPd             Float        @default(0.0)
+  curAmtPd              Float        @default(0.0)
+  amtPaid               Float
+  datePaid              DateTime     @default(now())
+  pmtMode               String       @default("Mobile Money") // Cash, MoMo, Bank, App
+  gcrNr                 String       @unique // Linked to TGCRNr.gcrNo
+  collectorsCollectorId String       @default("APP_PAYMENT") // Officer ID or APP_PAYMENT
+  cashiersCashierId     String       @default("APP_PAYMENT") // Cashier ID or APP_PAYMENT
+  adate                 DateTime     @default(now())
+  gcatId                String?
+  userId                String?
+  propertyId            String?
+  transactionId         String?      @unique
+  user                  User?        @relation(fields: [userId], references: [id])
+  property              Property?    @relation(fields: [propertyId], references: [id])
+  transaction           Transaction? @relation(fields: [transactionId], references: [id])
+  gcrRecord             TGCRNr       @relation(fields: [gcrNr], references: [gcrNo])
+}
+
+model Receipt {
+  id                 String       @id @default(uuid())
+  receiptNumber      String       @unique // Matches GCRNr
+  amount             Float
+  settlementType     String       @default("TOTAL")
+  paymentMethod      String       @default("Mobile Money (MTN)")
+  paymentPhoneNumber String?
+  status             String       @default("paid")
+  collectorName      String       @default("APP_PAYMENT")
+  cashierName        String       @default("APP_PAYMENT")
+  isPhysicalIssued   Boolean      @default(false)
+  datePaid           DateTime     @default(now())
+  userId             String
+  propertyId         String
+  transactionId      String?      @unique
+  user               User         @relation(fields: [userId], references: [id])
+  property           Property     @relation(fields: [propertyId], references: [id])
+  transaction        Transaction? @relation(fields: [transactionId], references: [id])
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+}
+
+model CollectorsCommPmt {
+  id                   String    @id @default(uuid())
+  collectorsCollectorId String
+  amtPaid              Float
+  datePaid             DateTime  @default(now())
+  collector            Collector @relation(fields: [collectorsCollectorId], references: [collectorId])
+}
+
+model TblCollectorAlert {
+  id           String    @id @default(uuid())
+  collectorId  String
+  alertMessage String
+  createdAt    DateTime  @default(now())
+  collector    Collector @relation(fields: [collectorId], references: [collectorId])
+}
+
+// ==========================================
+// 3. PROPERTY & VALUATION CADASTRE (ARNOLD.BAK)
+// ==========================================
+
+model PropertyOwner {
+  ownerId                String     @id @default(uuid())
+  name                   String
+  address                String?
+  tel                    String?
+  email                  String?
+  mobileNumber           String?
+  streetAddress          String?
+  corporationPartnership String?
+  properties             Property[]
+}
+
+model PropertyType {
+  code       String             @id
+  type       String
+  gcatId     String?
+  budgetCode String?
+  categories PropertyCategory[]
+  properties Property[]
+}
+
+model PropertyCategory {
+  code             String       @id
+  ccode            String?
+  category         String
+  propertyTypeCode String
+  minCharge        Float        @default(0.0)
+  gcatId           String?
+  propertyType     PropertyType @relation(fields: [propertyTypeCode], references: [code])
+  properties       Property[]
+}
+
+model FixedFee {
+  id               String  @id @default(uuid())
+  yYear            Int     @default(2025)
+  ratePA           Float   @default(0.00025)
+  propertyCatCode  String
+  propertyTypeCode String
+  minCharge        Float   @default(0.0)
+  gcatId           String?
+}
+
+model TAssessmentType {
+  id             String @id @default(uuid())
+  assessmentType String
+}
+
+model TConstructionMaterial {
+  id       String @id @default(uuid())
+  material String
+}
+
+model TPremise {
+  id          String @id @default(uuid())
+  premiseType String
+}
+
+model TOccupants {
+  id        String @id @default(uuid())
+  occupants String
+}
+
+model TblUse {
+  id      String @id @default(uuid())
+  useType String
+}
+
+model TblDocument {
+  id           String  @id @default(uuid())
+  documentType String
+  ddocument    String?
+}
+
+model Property {
+  id                     String            @id @default(uuid())
+  accountNumber          String            @unique // e.g. KKDA03188007, MA11078001
+  ownerDigitalAddress    String            // GhanaPost GPS e.g. GK-0010-9395
+  physicalAddress        String?
+  houseNo                String?
+  plotNo                 String?
+  valuationNo            String?
+  municipality           String            @default("Kpone-Katamanso (KKMA)")
+  latitude               Float?
+  longitude              Float?
+  propertyClassification String            @default("PRIVATE THIRD CLASS RESIDENTIAL")
+  billYear               Int               @default(2025)
+  billDate               DateTime          @default(now())
+  settlementDeadline     DateTime
+  rateableValue          Float             // Capital valuation
+  rateImposed            Float             @default(0.00025)
+  previousYearBill       Float             @default(0.0)
+  amountPaidLastYear     Float             @default(0.0)
+  arrears                Float             @default(0.0)
+  currentFee             Float
+  totalAmountDue         Float
+  status                 String            @default("UNPAID") // UNPAID, PARTIALLY_PAID, PAID
+  ownerId                String?
+  propertyTypeCode       String?
+  propertyCategoryCode   String?
+  streetCode             String?
+  communityCode          String?
+  subMetroCode           String?
+  owner                  PropertyOwner?    @relation(fields: [ownerId], references: [ownerId])
+  propertyType           PropertyType?     @relation(fields: [propertyTypeCode], references: [code])
+  propertyCategory       PropertyCategory? @relation(fields: [propertyCategoryCode], references: [code])
+  street                 Street?           @relation(fields: [streetCode], references: [code])
+  community              Community?        @relation(fields: [communityCode], references: [code])
+  subMetro               SubMetro?         @relation(fields: [subMetroCode], references: [code])
+  users                  User[]
+  receipts               Receipt[]
+  feePayments            FeePayment[]
+  transactions           Transaction[]
+  bills                  Bill[]
+  adjustArrears          AdjustArrear[]
+  defaulters             DefaultersList[]
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+}
+
+// ==========================================
+// 4. BILLING, ADJUSTMENTS & TARGETS (ARNOLD.BAK)
+// ==========================================
+
+model Bill {
+  id             String    @id @default(uuid())
+  accountNo      String
+  rateableValue  Float
+  billYear       Int       @default(2025)
+  gcatId         String?
+  preparedBy     String?   @default("SYSTEM")
+  balanceBF      Float     @default(0.0) // Arrears brought forward
+  ratePA         Float     @default(0.00025)
+  accountBalance Float     @default(0.0)
+  billDate       DateTime  @default(now())
+  printed        Boolean   @default(false)
+  property       Property? @relation(fields: [accountNo], references: [accountNumber])
+}
+
+model BillSetting {
+  id                  String   @id @default(uuid())
+  coordinatorsNumber  String?
+  pmtDate             DateTime?
+  ratePADecimalPlaces Int      @default(5)
+  autogenerateCode    Boolean  @default(true)
+  collectorLocation   String?
+  gcatId              String?
+}
+
+model AdjustArrear {
+  id         String    @id @default(uuid())
+  accountNo  String
+  billYear   Int
+  amount     Float
+  date       DateTime  @default(now())
+  adjustedBy String
+  gcatId     String?
+  property   Property? @relation(fields: [accountNo], references: [accountNumber])
+}
+
+model DefaultersList {
+  id        String    @id @default(uuid())
+  accountNo String
+  billYear  Int
+  gcatId    String?
+  property  Property? @relation(fields: [accountNo], references: [accountNumber])
+}
+
+model AccountingTarget {
+  id             String  @id @default(uuid())
+  collectionYear Int
+  budgetCode     String
+  month          Int
+  targetAmount   Float
+  gcatId         String?
+}
+
+model OverallCollectionTarget {
+  id             String  @id @default(uuid())
+  collectionYear Int
+  month          Int
+  targetAmount   Float
+  gcatId         String?
+}
+
+model CollectorCollectionTarget {
+  id                    String    @id @default(uuid())
+  collectionYear        Int
+  collectorsCollectorId String
+  month                 Int
+  targetAmount          Float
+  gcatId                String?
+  collector             Collector @relation(fields: [collectorsCollectorId], references: [collectorId])
+}
+
+// ==========================================
+// 5. BUSINESS OPERATING PERMITS (BOP) (ARNOLD.BAK)
+// ==========================================
+
+model TIndustry {
+  id         String      @id @default(uuid())
+  industry   String
+  businesses TBusiness[]
+}
+
+model TGeneralCategory {
+  id           String @id @default(uuid())
+  categoryName String
+}
+
+model TGroup {
+  id        String @id @default(uuid())
+  groupName String
+}
+
+model TBusiness {
+  id                  String          @id @default(uuid())
+  accountNo           String          @unique
+  businessName        String
+  tin                 String?
+  vatNo               String?
+  businessTypeCode    String?
+  businessCatCode     String?
+  industryId          String?
+  address             String?
+  registrationNo      String?
+  registrationDate    DateTime?
+  commencementDate    DateTime?
+  phoneNo             String?
+  fax                 String?
+  email               String?
+  noOfEmployee        Int?            @default(0)
+  numMale             Int?            @default(0)
+  numFemale           Int?            @default(0)
+  subMetroCode        String?
+  townAreaCouncilCode String?
+  streetCode          String?
+  houseNo             String?
+  rateableValue       Float?          @default(0.0)
+  industry            TIndustry?      @relation(fields: [industryId], references: [id])
+  permits             TblPermitInfo[]
+}
+
+model TblPermitInfo {
+  id                     String                @id @default(uuid())
+  permitNumber           String                @unique
+  businessId             String?
+  dateReceived           DateTime              @default(now())
+  buildingNumber         String?
+  streetName             String?
+  unitNumber             String?
+  lotPlotNo              String?
+  planNumber             String?
+  municipality           String?
+  estimatedCost          Float?                @default(0.0)
+  areaOfWork             String?
+  purposeOfApplication   String?
+  purposeOfBuilding      String?
+  currentUseOfBuilding   String?
+  permitStatus           String                @default("PENDING")
+  comments               String?
+  business               TBusiness?            @relation(fields: [businessId], references: [id])
+  payments               TblPermitPayment[]
+  inspections            TblPermitInspection[]
+}
+
+model TblPermitPayment {
+  id           String        @id @default(uuid())
+  permitInfoId String
+  amountPaid   Float
+  datePaid     DateTime      @default(now())
+  paymentMode  String        @default("Cash")
+  permitInfo   TblPermitInfo @relation(fields: [permitInfoId], references: [id])
+}
+
+model TblPermitInspection {
+  id             String        @id @default(uuid())
+  permitInfoId   String
+  inspectionDate DateTime      @default(now())
+  inspectorName  String
+  status         String        @default("PASSED")
+  remarks        String?
+  permitInfo     TblPermitInfo @relation(fields: [permitInfoId], references: [id])
+}
+
+// ==========================================
+// 6. STAFF & REVENUE MOBILIZATION (ARNOLD.BAK)
+// ==========================================
+
+model Collector {
+  collectorId      String                      @id
+  fullName         String
+  address          String?
+  collectionArea   String?
+  pctCommission    Float?                      @default(0.0)
+  guarantorName    String?
+  telephone        String?
+  gPlaceOfWork     String?
+  guaranteeValue   Float?                      @default(0.0)
+  collectorType    String?                     @default("FIELD")
+  gcrs             CollectorsGCRs[]
+  commPmts         CollectorsCommPmt[]
+  alerts           TblCollectorAlert[]
+  targets          CollectorCollectionTarget[]
+  assignments      TAssignCollector[]
+}
+
+model Cashier {
+  cashierId      String  @id
+  fullName       String
+  address        String?
+  collectionArea String?
+  pctCommission  Float?  @default(0.0)
+}
+
+model Supervisor {
+  supervisorId String             @id
+  fullName     String
+  address      String?
+  assignments  TAssignCollector[]
+}
+
+model TAssignCollector {
+  id                  String      @id @default(uuid())
+  collectorId         String
+  supervisorId        String?
+  constituencyCode    String?
+  subMetroCode        String?
+  townAreaCouncilCode String?
+  electoralAreaCode   String?
+  unitCommAreaCode    String?
+  communityCode       String?
+  assignedFrom        DateTime    @default(now())
+  assignedTo          DateTime?
+  dateAssigned        DateTime    @default(now())
+  collector           Collector   @relation(fields: [collectorId], references: [collectorId])
+  supervisor          Supervisor? @relation(fields: [supervisorId], references: [supervisorId])
+}
+
+// ==========================================
+// 7. MUNICIPAL JURISDICTION HIERARCHY (ARNOLD.BAK)
+// ==========================================
+
+model SubMetro {
+  code        String            @id
+  subMetro    String
+  councils    TownAreaCouncil[]
+  properties  Property[]
+}
+
+model TownAreaCouncil {
+  code             String          @id
+  townAreaCouncil  String
+  subMetroCode     String
+  subMetro         SubMetro        @relation(fields: [subMetroCode], references: [code])
+  electoralAreas   ElectoralArea[]
+}
+
+model ElectoralArea {
+  code                String          @id
+  electoralArea       String
+  townAreaCouncilCode String
+  townAreaCouncil     TownAreaCouncil @relation(fields: [townAreaCouncilCode], references: [code])
+  unitCommAreas       UnitCommArea[]
+}
+
+model UnitCommArea {
+  code              String        @id
+  unitCommArea      String
+  electoralAreaCode String
+  electoralArea     ElectoralArea @relation(fields: [electoralAreaCode], references: [code])
+  communities       Community[]
+}
+
+model Community {
+  code             String       @id
+  community        String
+  unitCommAreaCode String
+  unitCommArea     UnitCommArea @relation(fields: [unitCommAreaCode], references: [code])
+  streets          Street[]
+  properties       Property[]
+}
+
+model Street {
+  code          String     @id
+  street        String
+  communityCode String
+  community     Community  @relation(fields: [communityCode], references: [code])
+  properties    Property[]
+}
+
+model Constituency {
+  code         String @id
+  constituency String
+}
+
+model OperativeOrg {
+  id               String  @id @default(uuid())
+  orgName          String
+  address          String?
+  phone            String?
+  email            String?
+  fax              String?
+  pctCommOnAllColl Float?  @default(0.0)
+  orgLogo          String?
+}
+
+model EventLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  eventDate DateTime @default(now())
+  event     String
 }
