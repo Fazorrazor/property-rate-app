@@ -51,3 +51,6 @@ src/generated/prisma/
 
 # scratch & temporary files
 scratch/
+*.BAK
+docs/DB/
+
