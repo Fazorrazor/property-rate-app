@@ -4,14 +4,14 @@
 
 ---
 
-## ADR-001: Flutter for Cross-Platform Delivery
-**Status:** Accepted
-**Decision:** We will use Flutter (Dart) to build both the Citizen Ratepayer Mobile App (iOS/Android) and the Client Management & Admin Portal (Web).
-**Rationale:** A single unified codebase drastically reduces development overhead for a municipal project. Flutter's rendering engine guarantees a consistent, high-performance UI across all devices, ensuring no citizen is left behind due to hardware fragmentation.
+## ADR-001: Next.js PWA & Prisma ORM
+**Status:** Accepted (Pivoted from Flutter)
+**Decision:** We will use Next.js (React/TypeScript) to build a Progressive Web App (PWA) for citizens and the Admin Portal, connecting to the client's existing SQL database via Prisma ORM.
+**Rationale:** Next.js eliminates the need for massive local mobile SDK storage (e.g., Android Studio/Xcode) during development. A PWA provides a native app feel ("Add to Home Screen") while allowing us to unify the frontend and backend API logic in a single, lightweight TypeScript repository.
 
-## ADR-002: Offline-First Receipt Archiving
+## ADR-002: Offline-First Receipt Archiving via IndexedDB
 **Status:** Accepted
-**Decision:** The application will implement a local database (e.g., Isar or SQLite) to cache digital receipts securely on the device.
+**Decision:** The PWA will implement a Service Worker (`next-pwa`) and use the browser's `IndexedDB` to cache digital receipts securely on the device.
 **Rationale:** Network reliability cannot be guaranteed. Citizens must be able to present proof of payment to municipal inspectors even when completely offline. This builds trust and resolves dispute issues.
 
 ## ADR-003: Adapter Pattern for Mobile Money Gateways
@@ -24,7 +24,7 @@
 **Decision:** Demand notices and billing cycles will dispatch via Push Notification first, falling back to SMS if the device is unreachable or the user hasn't installed the app.
 **Rationale:** Maximizes reach for revenue mobilization. Push notifications are free, but SMS guarantees delivery to property owners who may not be active app users.
 
-## ADR-005: Civic Premium UI Aesthetics
+## ADR-005: Material Design 3 (Material You)
 **Status:** Accepted
-**Decision:** The UI will heavily leverage modern aesthetics (vibrant functional colors, glassmorphism hints, dynamic micro-animations) while adhering to strict WCAG accessibility standards.
-**Rationale:** A premium, state-of-the-art interface reassures the citizen that their money is being handled by a competent, secure system. High-end design directly correlates with perceived trustworthiness in fintech/civic applications.
+**Decision:** The UI will strictly adhere to Google's Material Design 3 specifications, utilizing Design Tokens, Semantic Color Roles, and Tonal Elevation.
+**Rationale:** Material 3 provides a mathematically precise, highly accessible design system. It ensures the interface feels approachable, official, and state-of-the-art, removing bureaucratic clutter and instilling citizen trust.

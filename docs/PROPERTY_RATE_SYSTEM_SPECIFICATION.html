@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Property Rate Management Platform - System Specification</title>
+    <style>
+        @page {
+            size: A4 portrait;
+            margin: 12mm 15mm 12mm 15mm;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+        }
+
+        html, body {
+            background-color: #ffffff !important;
+            color: #000000 !important;
+            font-family: "Times New Roman", Times, "Liberation Serif", Georgia, serif;
+            line-height: 1.4;
+            font-size: 10.5pt;
+        }
+
+        body {
+            padding: 0;
+        }
+
+        .document-container {
+            width: 100%;
+        }
+
+        /* Top Title & Header */
+        .doc-title-bar {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .doc-main-title {
+            font-size: 14pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 2px;
+        }
+
+        .doc-sub-title {
+            font-size: 10.5pt;
+            font-style: italic;
+            color: #111111;
+        }
+
+        /* Framed Instructions / Overview Box */
+        .instruction-box {
+            border: 1.5px solid #000000;
+            padding: 8px 12px;
+            margin-bottom: 12px;
+            background-color: #ffffff;
+        }
+
+        .instruction-header {
+            font-size: 10pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            text-decoration: underline;
+            margin-bottom: 4px;
+            letter-spacing: 0.5px;
+        }
+
+        .instruction-list {
+            margin-left: 18px;
+            font-size: 9.5pt;
+        }
+
+        .instruction-list li {
+            margin-bottom: 3px;
+            text-align: justify;
+        }
+
+        /* Section Dividers */
+        .section-divider {
+            text-align: center;
+            margin: 12px 0 8px 0;
+            page-break-after: avoid;
+        }
+
+        .section-divider-line {
+            border: none;
+            border-top: 1.5px solid #000000;
+            margin: 2px 0;
+        }
+
+        .section-title {
+            font-size: 11pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            padding: 2px 0;
+        }
+
+        .section-subtitle {
+            font-size: 9pt;
+            font-style: italic;
+            margin-top: 1px;
+        }
+
+        /* Tables */
+        .table-wrapper {
+            margin: 8px 0;
+            page-break-inside: avoid;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            border: 1.5px solid #000000;
+            font-size: 9pt;
+        }
+
+        thead {
+            background-color: #f2f2f2 !important;
+            border-bottom: 1.5px solid #000000;
+        }
+
+        th {
+            padding: 5px 8px;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 8.5pt;
+            letter-spacing: 0.4px;
+            border: 1px solid #000000;
+            text-align: left;
+            vertical-align: middle;
+        }
+
+        td {
+            padding: 4.5px 8px;
+            border: 1px solid #000000;
+            vertical-align: middle;
+            text-align: left;
+            color: #000000;
+            line-height: 1.3;
+        }
+
+        td strong {
+            font-weight: bold;
+        }
+
+        /* Module Framing Boxes */
+        .module-box {
+            border: 1.5px solid #000000;
+            padding: 12px 14px;
+            margin-bottom: 14px;
+            background-color: #ffffff;
+            page-break-inside: avoid;
+        }
+
+        .module-title {
+            font-size: 10.5pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid #000000;
+            padding-bottom: 4px;
+            margin-bottom: 8px;
+        }
+
+        .module-content ol {
+            margin-left: 18px;
+            font-size: 9.5pt;
+        }
+
+        .module-content li {
+            margin-bottom: 7px;
+            text-align: justify;
+        }
+
+        .module-content ul {
+            margin-left: 18px;
+            margin-top: 4px;
+            margin-bottom: 4px;
+            font-size: 9pt;
+        }
+
+        .module-content ul li {
+            margin-bottom: 3px;
+        }
+
+        /* Formula Presentation Box */
+        .formula-box {
+            border: 1px solid #000000;
+            background-color: #f8f8f8 !important;
+            padding: 6px 10px;
+            margin: 6px 0;
+            font-family: "Courier New", Courier, monospace;
+            font-size: 9pt;
+            font-weight: bold;
+        }
+
+        /* Footer */
+        .doc-footer {
+            margin-top: 16px;
+            padding-top: 6px;
+            border-top: 1.5px solid #000000;
+            text-align: center;
+            font-size: 8pt;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            page-break-inside: avoid;
+        }
+
+        .page-break {
+            page-break-before: always;
+        }
+    </style>
+</head>
+<body>
+
+<div class="document-container">
+
+    <!-- PAGE 1: TITLE, DIRECTIVES & EXACT 13 FIELD SPECIFICATION -->
+    <div class="doc-title-bar">
+        <h1 class="doc-main-title">Two-Way Property Rate Digital Administration Platform</h1>
+        <div class="doc-sub-title">Technical Architecture &amp; Operational Specification Document</div>
+    </div>
+
+    <div class="instruction-box">
+        <div class="instruction-header">System Scope &amp; Implementation Directives:</div>
+        <ol class="instruction-list">
+            <li><strong>Two-Way Interaction Model:</strong> The platform establishes a synchronized digital bridge between Municipal Revenue Administration (Client/Assembly) and Property Rate Payers (Citizens).</li>
+            <li><strong>Consolidated In-App Settlement:</strong> Replaces disconnected SMS hyperlinks with a unified, in-app digital demand notice and integrated payment gateway engine.</li>
+            <li><strong>Automated Assessment Rollout:</strong> Standardizes annual batch billing, carried-forward arrears consolidation, and automated notification dispatch.</li>
+        </ol>
+    </div>
+
+    <div class="section-divider">
+        <hr class="section-divider-line">
+        <div class="section-title">SECTION 1 &mdash; BASELINE DATA STRUCTURE &amp; FIELD SPECIFICATION</div>
+        <div class="section-subtitle">Core Data Schema, Field Definitions, and Architectural Purpose</div>
+        <hr class="section-divider-line">
+    </div>
+
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 25%;">Category</th>
+                    <th style="width: 23%;">Field Identifier</th>
+                    <th style="width: 17%;">Data Type &amp; Format</th>
+                    <th style="width: 35%;">Functional Definition &amp; System Purpose</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- B. Property & Account Identifiers -->
+                <tr>
+                    <td rowspan="3"><strong>B. Property &amp; Account Identifiers</strong></td>
+                    <td>Account No.</td>
+                    <td>Alphanumeric (Indexed)</td>
+                    <td>Primary Account Head and unique municipal property identifier; acts as master database key for records, lookup, and payment reconciliation.</td>
+                </tr>
+                <tr>
+                    <td>Owner / Digital Address</td>
+                    <td>Alphanumeric (GPS Format)</td>
+                    <td>GhanaPost GPS digital address / Taxpayer ID; ties the property account to its physical location coordinates.</td>
+                </tr>
+                <tr>
+                    <td>Property Classification</td>
+                    <td>Enumerated Category</td>
+                    <td>Zoning and property classification (e.g., Residential Classes, Commercial) determining the applied rating factor.</td>
+                </tr>
+
+                <!-- D. Billing Timeline & Deadlines -->
+                <tr>
+                    <td rowspan="3"><strong>D. Billing Timeline &amp; Deadlines</strong></td>
+                    <td>Bill Year</td>
+                    <td>Integer (YYYY)</td>
+                    <td>Active assessment fiscal year for statutory municipal rating and billing cycles.</td>
+                </tr>
+                <tr>
+                    <td>Bill Date (Issued)</td>
+                    <td>Date (DD-MMM-YYYY)</td>
+                    <td>Official timestamp of demand notice generation and dispatch to the taxpayer.</td>
+                </tr>
+                <tr>
+                    <td>Settlement Deadline (Due Date)</td>
+                    <td>Date (DD-MMM-YYYY)</td>
+                    <td>Statutory cutoff date (e.g., June 30), after which unsettled accounts are flagged for administrative follow-up.</td>
+                </tr>
+
+                <!-- E. Valuation & Rate Computation -->
+                <tr>
+                    <td rowspan="2"><strong>E. Valuation &amp; Rate Computation</strong></td>
+                    <td>Rateable Value</td>
+                    <td>Decimal / Currency</td>
+                    <td>Certified property capital valuation assessed by rating authorities.</td>
+                </tr>
+                <tr>
+                    <td>Rate Imposed (Rate-in-the-Cedi)</td>
+                    <td>Decimal Multiplier</td>
+                    <td>Statutory rate multiplier applied against the Rateable Value to compute the current fee.</td>
+                </tr>
+
+                <!-- F. Financial Breakdown (Bill Table) -->
+                <tr>
+                    <td rowspan="5"><strong>F. Financial Breakdown (Bill Table)</strong></td>
+                    <td>Previous Year Bill</td>
+                    <td>Decimal / Currency</td>
+                    <td>Total assessed fee billed during the preceding fiscal year.</td>
+                </tr>
+                <tr>
+                    <td>Amount Paid (Last Yr)</td>
+                    <td>Decimal / Currency</td>
+                    <td>Total payments credited against the previous year's bill.</td>
+                </tr>
+                <tr>
+                    <td>Arrears</td>
+                    <td>Decimal / Currency</td>
+                    <td>Cumulative outstanding debt carried forward from prior unpaid cycles.</td>
+                </tr>
+                <tr>
+                    <td>Current Fee</td>
+                    <td>Decimal / Currency</td>
+                    <td>Active period fee levied for the assessment year (Rateable Value &times; Rate Imposed).</td>
+                </tr>
+                <tr>
+                    <td>Total Amount Due</td>
+                    <td>Decimal / Currency</td>
+                    <td>Consolidated balance payable by the taxpayer (Arrears + Current Fee).</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- PAGE BREAK FOR CLEAN SECTION 2 ON PAGE 2 -->
+    <div class="page-break"></div>
+
+    <!-- PAGE 2: SECTION 2 -->
+    <div class="section-divider">
+        <hr class="section-divider-line">
+        <div class="section-title">SECTION 2 &mdash; TWO-WAY SYSTEM ARCHITECTURE</div>
+        <div class="section-subtitle">Functional Modules, Integration Layers, and Bidirectional Workflows</div>
+        <hr class="section-divider-line">
+    </div>
+
+    <div class="module-box">
+        <div class="module-title">Module A: Taxpayer Mobile Interface (Citizen Application)</div>
+        <div class="module-content">
+            <ol>
+                <li><strong>Telephone Authentication &amp; Account Number Resolution:</strong>
+                    Taxpayers authenticate using their mobile telephone number via SMS OTP. The telephone number serves strictly as an authentication and verification mechanism. Once verified against records present in the database, the system resolves and displays all property <strong>Account Numbers (Account Heads)</strong> registered under that contact number.
+                </li>
+                <li><strong>Native Digital Demand Notice Display:</strong>
+                    Provides an authenticated, mathematically transparent demand notice interface displaying Account No., Owner/Digital Address, Classification, Rate Calculation Formula, and Itemized Ledger in real time.
+                </li>
+                <li><strong>Integrated In-App Settlement Engine:</strong>
+                    A native payment engine embedded directly on the bill supporting modular settlement options:
+                    <ul>
+                        <li><strong>Full Balance Settlement:</strong> Settle total consolidated outstanding liability.</li>
+                        <li><strong>Arrears Settlement Only:</strong> Settle carried-forward prior debt independently.</li>
+                        <li><strong>Active Year Assessment Only:</strong> Settle current period fee independently.</li>
+                    </ul>
+                </li>
+                <li><strong>Multi-Channel Payment Gateway:</strong>
+                    Direct integration with Mobile Money payment rails (MTN Mobile Money, Telecel Cash, AT Money) and Bank Debit/Credit cards.
+                </li>
+                <li><strong>Automated Proof of Payment Issuance:</strong>
+                    Upon instant payment gateway confirmation, the system generates an official authenticated digital receipt stored permanently within the taxpayer's account ledger.
+                </li>
+            </ol>
+        </div>
+    </div>
+
+    <div class="module-box">
+        <div class="module-title">Module B: Municipal Administration &amp; Revenue Automation Portal</div>
+        <div class="module-content">
+            <ol>
+                <li><strong>Automated Annual Batch Billing Engine:</strong>
+                    Scheduled annual computation engine triggered during the opening fiscal window to compute assessments across all registered properties:
+                    <div class="formula-box">
+                        Current Fee = Rateable Value &times; Rate Imposed<br>
+                        Total Amount Due = Arrears + Current Fee
+                    </div>
+                </li>
+                <li><strong>Automated SMS Broadcast &amp; Secure Token Dispatch:</strong>
+                    Mass messaging pipeline that delivers concise statutory billing alerts to telephone numbers registered on each property <strong>Account Number</strong>, containing secure single-session token links that open the specific bill directly within the mobile application.
+                </li>
+                <li><strong>Revenue Analytics &amp; Defaulter Tracking:</strong>
+                    Administrative dashboard providing real-time collection metrics filtered by Property Classification and Billing Status. Accounts with unpaid balances past the statutory settlement deadline (June 30) are automatically flagged for administrative follow-up.
+                </li>
+            </ol>
+        </div>
+    </div>
+
+    <!-- PAGE BREAK FOR CLEAN SECTION 3 ON PAGE 3 -->
+    <div class="page-break"></div>
+
+    <!-- PAGE 3: SECTION 3 -->
+    <div class="section-divider">
+        <hr class="section-divider-line">
+        <div class="section-title">SECTION 3 &mdash; END-TO-END OPERATIONAL WORKFLOW</div>
+        <div class="section-subtitle">Lifecycle Stages, Execution Hierarchy, and Financial Ledger Principles</div>
+        <hr class="section-divider-line">
+    </div>
+
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 20%;">Operational Phase</th>
+                    <th style="width: 38%;">System Action &amp; Execution Logic</th>
+                    <th style="width: 20%;">Responsible Party</th>
+                    <th style="width: 22%;">Output / Deliverable</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>1. Annual Rollout</strong></td>
+                    <td>System executes batch computation; assesses current year fees and rolls uncollected previous balances into arrears.</td>
+                    <td>Municipal Revenue Unit</td>
+                    <td>Annual Assessment Roll</td>
+                </tr>
+                <tr>
+                    <td><strong>2. Notification Dispatch</strong></td>
+                    <td>Automated SMS engine broadcasts demand notices with encrypted deep-links to registered mobile telephone numbers tied to each property Account Number.</td>
+                    <td>Automated Messaging Service</td>
+                    <td>Direct Taxpayer Notification</td>
+                </tr>
+                <tr>
+                    <td><strong>3. Demand Notice Ingestion</strong></td>
+                    <td>Taxpayer opens secure link; reviews itemized assessment, valuation factor, and arrears balance.</td>
+                    <td>Property Rate Payer</td>
+                    <td>Authenticated Bill View</td>
+                </tr>
+                <tr>
+                    <td><strong>4. In-App Settlement</strong></td>
+                    <td>Taxpayer selects settlement amount (total amount due, arrears, or current fee) and authorizes transaction via payment gateway.</td>
+                    <td>Payment Gateway / Payer</td>
+                    <td>Real-Time Settlement Webhook</td>
+                </tr>
+                <tr>
+                    <td><strong>5. Ledger Reconciliation</strong></td>
+                    <td>System database updates property ledger, reduces balance, and issues official digital receipt.</td>
+                    <td>Core Database Engine</td>
+                    <td>Official Digital Receipt</td>
+                </tr>
+                <tr>
+                    <td><strong>6. Statutory Enforcement</strong></td>
+                    <td>Accounts with outstanding balances past statutory deadline (June 30) are flagged for administrative follow-up.</td>
+                    <td>Revenue Enforcement Unit</td>
+                    <td>Compliance &amp; Follow-up List</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="module-box" style="margin-top: 10px;">
+        <div class="module-title">Financial Ledger &amp; Accounting Principles</div>
+        <div class="module-content">
+            <ol>
+                <li><strong>Priority Debt Allocation:</strong> All incoming payments are applied strictly against the oldest debt first. Settlements reduce carried-forward <strong>Arrears</strong> before liquidating the <strong>Current Fee</strong>.</li>
+                <li><strong>Partial Settlement Accounting:</strong> When partial payments are received, the system adjusts the arrears balance in real time while maintaining the active year fee structure until fully settled.</li>
+                <li><strong>Immutable Audit Logging:</strong> Every billing transaction, SMS dispatch event, bill view, and payment attempt is logged with an immutable timestamp, operator ID, and network reference for municipal audit compliance.</li>
+            </ol>
+        </div>
+    </div>
+
+    <div class="doc-footer">
+        PROPERTY RATE DIGITAL ADMINISTRATION PLATFORM &mdash; SYSTEM SPECIFICATION DOCUMENT
+    </div>
+
+</div>
+
+</body>
+</html>

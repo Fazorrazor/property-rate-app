@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    background-color: #F6ECF2;
+    color: #2C2C2C;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer components {
+  .btn-3d-primary {
+    @apply relative transition-[transform,box-shadow,opacity] duration-75 active:translate-y-[3px] active:shadow-none bg-[#2C2C2C] text-white border border-[#000000];
+    box-shadow: 0 4px 0 0 #000000, 0 5px 10px rgba(0,0,0,0.15);
+  }
+  
+  .btn-3d-secondary {
+    @apply relative transition-[transform,box-shadow,opacity] duration-75 active:translate-y-[3px] active:shadow-none bg-white text-[#3C4043] border border-[#DADCE0];
+    box-shadow: 0 4px 0 0 #BDC1C6, 0 5px 10px rgba(0,0,0,0.1);
+  }
+
+  .btn-3d-outline-primary {
+    @apply relative transition-[transform,box-shadow,opacity] duration-75 active:translate-y-[3px] active:shadow-none bg-white text-[#2C2C2C] border border-[#2C2C2C];
+    box-shadow: 0 4px 0 0 #000000, 0 5px 10px rgba(0,0,0,0.15);
+  }
+
+  .btn-3d-danger {
+    @apply relative transition-[transform,box-shadow,opacity] duration-75 active:translate-y-[3px] active:shadow-none bg-[#C5221F] text-white border border-[#A50E0E];
+    box-shadow: 0 4px 0 0 #A50E0E, 0 5px 10px rgba(0,0,0,0.15);
+  }
+}

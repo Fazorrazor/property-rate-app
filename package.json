@@ -4,23 +4,44 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "dev:admin": "npm --prefix property-rate-admin run dev",
+    "build": "prisma generate && next build",
+    "build:admin": "prisma generate && npm --prefix property-rate-admin run build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "postinstall": "prisma generate",
+    "prisma:generate": "prisma generate"
   },
   "dependencies": {
+    "@prisma/adapter-better-sqlite3": "^7.9.1",
+    "@prisma/adapter-pg": "^7.9.1",
+    "@prisma/client": "^7.9.1",
+    "better-sqlite3": "^13.0.3",
+    "class-variance-authority": "^0.7.1",
+    "framer-motion": "^13.1.1",
+    "lucide-react": "^1.33.0",
     "next": "16.3.2",
+    "next-pwa": "^5.6.0",
+    "next-themes": "^0.4.6",
+    "pg": "^8.23.0",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "twilio": "^6.1.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/twilio": "^3.19.2",
     "eslint": "^9",
     "eslint-config-next": "16.3.2",
+    "prisma": "^7.9.1",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   }
 }

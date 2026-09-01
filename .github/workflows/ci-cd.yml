@@ -1,0 +1,53 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - master
+      - main
+  pull_request:
+    branches:
+      - master
+      - main
+
+jobs:
+  validate-and-build:
+    name: Lint, Typecheck & Production Build
+    runs-on: ubuntu-latest
+
+    env:
+      DATABASE_URL: "file:./dev.db"
+      PAYSTACK_PUBLIC_KEY: "pk_test_sample"
+      PAYSTACK_SECRET_KEY: "sk_test_sample"
+      NEXT_PUBLIC_APP_URL: "http://localhost:3000"
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Root Dependencies
+        run: npm ci || npm install
+
+      - name: Install Admin Portal Dependencies
+        run: npm --prefix property-rate-admin ci || npm --prefix property-rate-admin install
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Typecheck Ratepayer Portal
+        run: npx tsc --noEmit
+
+      - name: Typecheck Admin Portal
+        run: cd property-rate-admin && npx tsc --noEmit
+
+      - name: Build Ratepayer Application
+        run: npm run build
+
+      - name: Build Admin Portal Application
+        run: npm run build:admin

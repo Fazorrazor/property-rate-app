@@ -1,0 +1,140 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id            String         @id @default(uuid())
+  phoneNumber   String         @unique
+  name          String?
+  role          String         @default("RATEPAYER") // RATEPAYER, ADMIN, SUPER_ADMIN
+  passwordHash  String? // For admin login authentication
+  isVerified    Boolean        @default(false)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  properties    Property[]
+  receipts      Receipt[]
+  transactions  Transaction[]
+  notifications Notification[]
+  sessions      Session[]
+  auditLogs     AuditLog[] // Logs of actions performed by this user (if admin)
+}
+
+model Notification {
+  id                String   @id @default(uuid())
+  title             String
+  message           String
+  type              String   @default("BILLING_ROLLOUT") // BILLING_ROLLOUT, DEMAND_NOTICE, PAYMENT_CONFIRMATION, SYSTEM
+  isRead            Boolean  @default(false)
+  deliveryMethod    String   @default("IN_APP") // IN_APP, SMS
+  deliveryStatus    String   @default("PENDING") // PENDING, DELIVERED, FAILED
+  externalMessageId String? // ID from SMS provider for tracking delivery
+  userId            String?
+  user              User?    @relation(fields: [userId], references: [id])
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model Property {
+  id                     String  @id @default(uuid())
+  // B. Property & Account Identifiers
+  accountNumber          String  @unique // Master Account Head (e.g. KKDA03188007)
+  ownerDigitalAddress    String // GhanaPost GPS / Taxpayer ID (e.g. GK-0010-9395)
+  physicalAddress        String? // Street address for manual delivery
+  municipality           String  @default("Kpone-Katamanso (KKMA)")
+  latitude               Float?
+  longitude              Float?
+  propertyClassification String // e.g. PRIVATE THIRD CLASS RESIDENTIAL
+
+  // D. Billing Timeline & Deadlines
+  billYear           Int      @default(2025)
+  billDate           DateTime @default(now())
+  settlementDeadline DateTime // Statutory cutoff date: e.g. 30-Jun-2025
+
+  // E. Valuation & Rate Computation
+  rateableValue Float // Property capital valuation
+  rateImposed   Float @default(0.00025) // Statutory rate multiplier factor
+
+  // F. Financial Breakdown & Ledger
+  previousYearBill   Float  @default(0.0)
+  amountPaidLastYear Float  @default(0.0)
+  arrears            Float  @default(0.0)
+  currentFee         Float // rateableValue * rateImposed
+  totalAmountDue     Float // arrears + currentFee
+  status             String @default("UNPAID") // UNPAID, PARTIALLY_PAID, PAID
+
+  users     User[]
+  receipts  Receipt[]
+  transactions Transaction[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Receipt {
+  id             String   @id @default(uuid())
+  receiptNumber  String   @unique
+  amount         Float
+  settlementType String   @default("TOTAL") // TOTAL, ARREARS, CURRENT_FEE
+  paymentMethod  String   @default("Mobile Money (MTN)")
+  paymentPhoneNumber String?
+  status         String   @default("paid") // paid, pending, failed
+  datePaid       DateTime @default(now())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id])
+  propertyId     String
+  property       Property     @relation(fields: [propertyId], references: [id])
+  transactionId  String?      @unique
+  transaction    Transaction? @relation(fields: [transactionId], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  action     String // e.g., RECORD_PAYMENT, BATCH_BILLING, EDIT_PROPERTY
+  entityType String // e.g., Property, Receipt, Notification
+  entityId   String? // The ID of the affected record
+  details    String // JSON string or description of what changed
+  adminId    String
+  admin      User     @relation(fields: [adminId], references: [id])
+  createdAt  DateTime @default(now())
+}
+
+model Transaction {
+  id             String   @id @default(uuid())
+  reference      String   @unique // Provider's unique reference
+  provider       String   @default("PAYSTACK") // Orchestration tracking
+  amount         Float
+  currency       String   @default("GHS")
+  paymentPhoneNumber String?
+  status         String   @default("PENDING") // PENDING, SUCCESS, FAILED, ABANDONED
+  settlementType String   // TOTAL, ARREARS, CURRENT_FEE
+  userId         String
+  propertyId     String
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  // Relations
+  user           User     @relation(fields: [userId], references: [id])
+  property       Property @relation(fields: [propertyId], references: [id])
+  receipt        Receipt? // Created only upon successful reconciliation
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

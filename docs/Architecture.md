@@ -6,11 +6,11 @@
 
 ## 1. Technology Stack & Infrastructure Topology
 
-- **Frontend Application (Citizen & Admin):** Flutter (Dart) compiled to iOS, Android, and Web.
-- **State Management:** Riverpod (for predictable, compile-safe dependency injection and state).
-- **Primary Datastore:** PostgreSQL (Strictly typed, ACID-compliant for financial records).
-- **Backend Service:** Node.js (TypeScript) or Dart Server (e.g., Serverpod/Frog) for API endpoints.
-- **Local Storage:** SQLite/Isar for offline caching of digital receipts on the mobile device.
+- **Frontend Application (Citizen & Admin):** Next.js (React/TypeScript) configured as a Progressive Web App (PWA).
+- **Backend Service:** Next.js API Routes (Node.js/TypeScript).
+- **Primary Datastore:** Client's Existing SQL Database.
+- **ORM & Data Access:** Prisma ORM for direct, type-safe database connections.
+- **Local Storage:** IndexedDB (via Service Workers) for offline caching of digital receipts on the mobile device.
 - **Communication Adapter:** Mobile Money API integrations + SMS Gateway for demand notices.
 
 ---
@@ -18,9 +18,9 @@
 ## 2. The 3-Tier Security & Validation Perimeter
 
 Never trust the client network.
-1. **App Perimeter (Flutter):** Strong client-side validation. Use secure storage (Keychain/Keystore) for session tokens.
-2. **API Perimeter:** Strict schema validation on the backend. Rate limiting on the gateway to prevent abuse.
-3. **Database Perimeter:** Row Level Security (RLS) ensures citizens can only query their own property records and receipts.
+1. **App Perimeter (PWA):** Strong client-side validation. Secure HttpOnly cookies for session management.
+2. **API Perimeter:** Strict schema validation (Zod) on Next.js API routes. Rate limiting on the gateway to prevent abuse.
+3. **Database Perimeter:** Prisma validates data types before execution. Row-level logic ensures citizens can only query their own property records and receipts.
 
 ---
 
@@ -36,18 +36,16 @@ This is a high-stakes distributed transaction.
 
 ---
 
-## 4. Frontend Strategy (Mechanical Sympathy)
-
-- **Widget Const-ness:** Enforce `const` widgets everywhere to minimize widget tree rebuilds.
-- **Isolate Offloading:** Any heavy processing (e.g., generating PDF receipts) must be handed off to a background Isolate.
-- **Responsive Layouts:** The UI must adapt fluidly. The Admin Portal will utilize wide, multi-column dashboard layouts, while the Citizen App will use a focused, single-column mobile layout.
+- **Server Components by Default:** Minimize client-side JS by utilizing Next.js React Server Components (RSC) for heavy data fetching and rendering.
+- **Offline Service Workers:** The PWA uses `next-pwa` to cache core assets and intercept network requests, enabling offline receipt viewing.
+- **Responsive Layouts:** Tailwind CSS dictates fluid layouts. The Admin Portal utilizes wide, multi-column dashboard layouts, while the Citizen App utilizes a focused, single-column mobile view.
 
 ---
 
 ## 5. Directory Topology (Domain-Driven Design)
 
 Organize by **Feature/Domain**, not by type:
-- `lib/features/billing/` (Viewing bills, history)
-- `lib/features/payments/` (Mobile Money integration, idempotency keys)
-- `lib/features/admin/` (Billing cycle scheduling, compliance tracking)
-- `lib/core/` (Network clients, secure storage, design system tokens)
+- `src/features/billing/` (Viewing bills, history)
+- `src/features/payments/` (Mobile Money integration, idempotency keys)
+- `src/features/admin/` (Billing cycle scheduling, compliance tracking)
+- `src/lib/` (Prisma DB client, utility functions, design system configs)
