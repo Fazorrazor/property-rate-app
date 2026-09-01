@@ -249,32 +249,81 @@ async function main() {
     },
   });
 
-  // Annual Demand Notice Bills
-  await prisma.bill.create({
-    data: {
-      accountNo: prop1.accountNumber,
-      billYear: 2025,
-      rateableValue: prop1.rateableValue,
-      ratePA: prop1.rateImposed,
-      balanceBF: prop1.arrears,
-      accountBalance: prop1.totalAmountDue,
-      preparedBy: 'MUNICIPAL REVENUE CADASTRE',
-      printed: true,
-    },
-  });
+  console.log('Seeding 500+ authentic ratepayer accounts from ARNOLD.BAK...');
+  const arnoldData = require('../src/lib/data/arnold_accounts.json');
 
-  await prisma.bill.create({
-    data: {
-      accountNo: prop2.accountNumber,
-      billYear: 2025,
-      rateableValue: prop2.rateableValue,
-      ratePA: prop2.rateImposed,
-      balanceBF: prop2.arrears,
-      accountBalance: prop2.totalAmountDue,
-      preparedBy: 'MUNICIPAL REVENUE CADASTRE',
-      printed: true,
-    },
-  });
+  for (const item of arnoldData) {
+    if (!item.phone || !item.accounts || item.accounts.length === 0) continue;
+
+    // Check or create user
+    let user = await prisma.user.findUnique({ where: { phoneNumber: item.phone } });
+    if (!user) {
+      user = await prisma.user.create({
+        data: {
+          phoneNumber: item.phone,
+          name: item.name || 'Municipal Ratepayer',
+          isVerified: true,
+        },
+      });
+    }
+
+    // Create PropertyOwner
+    const owner = await prisma.propertyOwner.create({
+      data: {
+        name: item.name || 'Municipal Ratepayer',
+        tel: item.phone,
+        mobileNumber: item.phone,
+      },
+    });
+
+    for (const acc of item.accounts) {
+      const existingProp = await prisma.property.findUnique({ where: { accountNumber: acc.accountNumber } });
+      if (!existingProp) {
+        const prop = await prisma.property.create({
+          data: {
+            accountNumber: acc.accountNumber,
+            ownerDigitalAddress: acc.digitalAddress,
+            physicalAddress: `Property ${acc.accountNumber}, Greater Accra`,
+            municipality: 'Kpone-Katamanso (KKMA)',
+            propertyClassification: acc.classification,
+            billYear: 2025,
+            billDate: new Date('2025-02-05T00:00:00Z'),
+            settlementDeadline: new Date('2025-06-30T23:59:59Z'),
+            rateableValue: acc.rateableValue,
+            rateImposed: acc.rateImposed,
+            previousYearBill: acc.arrears > 0 ? acc.arrears : 0.0,
+            amountPaidLastYear: acc.arrears === 0 ? acc.currentFee : 0.0,
+            arrears: acc.arrears,
+            currentFee: acc.currentFee,
+            totalAmountDue: acc.totalAmountDue,
+            status: acc.status || 'UNPAID',
+            ownerId: owner.ownerId,
+            propertyTypeCode: acc.classification.includes('RESIDENTIAL') ? propTypeRes.code : propTypeCom.code,
+            propertyCategoryCode: acc.classification.includes('RESIDENTIAL') ? catRes3.code : catRes1.code,
+            subMetroCode: submetro1.code,
+            communityCode: comm1.code,
+            streetCode: street1.code,
+            users: {
+              connect: { id: user.id },
+            },
+          },
+        });
+
+        await prisma.bill.create({
+          data: {
+            accountNo: prop.accountNumber,
+            billYear: 2025,
+            rateableValue: prop.rateableValue,
+            ratePA: prop.rateImposed,
+            balanceBF: prop.arrears,
+            accountBalance: prop.totalAmountDue,
+            preparedBy: 'MUNICIPAL REVENUE CADASTRE',
+            printed: true,
+          },
+        });
+      }
+    }
+  }
 
   console.log('Seeding complete! Database successfully populated with authentic municipal property records, value books, and GCR pool.');
 }
