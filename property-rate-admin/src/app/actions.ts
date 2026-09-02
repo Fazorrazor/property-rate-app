@@ -3,7 +3,7 @@
 import { prisma } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
-import { TwilioProvider } from '../../../src/lib/sms/twilio';
+import { TwilioProvider } from '@/lib/sms/twilio';
 
 const twilioService = new TwilioProvider();
 
