@@ -49,30 +49,76 @@ export const adminDb = {
       if (args?.skip) query = query.range(args.skip, (args.skip + (args.take || 10)) - 1);
 
       const { data, error } = await query;
-      if (error || !data) return [];
+      if (error || !data || data.length === 0) return data || [];
 
+      const userIds = data.map((u: any) => u.id);
+
+      // 1. Batch fetch linked properties for all users in a single query
       if (args?.include?.properties) {
+        const { data: allLinks } = await supabase
+          .from('_PropertyToUser')
+          .select('A, B')
+          .in('B', userIds);
+        
+        const propIds = Array.from(new Set((allLinks || []).map((l: any) => l.A)));
+        let propsById: Record<string, any> = {};
+
+        if (propIds.length > 0) {
+          const { data: allProps } = await supabase
+            .from('Property')
+            .select('id, accountNumber, ownerDigitalAddress, propertyClassification, rateableValue, arrears, currentFee, totalAmountDue, status')
+            .in('id', propIds);
+          
+          propsById = (allProps || []).reduce((acc: any, p: any) => {
+            acc[p.id] = p;
+            return acc;
+          }, {});
+        }
+
+        const userToProps = (allLinks || []).reduce((acc: any, l: any) => {
+          if (!acc[l.B]) acc[l.B] = [];
+          if (propsById[l.A]) acc[l.B].push(propsById[l.A]);
+          return acc;
+        }, {});
+
         for (const u of data) {
-          const { data: links } = await supabase.from('_PropertyToUser').select('A').eq('B', u.id);
-          const propIds = (links || []).map((l: any) => l.A);
-          if (propIds.length > 0) {
-            const { data: props } = await supabase.from('Property').select('*').in('id', propIds);
-            u.properties = props || [];
-          } else {
-            u.properties = [];
-          }
+          u.properties = userToProps[u.id] || [];
         }
       }
+
+      // 2. Batch fetch receipts for all users in a single query
       if (args?.include?.receipts) {
+        const { data: allReceipts } = await supabase
+          .from('Receipt')
+          .select('id, receiptNumber, amount, datePaid, userId, propertyId, gcrNumber')
+          .in('userId', userIds);
+        
+        const receiptsByUserId = (allReceipts || []).reduce((acc: any, r: any) => {
+          if (!acc[r.userId]) acc[r.userId] = [];
+          acc[r.userId].push(r);
+          return acc;
+        }, {});
+
         for (const u of data) {
-          const { data: receipts } = await supabase.from('Receipt').select('*').eq('userId', u.id).order('datePaid', { ascending: false });
-          u.receipts = receipts || [];
+          u.receipts = receiptsByUserId[u.id] || [];
         }
       }
+
+      // 3. Batch fetch notifications for all users in a single query
       if (args?.include?.notifications) {
+        const { data: allNotifs } = await supabase
+          .from('Notification')
+          .select('id, title, message, type, deliveryMethod, deliveryStatus, createdAt, userId')
+          .in('userId', userIds);
+        
+        const notifsByUserId = (allNotifs || []).reduce((acc: any, n: any) => {
+          if (!acc[n.userId]) acc[n.userId] = [];
+          acc[n.userId].push(n);
+          return acc;
+        }, {});
+
         for (const u of data) {
-          const { data: notifs } = await supabase.from('Notification').select('*').eq('userId', u.id).order('createdAt', { ascending: false });
-          u.notifications = notifs || [];
+          u.notifications = notifsByUserId[u.id] || [];
         }
       }
 
@@ -137,25 +183,58 @@ export const adminDb = {
       if (args?.skip) query = query.range(args.skip, (args.skip + (args.take || 10)) - 1);
 
       const { data, error } = await query;
-      if (error || !data) return [];
+      if (error || !data || data.length === 0) return data || [];
 
+      const propIds = data.map((p: any) => p.id);
+
+      // 1. Batch fetch receipts for all properties in a single query
       if (args?.include?.receipts) {
+        const { data: allReceipts } = await supabase
+          .from('Receipt')
+          .select('id, receiptNumber, amount, datePaid, propertyId, gcrNumber, settlementType')
+          .in('propertyId', propIds);
+        
+        const receiptsByPropId = (allReceipts || []).reduce((acc: any, r: any) => {
+          if (!acc[r.propertyId]) acc[r.propertyId] = [];
+          acc[r.propertyId].push(r);
+          return acc;
+        }, {});
+
         for (const prop of data) {
-          const { data: receipts } = await supabase.from('Receipt').select('*').eq('propertyId', prop.id);
-          prop.receipts = receipts || [];
+          prop.receipts = receiptsByPropId[prop.id] || [];
         }
       }
 
+      // 2. Batch fetch linked users for all properties in a single query
       if (args?.include?.users) {
+        const { data: allLinks } = await supabase
+          .from('_PropertyToUser')
+          .select('A, B')
+          .in('A', propIds);
+        
+        const userIds = Array.from(new Set((allLinks || []).map((l: any) => l.B)));
+        let usersById: Record<string, any> = {};
+
+        if (userIds.length > 0) {
+          const { data: allUsers } = await supabase
+            .from('User')
+            .select('id, name, phoneNumber, role, isVerified')
+            .in('id', userIds);
+          
+          usersById = (allUsers || []).reduce((acc: any, u: any) => {
+            acc[u.id] = u;
+            return acc;
+          }, {});
+        }
+
+        const propToUsers = (allLinks || []).reduce((acc: any, l: any) => {
+          if (!acc[l.A]) acc[l.A] = [];
+          if (usersById[l.B]) acc[l.A].push(usersById[l.B]);
+          return acc;
+        }, {});
+
         for (const prop of data) {
-          const { data: links } = await supabase.from('_PropertyToUser').select('B').eq('A', prop.id);
-          if (links && links.length > 0) {
-            const userIds = links.map((l: any) => l.B);
-            const { data: users } = await supabase.from('User').select('*').in('id', userIds);
-            prop.users = users || [];
-          } else {
-            prop.users = [];
-          }
+          prop.users = propToUsers[prop.id] || [];
         }
       }
 

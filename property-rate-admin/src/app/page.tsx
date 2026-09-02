@@ -101,25 +101,31 @@ export default function AdminDashboardPage() {
   const loadData = async (page = currentPage) => {
     setIsLoading(true);
     try {
-      const [overviewRes, ratepayersRes, logsRes] = await Promise.all([
-        getAdminOverview(page, 50, municipalityFilter),
-        getRatepayersList("", 1, 100),
-        getSmsRolloutLogs(),
-      ]);
-
+      // 1. Fetch primary cadastre overview first for instantaneous rendering
+      const overviewRes = await getAdminOverview(page, 50, municipalityFilter);
       setData(overviewRes);
-      if (ratepayersRes) setRatepayers(ratepayersRes.ratepayers);
-      if (logsRes) setSmsLogs(logsRes);
 
       if (selectedAccount && overviewRes) {
         const updated = overviewRes.properties.find((p) => p.id === selectedAccount.id);
         if (updated) setSelectedAccount(updated);
       }
     } catch (err) {
-      console.error("Error loading admin data:", err);
-      showToast("Failed to load municipal data.", "error");
+      console.error("Error loading admin overview:", err);
+      showToast("Failed to load municipal overview.", "error");
     } finally {
       setIsLoading(false);
+    }
+
+    // 2. Fetch secondary tabs asynchronously without blocking the UI
+    try {
+      const [ratepayersRes, logsRes] = await Promise.all([
+        getRatepayersList("", 1, 100),
+        getSmsRolloutLogs(),
+      ]);
+      if (ratepayersRes) setRatepayers(ratepayersRes.ratepayers);
+      if (logsRes) setSmsLogs(logsRes);
+    } catch (err) {
+      console.error("Background data fetch error:", err);
     }
   };
 

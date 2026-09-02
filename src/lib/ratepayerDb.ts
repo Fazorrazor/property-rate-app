@@ -126,13 +126,24 @@ export const ratepayerDb = {
       if (args?.skip) query = query.range(args.skip, (args.skip + (args.take || 10)) - 1);
 
       const { data, error } = await query;
-      if (error || !data) return [];
+      if (error || !data || data.length === 0) return data || [];
 
-      // Include receipts if requested
+      // Include receipts if requested (Batch fetch in a single query)
       if (args?.include?.receipts) {
+        const propIds = data.map((p: any) => p.id);
+        const { data: allReceipts } = await supabase
+          .from('Receipt')
+          .select('*')
+          .in('propertyId', propIds);
+        
+        const receiptsByPropId = (allReceipts || []).reduce((acc: any, r: any) => {
+          if (!acc[r.propertyId]) acc[r.propertyId] = [];
+          acc[r.propertyId].push(r);
+          return acc;
+        }, {});
+
         for (const prop of data) {
-          const { data: receipts } = await supabase.from('Receipt').select('*').eq('propertyId', prop.id);
-          prop.receipts = receipts || [];
+          prop.receipts = receiptsByPropId[prop.id] || [];
         }
       }
 
