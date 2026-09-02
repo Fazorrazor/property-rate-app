@@ -1,5 +1,8 @@
-import { supabaseDb } from '../../../src/lib/supabaseDb';
+import { adminDb } from './adminDb';
 import type { PrismaClient } from '../../../src/generated/prisma/client';
 
-export const prisma = supabaseDb as unknown as PrismaClient;
-export { supabaseDb };
+/**
+ * Scoped Enterprise Database Access for Administrative Portal
+ */
+export const prisma = adminDb as unknown as PrismaClient;
+export { adminDb };

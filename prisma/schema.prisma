@@ -1,4 +1,8 @@
-// Complete Enterprise Municipal Schema from ARNOLD.BAK (PostgreSQL)
+// =========================================================================
+// Enterprise Municipal Revenue Platform Database Architecture
+// Schema Domain 1: Public Citizen (Ratepayer) Domain -> Scoped to Citizen App
+// Schema Domain 2: Enterprise Municipal Back-Office -> Scoped to Admin Portal
+// =========================================================================
 
 generator client {
   provider = "prisma-client"
@@ -9,9 +13,10 @@ datasource db {
   provider = "postgresql"
 }
 
-// ==========================================
-// 1. CORE WEB APP AUTH & NOTIFICATIONS
-// ==========================================
+// =========================================================================
+// DOMAIN 1: PUBLIC CITIZEN & RATEPAYER ACCESS (SHARED CORE)
+// =========================================================================
+
 
 model User {
   id            String         @id @default(uuid())

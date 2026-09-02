@@ -1,6 +1,11 @@
 import { supabase } from './supabase';
 
-export const supabaseDb = {
+/**
+ * Ratepayer DB Client
+ * Scoped strictly to citizen-facing entities (User, Property, Receipts, Transactions, Bills, Notifications).
+ * Has zero exposure to internal administrative staff, value book logs, or audit records.
+ */
+export const ratepayerDb = {
   user: {
     async findUnique(args: { where: { phoneNumber?: string; id?: string }; include?: any }) {
       let query = supabase.from('User').select('*');
@@ -10,65 +15,16 @@ export const supabaseDb = {
       if (error || !data) return null;
 
       if (args.include?.properties) {
-        data.properties = await supabaseDb.property.findMany({ where: { users: { some: { id: data.id } } } });
-      }
-      if (args.include?.receipts) {
-        data.receipts = await supabaseDb.receipt.findMany({ where: { userId: data.id }, orderBy: { datePaid: 'desc' } });
-      }
-      if (args.include?.notifications) {
-        data.notifications = await supabaseDb.notification.findMany({ where: { userId: data.id }, orderBy: { createdAt: 'desc' } });
+        data.properties = await ratepayerDb.property.findMany({ where: { users: { some: { id: data.id } } } });
       }
       return data;
-    },
-
-    async findMany(args?: { where?: any; include?: any; orderBy?: any; take?: number; skip?: number }) {
-      let query = supabase.from('User').select('*');
-      if (args?.where?.role) query = query.eq('role', args.where.role);
-      
-      if (args?.orderBy) {
-        const field = Object.keys(args.orderBy)[0];
-        const dir = args.orderBy[field] === 'desc' ? { ascending: false } : { ascending: true };
-        query = query.order(field, dir);
-      }
-
-      if (args?.take) query = query.limit(args.take);
-      if (args?.skip) query = query.range(args.skip, (args.skip + (args.take || 10)) - 1);
-
-      const { data, error } = await query;
-      if (error || !data) return [];
-
-      if (args?.include?.properties) {
-        for (const u of data) {
-          u.properties = await supabaseDb.property.findMany({ where: { users: { some: { id: u.id } } } });
-        }
-      }
-      if (args?.include?.receipts) {
-        for (const u of data) {
-          u.receipts = await supabaseDb.receipt.findMany({ where: { userId: u.id }, orderBy: { datePaid: 'desc' } });
-        }
-      }
-      if (args?.include?.notifications) {
-        for (const u of data) {
-          u.notifications = await supabaseDb.notification.findMany({ where: { userId: u.id }, orderBy: { createdAt: 'desc' } });
-        }
-      }
-
-      return data;
-    },
-
-    async count(args?: { where?: any }) {
-      let query = supabase.from('User').select('*', { count: 'exact', head: true });
-      if (args?.where?.role) query = query.eq('role', args.where.role);
-      const { count, error } = await query;
-      if (error) return 0;
-      return count || 0;
     },
 
     async findFirst(args?: { include?: any }) {
       const { data, error } = await supabase.from('User').select('*').limit(1).maybeSingle();
       if (error || !data) return null;
       if (args?.include?.properties) {
-        data.properties = await supabaseDb.property.findMany({ where: { users: { some: { id: data.id } } } });
+        data.properties = await ratepayerDb.property.findMany({ where: { users: { some: { id: data.id } } } });
       }
       return data;
     },
@@ -96,11 +52,11 @@ export const supabaseDb = {
     },
 
     async upsert(args: { where: { phoneNumber: string }; create: any; update: any }) {
-      const existing = await supabaseDb.user.findUnique({ where: { phoneNumber: args.where.phoneNumber } });
+      const existing = await ratepayerDb.user.findUnique({ where: { phoneNumber: args.where.phoneNumber } });
       if (existing) {
-        return supabaseDb.user.update({ where: { id: existing.id }, data: args.update });
+        return ratepayerDb.user.update({ where: { id: existing.id }, data: args.update });
       }
-      return supabaseDb.user.create({ data: args.create });
+      return ratepayerDb.user.create({ data: args.create });
     },
   },
 
@@ -110,7 +66,7 @@ export const supabaseDb = {
       if (error || !session) return null;
 
       if (args.include?.user) {
-        session.user = await supabaseDb.user.findUnique({
+        session.user = await ratepayerDb.user.findUnique({
           where: { id: session.userId },
           include: args.include.user.include,
         });
@@ -149,7 +105,6 @@ export const supabaseDb = {
         if (args.where.status) query = query.eq('status', args.where.status);
         if (args.where.accountNumber) query = query.eq('accountNumber', args.where.accountNumber);
         if (args.where.ownerDigitalAddress) query = query.eq('ownerDigitalAddress', args.where.ownerDigitalAddress);
-        if (args.where.municipality) query = query.eq('municipality', args.where.municipality);
         
         // Handle relation link through _PropertyToUser
         if (args.where.users?.some?.id) {
@@ -181,20 +136,6 @@ export const supabaseDb = {
         }
       }
 
-      // Include users if requested
-      if (args?.include?.users) {
-        for (const prop of data) {
-          const { data: links } = await supabase.from('_PropertyToUser').select('B').eq('A', prop.id);
-          if (links && links.length > 0) {
-            const userIds = links.map((l: any) => l.B);
-            const { data: users } = await supabase.from('User').select('*').in('id', userIds);
-            prop.users = users || [];
-          } else {
-            prop.users = [];
-          }
-        }
-      }
-
       return data;
     },
 
@@ -209,42 +150,6 @@ export const supabaseDb = {
         const { data: receipts } = await supabase.from('Receipt').select('*').eq('propertyId', data.id);
         data.receipts = receipts || [];
       }
-
-      if (args.include?.users) {
-        const { data: links } = await supabase.from('_PropertyToUser').select('B').eq('A', data.id);
-        if (links && links.length > 0) {
-          const userIds = links.map((l: any) => l.B);
-          const { data: users } = await supabase.from('User').select('*').in('id', userIds);
-          data.users = users || [];
-        } else {
-          data.users = [];
-        }
-      }
-
-      return data;
-    },
-
-    async create(args: { data: any }) {
-      const { users, receipts, bills, ...cleanData } = args.data;
-      const id = cleanData.id || `prop_${Math.random().toString(36).substring(2, 12)}`;
-      const row = {
-        ...cleanData,
-        id,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      const { data, error } = await supabase.from('Property').insert([row]).select().single();
-      if (error) throw new Error(error.message);
-
-      if (users?.connect?.length) {
-        for (const u of users.connect) {
-          try {
-            await supabase.from('_PropertyToUser').insert([{ A: id, B: u.id }]);
-          } catch (e) {
-            // non-fatal relation link
-          }
-        }
-      }
       return data;
     },
 
@@ -255,47 +160,15 @@ export const supabaseDb = {
       if (args.where.accountNumber) query = query.eq('accountNumber', args.where.accountNumber);
       const { data, error } = await query.select().single();
       if (error) throw new Error(error.message);
-
-      if (users?.set?.length && (args.where.id || data?.id)) {
-        const propId = args.where.id || data.id;
-        try {
-          await supabase.from('_PropertyToUser').delete().eq('A', propId);
-          for (const u of users.set) {
-            await supabase.from('_PropertyToUser').insert([{ A: propId, B: u.id }]);
-          }
-        } catch (e) {
-          // non-fatal
-        }
-      }
-
       return data;
     },
 
     async count(args?: { where?: any }) {
       let query = supabase.from('Property').select('*', { count: 'exact', head: true });
       if (args?.where?.status) query = query.eq('status', args.where.status);
-      if (args?.where?.municipality) query = query.eq('municipality', args.where.municipality);
       const { count, error } = await query;
       if (error) return 0;
       return count || 0;
-    },
-
-    async aggregate(args?: { where?: any; _sum?: any }) {
-      let query = supabase.from('Property').select('arrears, currentFee, totalAmountDue');
-      if (args?.where?.status) query = query.eq('status', args.where.status);
-      if (args?.where?.municipality) query = query.eq('municipality', args.where.municipality);
-      const { data, error } = await query;
-      if (error || !data) return { _sum: { arrears: 0, currentFee: 0, totalAmountDue: 0 } };
-      
-      const sum = data.reduce(
-        (acc: any, curr: any) => ({
-          arrears: acc.arrears + (curr.arrears || 0),
-          currentFee: acc.currentFee + (curr.currentFee || 0),
-          totalAmountDue: acc.totalAmountDue + (curr.totalAmountDue || 0),
-        }),
-        { arrears: 0, currentFee: 0, totalAmountDue: 0 }
-      );
-      return { _sum: sum };
     },
   },
 
@@ -421,28 +294,17 @@ export const supabaseDb = {
       if (error || !data) return [];
       return data;
     },
-
-    async aggregate(args?: { where?: any; _sum?: any }) {
-      let query = supabase.from('Receipt').select('amount');
-      const { data, error } = await query;
-      if (error || !data) return { _sum: { amount: 0 } };
-      const total = data.reduce((acc: number, curr: any) => acc + (curr.amount || 0), 0);
-      return { _sum: { amount: total } };
-    },
   },
 
   notification: {
-    async findMany(args?: { where?: any; orderBy?: any; take?: number; skip?: number }) {
+    async findMany(args?: { where?: any; orderBy?: any }) {
       let query = supabase.from('Notification').select('*');
       if (args?.where?.userId) query = query.eq('userId', args.where.userId);
-      if (args?.where?.deliveryMethod) query = query.eq('deliveryMethod', args.where.deliveryMethod);
       if (args?.orderBy?.createdAt) {
         query = query.order('createdAt', { ascending: args.orderBy.createdAt === 'asc' });
       } else {
         query = query.order('createdAt', { ascending: false });
       }
-      if (args?.take) query = query.limit(args.take);
-      if (args?.skip) query = query.range(args.skip, (args.skip + (args.take || 10)) - 1);
       const { data, error } = await query;
       if (error || !data) return [];
       return data;
@@ -459,18 +321,6 @@ export const supabaseDb = {
       const { data, error } = await supabase.from('Notification').insert([row]).select().single();
       if (error) throw new Error(error.message);
       return data;
-    },
-
-    async createMany(args: { data: any[] }) {
-      const rows = args.data.map((item) => ({
-        ...item,
-        id: item.id || `notif_${Math.random().toString(36).substring(2, 12)}`,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      }));
-      const { data, error } = await supabase.from('Notification').insert(rows).select();
-      if (error) throw new Error(error.message);
-      return { count: data?.length || rows.length };
     },
 
     async update(args: { where: { id: string }; data: any }) {
@@ -491,52 +341,4 @@ export const supabaseDb = {
       return { count: data?.length || 0 };
     },
   },
-
-  auditLog: {
-    async findMany(args?: { where?: any; orderBy?: any; take?: number }) {
-      let query = supabase.from('AuditLog').select('*');
-      if (args?.where?.adminId) query = query.eq('adminId', args.where.adminId);
-      if (args?.where?.entityId) query = query.eq('entityId', args.where.entityId);
-      if (args?.orderBy?.createdAt) {
-        query = query.order('createdAt', { ascending: args.orderBy.createdAt === 'asc' });
-      } else {
-        query = query.order('createdAt', { ascending: false });
-      }
-      if (args?.take) query = query.limit(args.take);
-      const { data, error } = await query;
-      if (error || !data) return [];
-      return data;
-    },
-
-    async create(args: { data: any }) {
-      const id = args.data.id || `log_${Math.random().toString(36).substring(2, 12)}`;
-      const row = {
-        ...args.data,
-        id,
-        createdAt: new Date().toISOString(),
-      };
-      try {
-        const { data, error } = await supabase.from('AuditLog').insert([row]).select().single();
-        if (error) {
-          console.warn('AuditLog table insert warning (non-fatal):', error.message);
-          return row;
-        }
-        return data;
-      } catch (e) {
-        console.warn('AuditLog table non-fatal catch:', e);
-        return row;
-      }
-    },
-  },
-
-  async $transaction(promisesOrFn: any) {
-    if (typeof promisesOrFn === 'function') {
-      return await promisesOrFn(supabaseDb);
-    }
-    if (Array.isArray(promisesOrFn)) {
-      return await Promise.all(promisesOrFn);
-    }
-    return promisesOrFn;
-  },
 };
-

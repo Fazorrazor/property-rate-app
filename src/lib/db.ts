@@ -1,5 +1,8 @@
-import { supabaseDb } from './supabaseDb';
+import { ratepayerDb } from './ratepayerDb';
 import type { PrismaClient } from '../generated/prisma/client';
 
-export const prisma = supabaseDb as unknown as PrismaClient;
-export { supabaseDb };
+/**
+ * Scoped Database Access for Citizen Ratepayer Application
+ */
+export const prisma = ratepayerDb as unknown as PrismaClient;
+export { ratepayerDb };

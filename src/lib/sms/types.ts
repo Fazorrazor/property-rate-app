@@ -2,6 +2,29 @@ export interface SMSResponse {
   success: boolean;
   messageId?: string;
   error?: string;
+  formattedPhone?: string;
+}
+
+export interface BillRolloutSMSParams {
+  accountNumber: string;
+  ownerName: string;
+  phoneNumber: string;
+  totalAmountDue: number;
+  arrears: number;
+  currentFee: number;
+  dueDate?: string;
+  baseUrl?: string;
+  customTemplate?: string;
+}
+
+export interface FormattedBillSMS {
+  recipientPhone: string;
+  recipientName: string;
+  accountNumber: string;
+  messageText: string;
+  billLinkUrl: string;
+  paymentLinkUrl: string;
+  totalAmountDue: number;
 }
 
 export interface ISMSProvider {
@@ -12,3 +35,4 @@ export interface ISMSProvider {
    */
   sendSMS(to: string, message: string): Promise<SMSResponse>;
 }
+
