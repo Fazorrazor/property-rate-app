@@ -9,12 +9,6 @@ import {
   Building2,
   Receipt,
   MessageSquare,
-  ShieldCheck,
-  Calendar,
-  Clock,
-  ExternalLink,
-  Coins,
-  History,
 } from "lucide-react";
 import { RatepayerHistoryDossier } from "@/app/actions";
 
@@ -99,7 +93,7 @@ export function RatepayerDossierSheet({
           </div>
 
           {/* Citizen Quick Profile Bar */}
-          <div className="bg-[#F8F9FA] px-6 py-3.5 border-b border-[#DADCE0] grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+          <div className="bg-[#F8F9FA] px-6 py-3.5 border-b border-[#DADCE0] grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
             <div>
               <span className="text-[#717171] block text-[11px]">Primary Phone</span>
               <span className="font-mono font-medium text-[#2C2C2C] flex items-center gap-1 mt-0.5">
@@ -110,13 +104,6 @@ export function RatepayerDossierSheet({
             <div>
               <span className="text-[#717171] block text-[11px]">Account Type</span>
               <span className="font-medium text-[#2C2C2C] mt-0.5 block">{user.role}</span>
-            </div>
-            <div>
-              <span className="text-[#717171] block text-[11px]">KYC Status</span>
-              <span className="font-medium text-[#137333] flex items-center gap-1 mt-0.5">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>{user.isVerified ? "Verified Citizen" : "Self-Registered"}</span>
-              </span>
             </div>
             <div>
               <span className="text-[#717171] block text-[11px]">Registered Date</span>
