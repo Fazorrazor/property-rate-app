@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, Loader2, Save } from 'lucide-react';
+import { X, Loader2, Save, ShieldCheck, Eye, EyeOff } from 'lucide-react';
 import { AdminProperty, saveProperty } from '@/app/actions';
 
 interface PropertyModalProps {
@@ -14,6 +14,8 @@ interface PropertyModalProps {
 export function PropertyModal({ isOpen, onClose, property, onSuccess }: PropertyModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   
   const [formData, setFormData] = useState({
     accountNumber: '',
@@ -53,6 +55,7 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
         rateImposed: '0.00025',
       });
     }
+    setAdminPassword('');
     setError('');
   }, [property, isOpen]);
 
@@ -60,6 +63,11 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!adminPassword.trim()) {
+      setError('Administrator security password is required to authorize property changes.');
+      return;
+    }
+
     setIsLoading(true);
     setError('');
     
@@ -69,7 +77,7 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
         ...formData,
         rateableValue: parseFloat(formData.rateableValue),
         rateImposed: parseFloat(formData.rateImposed)
-      });
+      }, adminPassword);
       
       if (res.success) {
         onSuccess();
@@ -91,14 +99,14 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
           <h2 className="font-semibold text-[#2C2C2C]">
             {property ? 'Edit Property Assessment' : 'Register New Property'}
           </h2>
-          <button onClick={onClose} className="p-1 hover:bg-[#E8EAED] rounded-lg transition-colors">
+          <button onClick={onClose} className="p-1 hover:bg-[#E8EAED] rounded-lg transition-colors cursor-pointer">
             <X className="w-5 h-5 text-[#717171]" />
           </button>
         </div>
         
         <div className="p-6 overflow-y-auto">
           {error && (
-            <div className="mb-4 bg-[#FCE8E6] border border-[#FAD2CF] text-[#C5221F] px-4 py-3 rounded-md text-sm">
+            <div className="mb-4 bg-[#FCE8E6] border border-[#FAD2CF] text-[#C5221F] px-4 py-3 rounded-md text-xs">
               {error}
             </div>
           )}
@@ -113,7 +121,7 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
                   value={formData.accountNumber}
                   onChange={(e) => setFormData({ ...formData, accountNumber: e.target.value })}
                   disabled={!!property}
-                  className="w-full text-sm p-2 border border-[#DADCE0] rounded-md focus:ring-[#612D53] focus:border-[#612D53] disabled:bg-[#F6ECF2]"
+                  className="w-full text-xs p-2 border border-[#DADCE0] rounded-md focus:ring-[#612D53] focus:border-[#612D53] disabled:bg-[#F6ECF2]"
                   placeholder="e.g. KKDA03188007"
                 />
               </div>
@@ -122,7 +130,7 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
                 <select
                   value={formData.municipality}
                   onChange={(e) => setFormData({ ...formData, municipality: e.target.value })}
-                  className="w-full text-sm p-2 border border-[#DADCE0] rounded-md focus:ring-[#612D53] focus:border-[#612D53]"
+                  className="w-full text-xs p-2 border border-[#DADCE0] rounded-md focus:ring-[#612D53] focus:border-[#612D53]"
                 >
                   <option>Kpone-Katamanso (KKMA)</option>
                   <option>Tema Metropolitan (TMA)</option>
@@ -139,56 +147,60 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
                   type="text"
                   value={formData.ownerName}
                   onChange={(e) => setFormData({ ...formData, ownerName: e.target.value })}
-                  className="w-full text-sm p-2 border border-[#DADCE0] rounded-md focus:ring-[#612D53]"
+                  className="w-full text-xs p-2 border border-[#DADCE0] rounded-md focus:ring-[#612D53]"
+                  placeholder="Ratepayer Full Name"
                 />
               </div>
               <div>
                 <label className="block text-xs font-medium text-[#717171] mb-1">Owner Phone *</label>
                 <input
                   required
-                  type="tel"
+                  type="text"
                   value={formData.ownerPhone}
                   onChange={(e) => setFormData({ ...formData, ownerPhone: e.target.value })}
-                  className="w-full text-sm p-2 border border-[#DADCE0] rounded-md focus:ring-[#612D53]"
+                  className="w-full text-xs p-2 border border-[#DADCE0] rounded-md focus:ring-[#612D53]"
+                  placeholder="024XXXXXXX"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium text-[#717171] mb-1">Digital Address (GhanaPost GPS) *</label>
+                <label className="block text-xs font-medium text-[#717171] mb-1">Digital Address (GPS)</label>
                 <input
-                  required
                   type="text"
                   value={formData.ownerDigitalAddress}
                   onChange={(e) => setFormData({ ...formData, ownerDigitalAddress: e.target.value })}
-                  className="w-full text-sm p-2 border border-[#DADCE0] rounded-md focus:ring-[#612D53]"
+                  className="w-full text-xs p-2 border border-[#DADCE0] rounded-md focus:ring-[#612D53]"
                   placeholder="e.g. GK-0010-9395"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#717171] mb-1">Physical Street Address</label>
+                <label className="block text-xs font-medium text-[#717171] mb-1">Physical Location</label>
                 <input
                   type="text"
                   value={formData.physicalAddress}
                   onChange={(e) => setFormData({ ...formData, physicalAddress: e.target.value })}
-                  className="w-full text-sm p-2 border border-[#DADCE0] rounded-md focus:ring-[#612D53]"
+                  className="w-full text-xs p-2 border border-[#DADCE0] rounded-md focus:ring-[#612D53]"
+                  placeholder="e.g. Near Community Center"
                 />
               </div>
             </div>
 
             <div className="border-t border-[#DADCE0] pt-4">
-              <h3 className="text-sm font-semibold text-[#2C2C2C] mb-4">Assessment & Valuation</h3>
+              <h3 className="text-xs font-semibold text-[#2C2C2C] mb-3">Assessment & Valuation</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="md:col-span-1">
                   <label className="block text-xs font-medium text-[#717171] mb-1">Classification *</label>
                   <select
                     value={formData.propertyClassification}
                     onChange={(e) => setFormData({ ...formData, propertyClassification: e.target.value })}
-                    className="w-full text-sm p-2 border border-[#DADCE0] rounded-md focus:ring-[#612D53]"
+                    className="w-full text-xs p-2 border border-[#DADCE0] rounded-md focus:ring-[#612D53]"
                   >
                     <option>PRIVATE THIRD CLASS RESIDENTIAL</option>
+                    <option>FIRST CLASS RESIDENTIAL</option>
                     <option>COMMERCIAL FIRST CLASS</option>
+                    <option>COMMERCIAL MIXED USE</option>
                     <option>INDUSTRIAL</option>
                   </select>
                 </div>
@@ -201,7 +213,7 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
                     step="0.01"
                     value={formData.rateableValue}
                     onChange={(e) => setFormData({ ...formData, rateableValue: e.target.value })}
-                    className="w-full text-sm p-2 border border-[#DADCE0] rounded-md focus:ring-[#612D53]"
+                    className="w-full text-xs p-2 border border-[#DADCE0] rounded-md focus:ring-[#612D53]"
                   />
                 </div>
                 <div>
@@ -213,9 +225,39 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
                     step="0.00001"
                     value={formData.rateImposed}
                     onChange={(e) => setFormData({ ...formData, rateImposed: e.target.value })}
-                    className="w-full text-sm p-2 border border-[#DADCE0] rounded-md focus:ring-[#612D53]"
+                    className="w-full text-xs p-2 border border-[#DADCE0] rounded-md focus:ring-[#612D53]"
                   />
                 </div>
+              </div>
+            </div>
+
+            {/* Administrator Security Authorization */}
+            <div className="border-t border-[#DADCE0] pt-4 space-y-2 bg-[#F8F9FA] p-3.5 rounded-xl border">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-[#612D53]" />
+                <label className="block text-xs font-semibold text-[#2C2C2C]">
+                  Administrator Security Authorization *
+                </label>
+              </div>
+              <p className="text-[11px] text-[#717171]">
+                Enter your administrator password to authorize cadastral changes.
+              </p>
+              <div className="relative">
+                <input
+                  required
+                  type={showPassword ? "text" : "password"}
+                  value={adminPassword}
+                  onChange={(e) => setAdminPassword(e.target.value)}
+                  className="w-full text-xs p-2.5 pr-9 border border-[#DADCE0] rounded-lg bg-white focus:outline-none focus:border-[#612D53]"
+                  placeholder="Enter administrator password (e.g. admin123)"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#717171] hover:text-[#2C2C2C] p-1 cursor-pointer"
+                >
+                  {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                </button>
               </div>
             </div>
           </form>

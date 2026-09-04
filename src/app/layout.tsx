@@ -37,6 +37,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${roboto.variable} h-full antialiased`}>
+      <head>
+        <link rel="preconnect" href="https://jzezuitkenrfkzrkphiz.supabase.co" crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href="https://jzezuitkenrfkzrkphiz.supabase.co" />
+        <link rel="preconnect" href="https://api.paystack.co" crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href="https://api.paystack.co" />
+      </head>
       <body className="min-h-full flex flex-col bg-background text-foreground">
         {children}
       </body>

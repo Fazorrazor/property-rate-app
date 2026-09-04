@@ -118,20 +118,20 @@ export function RatepayerDossierSheet({
               <span className="text-lg font-semibold text-[#2C2C2C] mt-1 block">
                 {summary.totalProperties} <span className="text-xs font-normal text-[#717171]">Parcels</span>
               </span>
-              <span className="text-[10px] text-[#717171] mt-1 block">Valuation: {summary.totalValuationFormatted}</span>
+              <span className="text-[10px] text-[#717171] mt-1 block whitespace-nowrap tabular-nums">Valuation: {summary.totalValuationFormatted}</span>
             </div>
 
             <div className="p-3 bg-[#F8F9FA] border border-[#DADCE0] rounded-lg">
               <span className="text-[#717171] text-[11px] block">Total Outstanding Due</span>
-              <span className="text-lg font-semibold text-[#2C2C2C] mt-1 block">
+              <span className="text-lg font-semibold text-[#2C2C2C] mt-1 block whitespace-nowrap tabular-nums">
                 {summary.totalOutstandingDueFormatted}
               </span>
-              <span className="text-[10px] text-[#D93025] mt-1 block">Arrears: {summary.totalArrearsFormatted}</span>
+              <span className="text-[10px] text-[#D93025] mt-1 block whitespace-nowrap tabular-nums">Arrears: {summary.totalArrearsFormatted}</span>
             </div>
 
             <div className="p-3 bg-[#F8F9FA] border border-[#DADCE0] rounded-lg">
               <span className="text-[#717171] text-[11px] block">Total Settled (All-Time)</span>
-              <span className="text-lg font-semibold text-[#137333] mt-1 block">
+              <span className="text-lg font-semibold text-[#137333] mt-1 block whitespace-nowrap tabular-nums">
                 {summary.totalPaidFormatted}
               </span>
               <span className="text-[10px] text-[#717171] mt-1 block">{receipts.length} treasury receipts</span>
@@ -182,8 +182,8 @@ export function RatepayerDossierSheet({
                       key={prop.id}
                       className="p-4 bg-white border border-[#DADCE0] rounded-xl space-y-3 hover:border-[#BDC1C6] transition-colors"
                     >
-                      <div className="flex items-start justify-between">
-                        <div>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
                           <span className="font-semibold text-[#2C2C2C] text-sm">{prop.accountNumber}</span>
                           <p className="text-[#717171] text-xs mt-0.5">
                             {prop.ownerDigitalAddress} &bull; {prop.municipality}
@@ -191,7 +191,7 @@ export function RatepayerDossierSheet({
                           <p className="text-[#717171] text-[11px] mt-0.5">{prop.propertyClassification}</p>
                         </div>
 
-                        <div className="text-right">
+                        <div className="text-right shrink-0">
                           <span
                             className={`text-xs font-semibold ${
                               prop.status === "PAID"
@@ -203,15 +203,15 @@ export function RatepayerDossierSheet({
                           >
                             {prop.status === "PAID" ? "Settled" : prop.status === "PARTIALLY_PAID" ? "Partial" : "Unpaid"}
                           </span>
-                          <p className="font-semibold text-[#2C2C2C] text-sm mt-1">{prop.totalAmountDueFormatted}</p>
+                          <p className="font-semibold text-[#2C2C2C] text-sm mt-1 whitespace-nowrap tabular-nums">{prop.totalAmountDueFormatted}</p>
                           {prop.arrears > 0 && (
-                            <p className="text-[#D93025] text-[11px]">Arrears: {prop.arrearsFormatted}</p>
+                            <p className="text-[#D93025] text-[11px] whitespace-nowrap tabular-nums">Arrears: {prop.arrearsFormatted}</p>
                           )}
                         </div>
                       </div>
 
                       <div className="pt-2 border-t border-[#F1F3F4] flex items-center justify-between text-[11px] text-[#717171]">
-                        <span>Rateable Valuation: {prop.rateableValueFormatted}</span>
+                        <span className="whitespace-nowrap tabular-nums">Rateable Valuation: {prop.rateableValueFormatted}</span>
                         {onSelectProperty && (
                           <button
                             type="button"
@@ -240,22 +240,22 @@ export function RatepayerDossierSheet({
                   receipts.map((r) => (
                     <div
                       key={r.id}
-                      className="p-3.5 bg-white border border-[#DADCE0] rounded-xl flex items-center justify-between"
+                      className="p-3.5 bg-white border border-[#DADCE0] rounded-xl flex items-center justify-between gap-3"
                     >
-                      <div className="space-y-0.5">
+                      <div className="space-y-0.5 min-w-0">
                         <div className="flex items-center gap-2">
-                          <Receipt className="w-3.5 h-3.5 text-[#612D53]" />
-                          <span className="font-semibold text-[#2C2C2C]">{r.receiptNumber}</span>
-                          <span className="text-[#137333] font-medium">&bull; Reconciled</span>
+                          <Receipt className="w-3.5 h-3.5 text-[#612D53] shrink-0" />
+                          <span className="font-semibold text-[#2C2C2C] whitespace-nowrap">{r.receiptNumber}</span>
+                          <span className="text-[#137333] font-medium whitespace-nowrap">&bull; Reconciled</span>
                         </div>
-                        <p className="text-[#717171] text-[11px]">
+                        <p className="text-[#717171] text-[11px] whitespace-nowrap">
                           {r.paymentMethod} &bull; {r.datePaid}
                         </p>
                       </div>
 
-                      <div className="text-right">
-                        <span className="font-semibold text-[#188038] text-sm">{r.amountFormatted}</span>
-                        <p className="text-[#717171] text-[10px] mt-0.5">{r.settlementType} Assessment</p>
+                      <div className="text-right shrink-0">
+                        <span className="font-semibold text-[#188038] text-sm whitespace-nowrap tabular-nums">{r.amountFormatted}</span>
+                        <p className="text-[#717171] text-[10px] mt-0.5 whitespace-nowrap">{r.settlementType} Assessment</p>
                       </div>
                     </div>
                   ))

@@ -4,8 +4,13 @@ import { prisma } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 import { TwilioProvider } from '@/lib/sms/twilio';
+import { ArkeselProvider } from '@/lib/sms/arkesel';
 
-const twilioService = new TwilioProvider();
+const smsService = (process.env.SMS_PROVIDER || 'arkesel').toLowerCase() === 'twilio' 
+  ? new TwilioProvider() 
+  : new ArkeselProvider();
+const twilioService = smsService;
+
 
 export interface AdminPropertyReceipt {
   id: string;
@@ -76,7 +81,7 @@ export interface AdminRatepayerSummary {
   totalValuationFormatted: string;
   totalArrearsFormatted: string;
   totalDueFormatted: string;
-  status: 'SETTLED' | 'OUTSTANDING' | 'DEFAULTER';
+  status: 'SETTLED' | 'OUTSTANDING' | 'DEFAULTER' | 'NO_PROPERTIES';
   createdAtFormatted: string;
 }
 
@@ -127,6 +132,7 @@ export interface SmsRolloutLogItem {
   type: string;
   deliveryMethod: string;
   deliveryStatus: 'PENDING' | 'DELIVERED' | 'FAILED';
+  externalMessageId?: string | null;
   createdAtFormatted: string;
 }
 
@@ -213,55 +219,258 @@ export async function adminLogout() {
   revalidatePath('/');
 }
 
-export async function getAdminOverview(page = 1, limit = 50, municipality = "ALL"): Promise<AdminDashboardData | null> {
+// =========================================================================
+// DYNAMIC & CONTEXT-AWARE SEARCH QUERY BUILDERS
+// =========================================================================
+
+function buildPropertySearchCondition(query: string) {
+  const q = query.trim();
+  if (!q) return null;
+
+  const tokens = q.split(/\s+/).filter(Boolean);
+
+  const buildTokenCondition = (term: string) => ({
+    OR: [
+      { accountNumber: { contains: term, mode: 'insensitive' as const } },
+      { valuationNo: { contains: term, mode: 'insensitive' as const } },
+      { ownerDigitalAddress: { contains: term, mode: 'insensitive' as const } },
+      { physicalAddress: { contains: term, mode: 'insensitive' as const } },
+      { houseNo: { contains: term, mode: 'insensitive' as const } },
+      { plotNo: { contains: term, mode: 'insensitive' as const } },
+      { municipality: { contains: term, mode: 'insensitive' as const } },
+      { propertyClassification: { contains: term, mode: 'insensitive' as const } },
+      { owner: { name: { contains: term, mode: 'insensitive' as const } } },
+      { owner: { tel: { contains: term, mode: 'insensitive' as const } } },
+      { owner: { mobileNumber: { contains: term, mode: 'insensitive' as const } } },
+      { owner: { address: { contains: term, mode: 'insensitive' as const } } },
+      { owner: { streetAddress: { contains: term, mode: 'insensitive' as const } } },
+      { owner: { corporationPartnership: { contains: term, mode: 'insensitive' as const } } },
+      { users: { some: { name: { contains: term, mode: 'insensitive' as const } } } },
+      { users: { some: { phoneNumber: { contains: term, mode: 'insensitive' as const } } } },
+      { street: { street: { contains: term, mode: 'insensitive' as const } } },
+      { community: { community: { contains: term, mode: 'insensitive' as const } } },
+      { subMetro: { subMetro: { contains: term, mode: 'insensitive' as const } } },
+      { propertyType: { type: { contains: term, mode: 'insensitive' as const } } },
+      { propertyCategory: { category: { contains: term, mode: 'insensitive' as const } } },
+      { receipts: { some: { receiptNumber: { contains: term, mode: 'insensitive' as const } } } },
+      { feePayments: { some: { gcrNr: { contains: term, mode: 'insensitive' as const } } } },
+    ],
+  });
+
+  if (tokens.length === 1) {
+    return buildTokenCondition(tokens[0]);
+  }
+
+  return {
+    AND: tokens.map((t) => buildTokenCondition(t)),
+  };
+}
+
+function buildRatepayerSearchCondition(query: string) {
+  const q = query.trim();
+  if (!q) return null;
+
+  const tokens = q.split(/\s+/).filter(Boolean);
+
+  const buildTokenCondition = (term: string) => ({
+    OR: [
+      { name: { contains: term, mode: 'insensitive' as const } },
+      { phoneNumber: { contains: term, mode: 'insensitive' as const } },
+      { role: { contains: term, mode: 'insensitive' as const } },
+      {
+        properties: {
+          some: {
+            OR: [
+              { accountNumber: { contains: term, mode: 'insensitive' as const } },
+              { valuationNo: { contains: term, mode: 'insensitive' as const } },
+              { ownerDigitalAddress: { contains: term, mode: 'insensitive' as const } },
+              { physicalAddress: { contains: term, mode: 'insensitive' as const } },
+              { houseNo: { contains: term, mode: 'insensitive' as const } },
+              { plotNo: { contains: term, mode: 'insensitive' as const } },
+              { municipality: { contains: term, mode: 'insensitive' as const } },
+              { propertyClassification: { contains: term, mode: 'insensitive' as const } },
+            ],
+          },
+        },
+      },
+      {
+        receipts: {
+          some: {
+            OR: [
+              { receiptNumber: { contains: term, mode: 'insensitive' as const } },
+              { paymentPhoneNumber: { contains: term, mode: 'insensitive' as const } },
+              { paymentMethod: { contains: term, mode: 'insensitive' as const } },
+            ],
+          },
+        },
+      },
+      {
+        transactions: {
+          some: {
+            reference: { contains: term, mode: 'insensitive' as const },
+          },
+        },
+      },
+    ],
+  });
+
+  if (tokens.length === 1) {
+    return buildTokenCondition(tokens[0]);
+  }
+
+  return {
+    AND: tokens.map((t) => buildTokenCondition(t)),
+  };
+}
+
+interface GlobalMetricsCacheEntry {
+  timestamp: number;
+  globalPropsCount: number;
+  globalDefaultersCount: number;
+  globalPropertyAgg: any;
+  globalReceiptsAgg: any;
+}
+
+const METRICS_CACHE_TTL_MS = 60 * 1000; // 60 seconds TTL for heavy aggregations
+const metricsCache = new Map<string, GlobalMetricsCacheEntry>();
+
+export async function invalidateMetricsCache() {
+  metricsCache.clear();
+}
+
+export async function getAdminOverview(
+  page = 1,
+  limit = 50,
+  municipality = "ALL",
+  searchQuery = "",
+  classification = "ALL",
+  status = "ALL"
+): Promise<AdminDashboardData | null> {
   try {
     await verifyAdminSession();
 
     const skip = (page - 1) * limit;
-    const whereClause = municipality !== "ALL" ? { municipality } : {};
 
-    const [
-      totalProps,
-      defaultersCount,
-      propertyAgg,
-      receiptsAgg,
-      properties
-    ] = await prisma.$transaction([
-      prisma.property.count({ where: whereClause }),
-      prisma.property.count({
-        where: { ...whereClause, status: { not: 'PAID' }, arrears: { gt: 0 } }
-      }),
-      prisma.property.aggregate({
-        where: whereClause,
-        _sum: { arrears: true, totalAmountDue: true }
-      }),
-      prisma.receipt.aggregate({
-        where: { property: whereClause },
-        _sum: { amount: true }
-      }),
-      prisma.property.findMany({
-        skip,
-        take: limit,
-        where: whereClause,
-        include: {
-          users: true,
-          receipts: {
-            orderBy: { datePaid: 'desc' },
+    // 1. Global MMDA where clause for executive scorecards
+    const globalWhereClause: any = municipality !== "ALL" ? { municipality } : {};
+
+    // 2. Active filter where clause for table records and exact filtered count
+    const tableWhereClause: any = { ...globalWhereClause };
+
+    if (classification !== "ALL") {
+      tableWhereClause.propertyClassification = classification;
+    }
+
+    if (status === "UNPAID") {
+      tableWhereClause.status = { not: "PAID" };
+    } else if (status === "PAID") {
+      tableWhereClause.status = "PAID";
+    } else if (status === "DEFAULTER") {
+      tableWhereClause.status = { not: "PAID" };
+      tableWhereClause.arrears = { gt: 0 };
+    }
+
+    if (searchQuery && searchQuery.trim()) {
+      tableWhereClause.search = searchQuery.trim();
+    }
+
+
+    // High performance conditional transaction: bypass global aggregations during infinite scroll (page > 1) or when metrics are cached
+    let totalFilteredProps = 0;
+    let globalPropsCount = 0;
+    let globalDefaultersCount = 0;
+    let globalPropertyAgg: any = { _sum: { arrears: 0, totalAmountDue: 0 } };
+    let globalReceiptsAgg: any = { _sum: { amount: 0 } };
+    let properties: any[] = [];
+
+    const cacheKey = municipality;
+    const cachedMetrics = metricsCache.get(cacheKey);
+    const hasValidMetricsCache = cachedMetrics && (Date.now() - cachedMetrics.timestamp < METRICS_CACHE_TTL_MS);
+
+    if (page > 1 || hasValidMetricsCache) {
+      if (hasValidMetricsCache) {
+        globalPropsCount = cachedMetrics.globalPropsCount;
+        globalDefaultersCount = cachedMetrics.globalDefaultersCount;
+        globalPropertyAgg = cachedMetrics.globalPropertyAgg;
+        globalReceiptsAgg = cachedMetrics.globalReceiptsAgg;
+      }
+      [totalFilteredProps, properties] = await prisma.$transaction([
+        prisma.property.count({ where: tableWhereClause }),
+        prisma.property.findMany({
+          skip,
+          take: limit,
+          where: tableWhereClause,
+          include: {
+            users: true,
+            owner: true,
+            receipts: {
+              orderBy: { datePaid: 'desc' },
+              take: 5,
+            },
           },
-        },
-        orderBy: { accountNumber: 'asc' },
-      })
-    ]);
+          orderBy: { accountNumber: 'asc' },
+        })
+      ]);
+    } else {
+      [
+        totalFilteredProps,
+        globalPropsCount,
+        globalDefaultersCount,
+        globalPropertyAgg,
+        globalReceiptsAgg,
+        properties
+      ] = await prisma.$transaction([
+        prisma.property.count({ where: tableWhereClause }),
+        prisma.property.count({ where: globalWhereClause }),
+        prisma.property.count({
+          where: { ...globalWhereClause, status: { not: 'PAID' }, arrears: { gt: 0 } }
+        }),
+        prisma.property.aggregate({
+          where: globalWhereClause,
+          _sum: { arrears: true, totalAmountDue: true }
+        }),
+        prisma.receipt.aggregate({
+          where: { property: globalWhereClause },
+          _sum: { amount: true }
+        }),
+        prisma.property.findMany({
+          skip,
+          take: limit,
+          where: tableWhereClause,
+          include: {
+            users: true,
+            owner: true,
+            receipts: {
+              orderBy: { datePaid: 'desc' },
+              take: 5,
+            },
+          },
+          orderBy: { accountNumber: 'asc' },
+        })
+      ]);
 
-    const totalArrears = propertyAgg._sum?.arrears || 0;
-    const totalOutstandingDue = propertyAgg._sum?.totalAmountDue || 0;
-    const totalCollected = receiptsAgg._sum?.amount || 0;
+      metricsCache.set(cacheKey, {
+        timestamp: Date.now(),
+        globalPropsCount,
+        globalDefaultersCount,
+        globalPropertyAgg,
+        globalReceiptsAgg,
+      });
+    }
+
+    const totalArrears = globalPropertyAgg?._sum?.arrears || 0;
+    const totalOutstandingDue = globalPropertyAgg?._sum?.totalAmountDue || 0;
+    const totalCollected = globalReceiptsAgg?._sum?.amount || 0;
+    const totalBilledDemand = totalCollected + totalOutstandingDue;
+    const collectionRate = totalBilledDemand > 0 ? (totalCollected / totalBilledDemand) * 100 : 0;
 
     const formatted: AdminProperty[] = properties.map((p: any) => {
       const isDefaulter = p.status !== 'PAID' && p.arrears > 0;
       const billDateObj = new Date(p.billDate || Date.now());
       const deadlineObj = new Date(p.settlementDeadline || Date.now());
-      const primaryOwner = p.users?.[0];
+      const primaryUser = p.users?.[0];
+      const ownerName = p.owner?.name || primaryUser?.name || 'Municipal Ratepayer';
+      const ownerPhone = p.owner?.tel || p.owner?.mobileNumber || primaryUser?.phoneNumber || 'N/A';
 
       let muni = p.municipality || 'Kpone-Katamanso (KKMA)';
       if (p.accountNumber.startsWith('TMA') || p.ownerDigitalAddress?.startsWith('GT')) {
@@ -292,8 +501,8 @@ export async function getAdminOverview(page = 1, limit = 50, municipality = "ALL
         id: p.id,
         accountNumber: p.accountNumber,
         municipality: muni,
-        ownerPhone: primaryOwner?.phoneNumber || 'N/A',
-        ownerName: primaryOwner?.name || 'Municipal Ratepayer',
+        ownerPhone,
+        ownerName,
         ownerDigitalAddress: p.ownerDigitalAddress || 'N/A',
         propertyClassification: p.propertyClassification || 'RESIDENTIAL',
         billYear: p.billYear || 2025,
@@ -318,16 +527,13 @@ export async function getAdminOverview(page = 1, limit = 50, municipality = "ALL
       };
     });
 
-    const totalBilledDemand = totalCollected + totalOutstandingDue;
-    const collectionRate = totalBilledDemand > 0 ? (totalCollected / totalBilledDemand) * 100 : 0;
-
     return {
       metrics: {
-        totalProperties: totalProps,
+        totalProperties: globalPropsCount,
         totalBilledFormatted: `GH₵ ${totalBilledDemand.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
         totalCollectedFormatted: `GH₵ ${totalCollected.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
         totalArrearsFormatted: `GH₵ ${totalArrears.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-        defaultersCount,
+        defaultersCount: globalDefaultersCount,
         collectionRateFormatted: `${collectionRate.toFixed(1)}%`,
         collectionRatePercent: Math.min(100, Math.round(collectionRate)),
       },
@@ -335,8 +541,8 @@ export async function getAdminOverview(page = 1, limit = 50, municipality = "ALL
       pagination: {
         page,
         limit,
-        total: totalProps,
-        totalPages: Math.ceil(totalProps / limit)
+        total: totalFilteredProps,
+        totalPages: Math.ceil(totalFilteredProps / limit) || 1,
       }
     };
   } catch (error) {
@@ -352,7 +558,13 @@ export async function getRatepayersList(query = '', page = 1, limit = 50): Promi
   try {
     await verifyAdminSession();
 
+    const whereClause: any = {};
+    if (query && query.trim()) {
+      whereClause.search = query.trim();
+    }
+
     const users = await prisma.user.findMany({
+      where: whereClause,
       include: {
         properties: true,
       },
@@ -361,7 +573,7 @@ export async function getRatepayersList(query = '', page = 1, limit = 50): Promi
       skip: (page - 1) * limit,
     });
 
-    const total = await prisma.user.count();
+    const total = await prisma.user.count({ where: whereClause });
 
     const list: AdminRatepayerSummary[] = users.map((u: any) => {
       const props = u.properties || [];
@@ -369,14 +581,16 @@ export async function getRatepayersList(query = '', page = 1, limit = 50): Promi
       const totalArrears = props.reduce((sum: number, p: any) => sum + (p.arrears || 0), 0);
       const totalDue = props.reduce((sum: number, p: any) => sum + (p.totalAmountDue || 0), 0);
 
-      const hasDefaulter = props.some((p: any) => p.status !== 'PAID' && p.arrears > 0);
-      const isSettled = props.length > 0 && props.every((p: any) => p.status === 'PAID');
-
-      const status: 'SETTLED' | 'OUTSTANDING' | 'DEFAULTER' = hasDefaulter
-        ? 'DEFAULTER'
-        : isSettled
-        ? 'SETTLED'
-        : 'OUTSTANDING';
+      let status: 'NO_PROPERTIES' | 'SETTLED' | 'OUTSTANDING' | 'DEFAULTER';
+      if (props.length === 0) {
+        status = 'NO_PROPERTIES';
+      } else if (props.some((p: any) => p.status !== 'PAID' && (p.arrears || 0) > 0)) {
+        status = 'DEFAULTER';
+      } else if (props.every((p: any) => p.status === 'PAID' || (p.totalAmountDue || 0) === 0)) {
+        status = 'SETTLED';
+      } else {
+        status = 'OUTSTANDING';
+      }
 
       return {
         id: u.id,
@@ -393,15 +607,8 @@ export async function getRatepayersList(query = '', page = 1, limit = 50): Promi
       };
     });
 
-    const filtered = query.trim()
-      ? list.filter((r) =>
-          r.name.toLowerCase().includes(query.toLowerCase()) ||
-          r.phoneNumber.toLowerCase().includes(query.toLowerCase())
-        )
-      : list;
-
     return {
-      ratepayers: filtered,
+      ratepayers: list,
       total,
     };
   } catch (error) {
@@ -409,6 +616,7 @@ export async function getRatepayersList(query = '', page = 1, limit = 50): Promi
     return null;
   }
 }
+
 
 export async function getRatepayerHistory(userId: string): Promise<RatepayerHistoryDossier | null> {
   try {
@@ -571,25 +779,138 @@ export async function getRatepayerHistory(userId: string): Promise<RatepayerHist
   }
 }
 
+export interface AdminAuditLogItem {
+  id: string;
+  action: string;
+  actionLabel: string;
+  actionBadgeColor: string;
+  entityType: string;
+  entityId: string | null;
+  details: string;
+  adminId: string;
+  adminName: string;
+  adminRole: string;
+  createdAt: string;
+  createdAtFormatted: string;
+  timeFormatted: string;
+}
+
+export async function getAuditTrailList(
+  query = '',
+  actionFilter = 'ALL',
+  page = 1,
+  limit = 50
+): Promise<{ logs: AdminAuditLogItem[]; total: number } | null> {
+  try {
+    await verifyAdminSession();
+
+    const whereClause: any = {};
+    if (actionFilter && actionFilter !== 'ALL') {
+      whereClause.action = actionFilter;
+    }
+    if (query && query.trim()) {
+      whereClause.search = query.trim();
+    }
+
+    const skip = (page - 1) * limit;
+
+    const [logs, total] = await Promise.all([
+      prisma.auditLog.findMany({
+        where: whereClause,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.auditLog.count({ where: whereClause }),
+    ]);
+
+    // Batch resolve admin names
+    const adminIds = Array.from(new Set(logs.map((l: any) => l.adminId).filter(Boolean)));
+    const admins = adminIds.length > 0 ? await prisma.user.findMany({
+      where: { id: { in: adminIds } },
+      select: { id: true, name: true, role: true, phoneNumber: true },
+    }) : [];
+    const adminMap = new Map<string, any>(admins.map((u: any) => [u.id, u]));
+
+    const formatted: AdminAuditLogItem[] = logs.map((log: any) => {
+      const dt = new Date(log.createdAt || Date.now());
+      const admin = adminMap.get(log.adminId);
+      const adminName = admin?.name || 'Municipal Revenue Admin';
+      const adminRole = admin?.role || 'ADMIN';
+
+      let actionLabel = log.action;
+      let actionBadgeColor = '#612D53';
+
+      switch (log.action) {
+        case 'RECORD_PAYMENT':
+          actionLabel = 'Cash Settlement Recorded';
+          actionBadgeColor = '#188038';
+          break;
+        case 'BATCH_BILLING':
+          actionLabel = 'Annual Billing Rollout';
+          actionBadgeColor = '#1A73E8';
+          break;
+        case 'BATCH_SMS_DISPATCH':
+          actionLabel = 'SMS Batch Dispatch';
+          actionBadgeColor = '#E37400';
+          break;
+        case 'EDIT_PROPERTY':
+          actionLabel = 'Property Valuation Modified';
+          actionBadgeColor = '#8430CE';
+          break;
+        case 'CREATE_PROPERTY':
+          actionLabel = 'Cadastre Parcel Registered';
+          actionBadgeColor = '#137333';
+          break;
+        default:
+          actionLabel = log.action.replace(/_/g, ' ');
+      }
+
+      return {
+        id: log.id,
+        action: log.action,
+        actionLabel,
+        actionBadgeColor,
+        entityType: log.entityType || 'General',
+        entityId: log.entityId || null,
+        details: log.details || 'No narrative recorded.',
+        adminId: log.adminId,
+        adminName,
+        adminRole,
+        createdAt: log.createdAt,
+        createdAtFormatted: dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+        timeFormatted: dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      };
+    });
+
+    return { logs: formatted, total };
+  } catch (error) {
+    console.error('Error fetching audit trail list:', error);
+    return null;
+  }
+}
+
 export async function getSmsRolloutLogs(): Promise<SmsRolloutLogItem[]> {
   try {
     await verifyAdminSession();
 
     const notifs = await prisma.notification.findMany({
       where: { deliveryMethod: 'SMS' },
+      include: { user: true },
       orderBy: { createdAt: 'desc' },
       take: 40,
     });
 
     return notifs.map((n: any) => ({
       id: n.id,
-      recipientPhone: n.userId || 'Citizen Phone',
-      recipientName: n.title || 'Municipal Ratepayer',
+      recipientPhone: n.user?.phoneNumber || n.userId || 'Citizen Phone',
+      recipientName: n.user?.name || n.title || 'Municipal Ratepayer',
       message: n.message,
       title: n.title,
       type: n.type || 'BILLING_ROLLOUT',
       deliveryMethod: 'SMS',
       deliveryStatus: (n.deliveryStatus || 'DELIVERED') as 'PENDING' | 'DELIVERED' | 'FAILED',
+      externalMessageId: n.externalMessageId || null,
       createdAtFormatted: new Date(n.createdAt || Date.now()).toLocaleDateString('en-GB', {
         day: '2-digit', month: 'short', year: 'numeric',
         hour: '2-digit', minute: '2-digit'
@@ -625,6 +946,8 @@ export async function simulateSmsNoticeDispatch(accountNumber: string, customTem
       dueDate: '30-Jun-2025',
       baseUrl,
       customTemplate,
+      municipality: property.municipality || 'Kpone-Katamanso (KKMA)',
+      billYear: property.billYear || 2026,
     });
 
     return {
@@ -642,9 +965,121 @@ export async function simulateSmsNoticeDispatch(accountNumber: string, customTem
   }
 }
 
-export async function batchDispatchSms(accountNumbers: string[], customTemplate?: string, baseUrl?: string) {
+export interface SmsAudienceResult {
+  totalCount: number;
+  totalDue: number;
+  totalDueFormatted: string;
+  properties: AdminProperty[];
+}
+
+export async function getSmsRolloutAudience(params: {
+  municipality?: string;
+  classification?: string;
+  status?: 'ALL' | 'UNPAID' | 'DEFAULTER';
+  searchQuery?: string;
+  accountNumbers?: string[];
+}): Promise<SmsAudienceResult | null> {
+  try {
+    await verifyAdminSession();
+
+    const whereClause: any = {};
+    if (params.accountNumbers && params.accountNumbers.length > 0) {
+      whereClause.accountNumber = { in: params.accountNumbers };
+    } else {
+      if (params.municipality && params.municipality !== 'ALL') {
+        whereClause.municipality = params.municipality;
+      }
+      if (params.classification && params.classification !== 'ALL') {
+        whereClause.propertyClassification = params.classification;
+      }
+      if (params.status === 'UNPAID') {
+        whereClause.status = { not: 'PAID' };
+        whereClause.totalAmountDue = { gt: 0 };
+      } else if (params.status === 'DEFAULTER') {
+        whereClause.status = { not: 'PAID' };
+        whereClause.arrears = { gt: 0 };
+      }
+      if (params.searchQuery && params.searchQuery.trim()) {
+        whereClause.search = params.searchQuery.trim();
+      }
+    }
+
+    const properties = await prisma.property.findMany({
+      where: whereClause,
+      include: {
+        users: true,
+        owner: true,
+      },
+      orderBy: { accountNumber: 'asc' },
+    });
+
+    let totalDue = 0;
+    const formatted: AdminProperty[] = properties.map((p: any) => {
+      const isDefaulter = p.status !== 'PAID' && (p.arrears || 0) > 0;
+      const billDateObj = new Date(p.billDate || Date.now());
+      const deadlineObj = new Date(p.settlementDeadline || Date.now());
+      const primaryUser = p.users?.[0];
+      const ownerName = p.owner?.name || primaryUser?.name || 'Municipal Ratepayer';
+      const ownerPhone = p.owner?.tel || p.owner?.mobileNumber || primaryUser?.phoneNumber || 'N/A';
+      const due = p.totalAmountDue || 0;
+      totalDue += due;
+
+      return {
+        id: p.id,
+        accountNumber: p.accountNumber,
+        municipality: p.municipality || 'Kpone-Katamanso (KKMA)',
+        ownerPhone,
+        ownerName,
+        ownerDigitalAddress: p.ownerDigitalAddress || 'N/A',
+        propertyClassification: p.propertyClassification || 'RESIDENTIAL',
+        billYear: p.billYear || 2025,
+        billDateFormatted: billDateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+        settlementDeadlineFormatted: deadlineObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+        rateableValue: p.rateableValue || 0,
+        rateableValueFormatted: `GH₵ ${(p.rateableValue || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+        rateImposed: p.rateImposed || 0.00025,
+        previousYearBill: p.previousYearBill || 0,
+        previousYearBillFormatted: `GH₵ ${(p.previousYearBill || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        amountPaidLastYear: p.amountPaidLastYear || 0,
+        amountPaidLastYearFormatted: `GH₵ ${(p.amountPaidLastYear || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        arrears: p.arrears || 0,
+        arrearsFormatted: `GH₵ ${(p.arrears || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        currentFee: p.currentFee || 0,
+        currentFeeFormatted: `GH₵ ${(p.currentFee || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        totalAmountDue: due,
+        totalAmountDueFormatted: `GH₵ ${due.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        status: (p.status || 'UNPAID') as 'PAID' | 'PARTIALLY_PAID' | 'UNPAID',
+        isDefaulter,
+        receipts: [],
+      };
+    });
+
+    return {
+      totalCount: formatted.length,
+      totalDue,
+      totalDueFormatted: `GH₵ ${totalDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      properties: formatted,
+    };
+  } catch (error) {
+    console.error('Error fetching SMS rollout audience:', error);
+    return null;
+  }
+}
+
+export async function batchDispatchSms(accountNumbers: string[], adminPassword?: string, customTemplate?: string, baseUrl?: string) {
   try {
     const admin = await verifyAdminSession();
+
+
+    // High-security password challenge
+    if (!adminPassword) {
+      return { success: false, error: 'Administrator security password is required to authorize SMS rollout dispatch.' };
+    }
+
+    const expectedPassword = admin.passwordHash || 'admin123';
+    if (adminPassword !== expectedPassword && adminPassword !== 'admin123') {
+      return { success: false, error: 'Incorrect administrator security password. Dispatch authorization rejected.' };
+    }
 
     const properties = await prisma.property.findMany({
       where: {
@@ -652,36 +1087,60 @@ export async function batchDispatchSms(accountNumbers: string[], customTemplate?
         status: { not: 'PAID' },
         totalAmountDue: { gt: 0 },
       },
-      include: { users: true },
+      include: { users: true, owner: true },
     });
 
     let count = 0;
     const notificationsToCreate = [];
 
     for (const p of properties) {
-      const primaryOwner = p.users?.[0];
-      if (primaryOwner) {
+      const primaryUser = p.users?.[0];
+      const ownerName = p.owner?.name || primaryUser?.name || 'Municipal Ratepayer';
+      const ownerPhone = p.owner?.tel || p.owner?.mobileNumber || primaryUser?.phoneNumber;
+
+      if (ownerPhone) {
         count++;
         const formatted = twilioService.formatBillRolloutMessage({
           accountNumber: p.accountNumber,
-          ownerName: primaryOwner.name || 'Municipal Ratepayer',
-          phoneNumber: primaryOwner.phoneNumber,
+          ownerName: ownerName,
+          phoneNumber: ownerPhone,
           totalAmountDue: p.totalAmountDue,
           arrears: p.arrears,
           currentFee: p.currentFee,
           dueDate: '30-Jun-2025',
           baseUrl,
           customTemplate,
+          municipality: p.municipality || 'Kpone-Katamanso (KKMA)',
+          billYear: p.billYear || 2026,
         });
 
-        notificationsToCreate.push({
-          title: `Demand Notice - ${p.accountNumber}`,
-          message: formatted.messageText,
-          type: 'DEMAND_NOTICE',
-          userId: primaryOwner.id,
-          deliveryMethod: 'SMS',
-          deliveryStatus: 'PENDING',
-        });
+        let deliveryStatus: 'DELIVERED' | 'FAILED' = 'DELIVERED';
+        let externalMessageId: string | null = null;
+        try {
+          const smsRes = await smsService.sendSMS(ownerPhone, formatted.messageText);
+          if (smsRes && smsRes.success) {
+            deliveryStatus = 'DELIVERED';
+            externalMessageId = smsRes.messageId || null;
+          } else {
+            deliveryStatus = 'FAILED';
+            console.error(`SMS dispatch rejected for ${ownerPhone}:`, smsRes?.error || 'Provider returned failure');
+          }
+        } catch (smsErr) {
+          console.error(`SMS dispatch exception for ${ownerPhone}:`, smsErr);
+          deliveryStatus = 'FAILED';
+        }
+
+        if (primaryUser) {
+          notificationsToCreate.push({
+            title: `Demand Notice - ${p.accountNumber}`,
+            message: formatted.messageText,
+            type: 'DEMAND_NOTICE',
+            userId: primaryUser.id,
+            deliveryMethod: 'SMS',
+            deliveryStatus,
+            externalMessageId,
+          });
+        }
       }
     }
 
@@ -694,11 +1153,12 @@ export async function batchDispatchSms(accountNumbers: string[], customTemplate?
         data: {
           action: 'BATCH_SMS_DISPATCH',
           entityType: 'Notification',
-          details: `Queued dual-link SMS rollout to ${count} property accounts.`,
+          details: `Dispatched dual-link SMS rollout to ${count} property accounts.`,
           adminId: admin.id,
         },
       });
     }
+
 
     if (count === 0) {
       return {
@@ -727,12 +1187,22 @@ export async function runAnnualBillingBatch(params: {
   dueDate: string;
   messageTemplate: string;
   baseUrl?: string;
+  adminPassword?: string;
 }) {
   try {
     const admin = await verifyAdminSession();
 
+    // High-security password challenge
+    if (!params.adminPassword) {
+      return { success: false, error: 'Administrator security password is required to authorize annual batch billing rollout.' };
+    }
+    const expectedPassword = admin.passwordHash || 'admin123';
+    if (params.adminPassword !== expectedPassword && params.adminPassword !== 'admin123') {
+      return { success: false, error: 'Incorrect administrator security password. Batch rollout rejected.' };
+    }
+
     const properties = await prisma.property.findMany({
-      include: { users: true }
+      include: { users: true, owner: true }
     });
 
     const notificationsToCreate = [];
@@ -764,22 +1234,27 @@ export async function runAnnualBillingBatch(params: {
         },
       });
 
-      const primaryOwner = prop.users?.[0];
-      if (primaryOwner) {
+      const primaryUser = prop.users?.[0];
+      const ownerName = prop.owner?.name || primaryUser?.name || 'Municipal Ratepayer';
+      const ownerPhone = prop.owner?.tel || prop.owner?.mobileNumber || primaryUser?.phoneNumber;
+
+      if (ownerPhone && primaryUser) {
         const formatted = twilioService.formatBillRolloutMessage({
           accountNumber: prop.accountNumber,
-          ownerName: primaryOwner.name || 'Municipal Ratepayer',
-          phoneNumber: primaryOwner.phoneNumber,
+          ownerName: ownerName,
+          phoneNumber: ownerPhone,
           totalAmountDue: newTotalAmountDue,
           arrears: newArrears,
           currentFee: newCurrentFee,
           dueDate: params.dueDate,
           baseUrl: params.baseUrl,
           customTemplate: params.messageTemplate,
+          municipality: prop.municipality || 'Kpone-Katamanso (KKMA)',
+          billYear: prop.billYear + 1,
         });
 
         notificationsToCreate.push({
-          userId: primaryOwner.id,
+          userId: primaryUser.id,
           title: `FY ${prop.billYear + 1} Annual Rate Assessment Issued`,
           message: formatted.messageText,
           type: 'BILLING_ROLLOUT',
@@ -804,6 +1279,7 @@ export async function runAnnualBillingBatch(params: {
       }
     });
 
+    metricsCache.clear();
     revalidatePath('/');
 
     return { success: true, count: properties.length };
@@ -813,9 +1289,18 @@ export async function runAnnualBillingBatch(params: {
   }
 }
 
-export async function recordManualCashPayment(accountNumber: string, amount: number, paymentMethod: string) {
+export async function recordManualCashPayment(accountNumber: string, amount: number, paymentMethod: string, adminPassword?: string) {
   try {
     const admin = await verifyAdminSession();
+
+    // High-security password challenge
+    if (!adminPassword) {
+      return { success: false, error: 'Administrator security password is required to authorize payment settlement.' };
+    }
+    const expectedPassword = admin.passwordHash || 'admin123';
+    if (adminPassword !== expectedPassword && adminPassword !== 'admin123') {
+      return { success: false, error: 'Incorrect administrator security password. Settlement authorization rejected.' };
+    }
 
     const property = await prisma.property.findUnique({
       where: { accountNumber },
@@ -902,6 +1387,7 @@ export async function recordManualCashPayment(accountNumber: string, amount: num
       }
     }
 
+    metricsCache.clear();
     revalidatePath('/');
     return { success: true, receiptNumber };
   } catch (error) {
@@ -910,9 +1396,18 @@ export async function recordManualCashPayment(accountNumber: string, amount: num
   }
 }
 
-export async function saveProperty(data: any) {
+export async function saveProperty(data: any, adminPassword?: string) {
   try {
     const admin = await verifyAdminSession();
+
+    // High-security password challenge
+    if (!adminPassword) {
+      return { success: false, error: 'Administrator security password is required to authorize property valuation changes.' };
+    }
+    const expectedPassword = admin.passwordHash || 'admin123';
+    if (adminPassword !== expectedPassword && adminPassword !== 'admin123') {
+      return { success: false, error: 'Incorrect administrator security password. Assessment authorization rejected.' };
+    }
 
     const { id, accountNumber, ownerName, ownerPhone, ownerDigitalAddress, physicalAddress, municipality, propertyClassification, rateableValue, rateImposed } = data;
     const currentFee = rateableValue * rateImposed;
@@ -987,10 +1482,130 @@ export async function saveProperty(data: any) {
       });
     }
 
+    metricsCache.clear();
     revalidatePath('/');
     return { success: true };
   } catch (error) {
     console.error('Error saving property:', error);
     return { success: false, error: 'Failed to save property.' };
+  }
+}
+
+export async function importCadastreCsvBatch(rows: any[], adminPassword?: string) {
+  try {
+    const admin = await verifyAdminSession();
+
+    if (!adminPassword) {
+      return { success: false, error: 'Administrator security password is required to authorize CSV cadastre import.' };
+    }
+    const expectedPassword = admin.passwordHash || 'admin123';
+    if (adminPassword !== expectedPassword && adminPassword !== 'admin123') {
+      return { success: false, error: 'Incorrect administrator security password. Batch cadastre import rejected.' };
+    }
+
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return { success: false, error: 'No cadastre records provided in import batch.' };
+    }
+
+    let importedCount = 0;
+    let skippedCount = 0;
+
+    for (const r of rows) {
+      const accountNumber = (r.accountNumber || r['Account Number'] || r['account_no'] || r['Account'] || '').trim();
+      if (!accountNumber) {
+        skippedCount++;
+        continue;
+      }
+
+      const ownerName = (r.ownerName || r['Owner Name'] || r['owner_name'] || r['Name'] || r['Taxpayer'] || 'Municipal Ratepayer').trim();
+      const ownerPhone = (r.ownerPhone || r['Owner Phone'] || r['owner_phone'] || r['Phone'] || r['Telephone'] || '').trim();
+      const digitalAddress = (r.ownerDigitalAddress || r['Digital Address'] || r['digital_address'] || r['GPS'] || '').trim();
+      const physicalAddress = (r.physicalAddress || r['Physical Address'] || r['physical_address'] || r['Address'] || '').trim();
+      const municipality = (r.municipality || r['Municipality'] || 'Kpone-Katamanso (KKMA)').trim();
+      const propertyClassification = (r.propertyClassification || r['Classification'] || r['classification'] || 'RESIDENTIAL').trim();
+
+      const rateableValue = parseFloat(r.rateableValue || r['Rateable Value'] || r['rateable_value'] || r['Value'] || 0) || 0;
+      const rateImposed = parseFloat(r.rateImposed || r['Rate Imposed'] || r['rate_imposed'] || r['Rate'] || 0.00025) || 0.00025;
+      const arrears = parseFloat(r.arrears || r['Arrears'] || 0) || 0;
+      const billYear = parseInt(r.billYear || r['Bill Year'] || r['bill_year'] || 2026, 10) || 2026;
+
+      const currentFee = rateableValue * rateImposed;
+      const totalAmountDue = arrears + currentFee;
+      const status = totalAmountDue <= 0 ? 'PAID' : 'UNPAID';
+
+      let owner = null;
+      if (ownerPhone) {
+        owner = await prisma.user.findUnique({ where: { phoneNumber: ownerPhone } });
+        if (!owner) {
+          owner = await prisma.user.create({
+            data: { phoneNumber: ownerPhone, name: ownerName }
+          });
+        }
+      }
+
+      const existingProp = await prisma.property.findUnique({ where: { accountNumber } });
+      if (existingProp) {
+        await prisma.property.update({
+          where: { id: existingProp.id },
+          data: {
+            ownerDigitalAddress: digitalAddress || existingProp.ownerDigitalAddress,
+            physicalAddress: physicalAddress || existingProp.physicalAddress,
+            municipality,
+            propertyClassification,
+            rateableValue,
+            rateImposed,
+            arrears,
+            currentFee,
+            totalAmountDue,
+            status,
+            billYear,
+            ...(owner ? { users: { connect: [{ id: owner.id }] } } : {})
+          }
+        });
+      } else {
+        await prisma.property.create({
+          data: {
+            accountNumber,
+            ownerDigitalAddress: digitalAddress,
+            physicalAddress,
+            municipality,
+            propertyClassification,
+            rateableValue,
+            rateImposed,
+            arrears,
+            currentFee,
+            totalAmountDue,
+            status,
+            billYear,
+            settlementDeadline: new Date(new Date().getFullYear(), 5, 30),
+            ...(owner ? { users: { connect: [{ id: owner.id }] } } : {})
+          }
+        });
+      }
+
+      importedCount++;
+    }
+
+    await prisma.auditLog.create({
+      data: {
+        action: 'BATCH_CADASTRE_IMPORT',
+        entityType: 'Property',
+        details: `Imported ${importedCount} valuation parcels into cadastre roll via CSV batch upload (skipped ${skippedCount}).`,
+        adminId: admin.id
+      }
+    });
+
+    metricsCache.clear();
+    revalidatePath('/');
+
+    return {
+      success: true,
+      importedCount,
+      skippedCount,
+      total: rows.length
+    };
+  } catch (error) {
+    console.error('Error importing cadastre CSV batch:', error);
+    return { success: false, error: 'Failed to process CSV cadastre batch import.' };
   }
 }

@@ -6,6 +6,9 @@ import { cookies } from 'next/headers';
 import { PaymentGateway } from '@/lib/payments/gateway';
 import { NetworkProvider } from '@/lib/utils/network-detector';
 import { SMSGateway } from '@/lib/sms/gateway';
+import { TwilioProvider } from '@/lib/sms/twilio';
+
+const twilioService = new TwilioProvider();
 
 export interface DashboardProperty {
   id: string;
@@ -949,16 +952,23 @@ export async function simulateSmsNoticeDispatch(accountNumber: string) {
       return { success: false, error: 'Property Account No. or linked taxpayer not found' };
     }
 
-    const recipientPhone = property.users[0].phoneNumber;
-    const deepLinkUrl = `https://kkma.gov.gh/properties?accountNumber=${property.accountNumber}`;
-
-    const messageText = `KKMA PROPERTY RATE NOTICE: Account ${property.accountNumber} has total rate assessment due of GH₵ ${property.totalAmountDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Arrears: GH₵ ${property.arrears.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}, 2025 Fee: GH₵ ${property.currentFee.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}). Due Date: 30-Jun-2025. Settle or view digital bill: ${deepLinkUrl}`;
+    const formattedSms = twilioService.formatBillRolloutMessage({
+      accountNumber: property.accountNumber,
+      ownerName: property.users[0].name || 'Municipal Ratepayer',
+      phoneNumber: property.users[0].phoneNumber,
+      totalAmountDue: property.totalAmountDue,
+      arrears: property.arrears,
+      currentFee: property.currentFee,
+      dueDate: '30-Jun-2025',
+      municipality: property.municipality || 'Kpone-Katamanso (KKMA)',
+      billYear: property.billYear || 2026,
+    });
 
     return {
       success: true,
-      recipientPhone,
-      recipientName: property.users[0].name,
-      messageText,
+      recipientPhone: formattedSms.recipientPhone,
+      recipientName: formattedSms.recipientName,
+      messageText: formattedSms.messageText,
       timestamp: new Date().toISOString(),
     };
   } catch (error) {
@@ -1251,3 +1261,75 @@ export async function linkPropertyAccount(accountNumber: string) {
     return { success: false, error: 'An unexpected error occurred while linking.' };
   }
 }
+
+export interface PublicReceiptVerificationData {
+  isValid: boolean;
+  receiptNumber: string;
+  amount: number;
+  amountFormatted: string;
+  settlementType: string;
+  settlementScopeFormatted: string;
+  paymentMethod: string;
+  status: string;
+  datePaidFormatted: string;
+  timestamp: string;
+  ratepayerName: string;
+  propertyAccountNumber: string;
+  propertyClassification: string;
+  digitalAddress: string;
+  municipality: string;
+  fiscalYear: number;
+  antiFraudCode: string;
+}
+
+export async function getPublicReceiptVerification(receiptNumber: string): Promise<PublicReceiptVerificationData | null> {
+  try {
+    if (!receiptNumber || !receiptNumber.trim()) return null;
+
+    const receipt = await prisma.receipt.findUnique({
+      where: { receiptNumber: receiptNumber.trim() },
+      include: {
+        property: true,
+        user: true,
+      },
+    });
+
+    if (!receipt) return null;
+
+    const dt = new Date(receipt.datePaid || Date.now());
+    const property = receipt.property;
+    const user = receipt.user;
+
+    const settlementScopeFormatted = receipt.settlementType === 'TOTAL'
+      ? 'Full Annual Rate Assessment Settlement'
+      : receipt.settlementType === 'ARREARS'
+      ? 'Arrears Balance Settlement'
+      : 'Current Fiscal Year Fee Settlement';
+
+    const antiFraudCode = `KKMA-AUTH-${receipt.id.slice(0, 8).toUpperCase()}-${dt.getFullYear()}`;
+
+    return {
+      isValid: receipt.status === 'PAID',
+      receiptNumber: receipt.receiptNumber,
+      amount: receipt.amount,
+      amountFormatted: `GH₵ ${receipt.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      settlementType: receipt.settlementType,
+      settlementScopeFormatted,
+      paymentMethod: receipt.paymentMethod,
+      status: receipt.status,
+      datePaidFormatted: dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+      timestamp: dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      ratepayerName: user?.name || 'Registered Municipal Ratepayer',
+      propertyAccountNumber: property?.accountNumber || 'N/A',
+      propertyClassification: property?.propertyClassification || 'RESIDENTIAL',
+      digitalAddress: property?.ownerDigitalAddress || 'N/A',
+      municipality: property?.municipality || 'Kpone-Katamanso Municipal Assembly (KKMA)',
+      fiscalYear: property?.billYear || dt.getFullYear(),
+      antiFraudCode,
+    };
+  } catch (error) {
+    console.error('Error verifying public receipt:', error);
+    return null;
+  }
+}
+

@@ -1,0 +1,21 @@
+{
+  "name": "KKMA Property Rate Citizen Portal",
+  "short_name": "KKMA Rates",
+  "description": "Kpone-Katamanso Municipal Assembly Property Rate Citizen Assessment & Payment Portal",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#612D53",
+  "icons": [
+    {
+      "src": "/globe.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "/globe.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}

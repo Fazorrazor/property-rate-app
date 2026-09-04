@@ -99,20 +99,36 @@ export const ratepayerDb = {
 
   property: {
     async findMany(args?: { where?: any; include?: any; orderBy?: any; take?: number; skip?: number }) {
-      let query = supabase.from('Property').select('*');
+      let query = supabase.from('Property').select('id, accountNumber, valuationNo, ownerId, ownerDigitalAddress, propertyClassification, billYear, rateableValue, rateImposed, previousYearBill, amountPaidLastYear, arrears, currentFee, totalAmountDue, status, billDate, settlementDeadline, municipality');
 
       if (args?.where) {
         if (args.where.status) query = query.eq('status', args.where.status);
         if (args.where.accountNumber) query = query.eq('accountNumber', args.where.accountNumber);
         if (args.where.ownerDigitalAddress) query = query.eq('ownerDigitalAddress', args.where.ownerDigitalAddress);
         
-        // Handle relation link through _PropertyToUser
+        // Handle relation link through _PropertyToUser & PropertyOwner telephone match
         if (args.where.users?.some?.id) {
           const userId = args.where.users.some.id;
-          const { data: links } = await supabase.from('_PropertyToUser').select('A').eq('B', userId);
-          const propIds = (links || []).map((l: any) => l.A);
-          if (propIds.length === 0) return [];
-          query = query.in('id', propIds);
+          const { data: userRecord } = await supabase.from('User').select('id, phoneNumber').eq('id', userId).maybeSingle();
+          
+          const [linksRes, ownersRes] = await Promise.all([
+            supabase.from('_PropertyToUser').select('A').eq('B', userId),
+            userRecord?.phoneNumber
+              ? supabase.from('PropertyOwner').select('ownerId').or(`tel.eq.${userRecord.phoneNumber},mobileNumber.eq.${userRecord.phoneNumber}`)
+              : Promise.resolve({ data: [] as any })
+          ]);
+          const directPropIds = (linksRes?.data || []).map((l: any) => l.A);
+          const ownerIds = (ownersRes?.data || []).map((o: any) => o.ownerId);
+          
+          let ownerPropIds: string[] = [];
+          if (ownerIds.length > 0) {
+            const { data: opData } = await supabase.from('Property').select('id').in('ownerId', ownerIds);
+            ownerPropIds = (opData || []).map((p: any) => p.id);
+          }
+          
+          const allPropIds = Array.from(new Set([...directPropIds, ...ownerPropIds]));
+          if (allPropIds.length === 0) return [];
+          query = query.in('id', allPropIds);
         }
       }
 
@@ -125,15 +141,15 @@ export const ratepayerDb = {
       if (args?.take) query = query.limit(args.take);
       if (args?.skip) query = query.range(args.skip, (args.skip + (args.take || 10)) - 1);
 
-      const { data, error } = await query;
+      const { data, error } = (await query) as { data: any[] | null; error: any };
       if (error || !data || data.length === 0) return data || [];
 
-      // Include receipts if requested (Batch fetch in a single query)
+      // Include receipts if requested (Batch fetch in a single query with targeted columns)
       if (args?.include?.receipts) {
         const propIds = data.map((p: any) => p.id);
         const { data: allReceipts } = await supabase
           .from('Receipt')
-          .select('*')
+          .select('id, receiptNumber, amount, datePaid, propertyId, gcrNumber, settlementType')
           .in('propertyId', propIds);
         
         const receiptsByPropId = (allReceipts || []).reduce((acc: any, r: any) => {

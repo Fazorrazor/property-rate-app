@@ -15,6 +15,10 @@ export interface BillRolloutSMSParams {
   dueDate?: string;
   baseUrl?: string;
   customTemplate?: string;
+  municipality?: string;
+  billYear?: number | string;
+  supportPhone?: string;
+  ussdCode?: string;
 }
 
 export interface FormattedBillSMS {

@@ -30,5 +30,5 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "property-rate-admin"]
+  "exclude": ["node_modules", "property-rate-admin", "scratch"]
 }

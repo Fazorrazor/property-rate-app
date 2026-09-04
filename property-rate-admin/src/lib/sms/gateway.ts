@@ -1,9 +1,8 @@
 import { ISMSProvider } from './types';
 import { TwilioProvider } from './twilio';
-import { AfricasTalkingProvider } from './africastalking';
 import { ArkeselProvider } from './arkesel';
 
-export type SMSProviderType = 'AFRICASTALKING' | 'ARKESEL' | 'HUBTEL' | 'TWILIO';
+export type SMSProviderType = 'ARKESEL' | 'TWILIO';
 
 export class SMSGateway {
   private provider: ISMSProvider;
@@ -14,9 +13,6 @@ export class SMSGateway {
     switch (activeProvider) {
       case 'ARKESEL':
         this.provider = new ArkeselProvider();
-        break;
-      case 'AFRICASTALKING':
-        this.provider = new AfricasTalkingProvider();
         break;
       case 'TWILIO':
         this.provider = new TwilioProvider();

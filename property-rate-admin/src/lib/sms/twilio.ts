@@ -85,18 +85,29 @@ export class TwilioProvider implements ISMSProvider {
       dueDate = '30-Jun-2025',
       baseUrl,
       customTemplate,
+      municipality = 'Kpone-Katamanso (KKMA)',
+      billYear = new Date().getFullYear(),
+      supportPhone = '0256039385/0538702445',
+      ussdCode = '*227*4362#',
     } = params;
 
     const { billLinkUrl, paymentLinkUrl } = this.buildBillLinks(accountNumber, baseUrl);
 
+    const cleanMunicipality = municipality.replace(/\s*\([^)]*\)/, '').trim() || municipality;
     const formattedAmount = totalAmountDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const formattedArrears = arrears.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const formattedCurrentFee = currentFee.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    const defaultMsg = `Dear ${cleanMunicipality} Resident,\n\nDo find below your ${billYear} Property Rate bill:\n\nValuation ID: ${accountNumber}\n\nAmount due: GH₵ ${formattedAmount}\n\nView your bills: ${billLinkUrl}\n\nPay Via ${ussdCode} or ${paymentLinkUrl} with your payment reference ${accountNumber}\n\nFor payment & enquiries kindly call ${supportPhone}\nDisregard if already paid. Keep receipt for verification.`;
 
     let messageText: string;
 
     if (customTemplate && customTemplate.trim()) {
       messageText = customTemplate
+        .replace(/{{municipality}}/g, cleanMunicipality)
+        .replace(/{{billYear}}/g, String(billYear))
+        .replace(/{{supportPhone}}/g, supportPhone)
+        .replace(/{{ussdCode}}/g, ussdCode)
         .replace(/{{accountNumber}}/g, accountNumber)
         .replace(/{{ownerName}}/g, ownerName || 'Municipal Ratepayer')
         .replace(/{{totalAmountDue}}/g, formattedAmount)
@@ -106,7 +117,7 @@ export class TwilioProvider implements ISMSProvider {
         .replace(/{{billLink}}/g, billLinkUrl)
         .replace(/{{paymentLink}}/g, paymentLinkUrl);
     } else {
-      messageText = `KKMA PROPERTY RATE BILL: Account ${accountNumber} (${ownerName || 'Ratepayer'}) has municipal assessment due of GH₵ ${formattedAmount} (Arrears: GH₵ ${formattedArrears}, Current: GH₵ ${formattedCurrentFee}). Due: ${dueDate}.\n1. View Digital Bill: ${billLinkUrl}\n2. Instant Settlement: ${paymentLinkUrl}`;
+      messageText = defaultMsg;
     }
 
     return {

@@ -1,63 +1,39 @@
 import { ISMSProvider, SMSResponse, BillRolloutSMSParams, FormattedBillSMS } from './types';
-import twilio from 'twilio';
 
-export class TwilioProvider implements ISMSProvider {
-  private client: twilio.Twilio | null = null;
-  private fromNumber: string;
+export class ArkeselProvider implements ISMSProvider {
+  private apiKey: string;
+  private senderId: string;
 
   constructor() {
-    const accountSid = process.env.TWILIO_ACCOUNT_SID || '';
-    const authToken = process.env.TWILIO_AUTH_TOKEN || '';
-    this.fromNumber = process.env.TWILIO_PHONE_NUMBER || '';
-
-    // Initialize the Twilio client only if the credentials are provided and not placeholders
-    if (accountSid && authToken && accountSid !== 'YOUR_TWILIO_ACCOUNT_SID') {
-      try {
-        this.client = twilio(accountSid, authToken);
-      } catch (error) {
-        console.error('Failed to initialize Twilio client:', error);
-      }
-    }
+    this.apiKey = process.env.ARKESEL_API_KEY || '';
+    this.senderId = process.env.ARKESEL_SENDER_ID || 'Arnold';
   }
 
   /**
-   * Format phone number to E.164 standard which Twilio requires.
+   * Format phone number for Arkesel API.
+   * Arkesel accepts Ghanaian format like 233551908713 or 0551908713.
    */
   public formatPhoneNumber(phone: string): string {
     if (!phone) return '';
-    // If it already has a +, clean formatting and return
-    if (phone.startsWith('+')) {
-      return phone.replace(/[^\d+]/g, '');
+    const cleanPhone = phone.replace(/[^\d+]/g, '');
+
+    if (cleanPhone.startsWith('+')) {
+      return cleanPhone.substring(1); // Remove leading +
     }
 
-    const cleanPhone = phone.replace(/\D/g, '');
-    
-    // Any number starting with 233 (Ghana country code)
     if (cleanPhone.startsWith('233')) {
-      return `+${cleanPhone}`;
+      return cleanPhone;
     }
 
-    // Ghana 10-digit with leading 0 (e.g., 0551908713 -> +233551908713)
     if (cleanPhone.startsWith('0') && cleanPhone.length === 10) {
-      return `+233${cleanPhone.substring(1)}`;
+      return `233${cleanPhone.substring(1)}`;
     }
 
-    // Ghana 9-digit without leading 0 (e.g., 551908713 -> +233551908713)
     if (cleanPhone.length === 9) {
-      return `+233${cleanPhone}`;
+      return `233${cleanPhone}`;
     }
 
-    // US 11-digit with country code (e.g., 17242625663 -> +17242625663)
-    if (cleanPhone.startsWith('1') && cleanPhone.length === 11) {
-      return `+${cleanPhone}`;
-    }
-
-    // US 10-digit (e.g., 7242625663 -> +17242625663)
-    if (cleanPhone.length === 10 && !cleanPhone.startsWith('0')) {
-      return `+1${cleanPhone}`;
-    }
-    
-    return `+${cleanPhone}`;
+    return cleanPhone;
   }
 
   /**
@@ -135,36 +111,51 @@ export class TwilioProvider implements ISMSProvider {
     try {
       const formattedPhone = this.formatPhoneNumber(to);
 
-      if (!this.client || !this.fromNumber || this.fromNumber === 'YOUR_TWILIO_PHONE_NUMBER') {
-        console.warn(`[SMS Mock - Twilio] To: ${formattedPhone} | Message: ${message}`);
-        // Simulate safe execution without live network dispatch
+      if (!this.apiKey || this.apiKey === 'YOUR_ARKESEL_API_KEY') {
+        console.warn(`[SMS Mock - Arkesel] To: ${formattedPhone} | Message: ${message}`);
         await new Promise((resolve) => setTimeout(resolve, 300));
         return {
           success: true,
-          messageId: `mock-twilio-${Date.now()}`,
+          messageId: `mock-arkesel-${Date.now()}`,
           formattedPhone,
         };
       }
-      
-      const response = await this.client.messages.create({
-        body: message,
-        from: this.fromNumber,
-        to: formattedPhone,
+
+      const response = await fetch('https://sms.arkesel.com/api/v2/sms/send', {
+        method: 'POST',
+        headers: {
+          'api-key': this.apiKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sender: this.senderId,
+          message: message,
+          recipients: [formattedPhone],
+        }),
       });
 
-      if (response.errorCode) {
-        return { success: false, error: `Twilio Error: ${response.errorMessage}`, formattedPhone };
+      const data = await response.json();
+
+      if (!response.ok || data.status === 'error') {
+        console.error('Arkesel SMS Error:', data);
+        return {
+          success: false,
+          error: data.message || `HTTP ${response.status} from Arkesel`,
+          formattedPhone,
+        };
       }
 
       return {
         success: true,
-        messageId: response.sid,
+        messageId: data.data?.[0]?.id || `arkesel-${Date.now()}`,
         formattedPhone,
       };
     } catch (error: any) {
-      console.error('Twilio Provider Error:', error);
-      return { success: false, error: error.message || 'Unknown Twilio SMS error' };
+      console.error('Arkesel Provider Exception:', error);
+      return {
+        success: false,
+        error: error.message || 'Unknown Arkesel error',
+      };
     }
   }
 }
-
