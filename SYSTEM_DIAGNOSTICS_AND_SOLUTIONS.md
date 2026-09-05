@@ -11,6 +11,7 @@ This document serves as an engineering audit of faults identified within the **M
 4. [Defect 4: SMS Rollout Engine & Audience Filter Discrepancies](#defect-4-sms-rollout-engine--audience-filter-discrepancies)
 5. [Defect 5: UI Governance: Zero-Pill Requirement & Dynamic Fluid Layouts](#defect-5-ui-governance-zero-pill-requirement--dynamic-fluid-layouts)
 6. [Defect 6: Search Clear Restoration Bug & Anti-AI Code Bloat / YAGNI Governance](#defect-6-search-clear-restoration-bug--anti-ai-code-bloat--yagni-governance)
+7. [Defect 7: In-App SMS Dispatch Mode Control (Live vs Test Simulation) & Settings Workspace](#defect-7-in-app-sms-dispatch-mode-control-live-vs-test-simulation--settings-workspace)
 
 ---
 
@@ -203,3 +204,32 @@ Ad-hoc styling introduced rounded pill badges (`rounded-full bg-green-100 text-g
    - **Elimination of Hallucinated Boilerplate**: Use native TypeScript and React expressions (`useMemo`, native arrays, standard hooks) rather than AI-generated boilerplate layers.
    - **Contextual Economy & Surgical Precision**: Maintain architectural continuity; do not patch bugs by piling new functions on top of old ones. Consolidate and prune dead code proactively.
 
+---
+
+## Defect 7: In-App SMS Dispatch Mode Control (Live vs Test Simulation) & Settings Workspace
+
+### Symptoms
+- The system previously hardcoded fallback logic inside the provider (`arkesel.ts`), which automatically triggered mock simulation mode whenever runtime environment variables were not loaded at process startup.
+- Administrators had no in-app visibility or control to distinguish whether SMS dispatches were executing in safe simulation mode or being broadcast over live carrier networks.
+- There was no dedicated Settings module in the admin portal to inspect gateway credentials, verify live balance, or toggle between Live and Test simulation modes.
+
+### Root Cause Analysis
+1. **Implicit Backend-Only Fallback**:
+   The `sendSMS` method inspected `if (!this.apiKey || this.apiKey === 'YOUR_ARKESEL_API_KEY')` without an explicit mode flag. If the key was not refreshed in the running process, it silently fell back to mock generation (`mock-arkesel-...`) without administrator consent or awareness.
+2. **Missing In-App Administration Interface**:
+   The admin portal only had operational modules (`REGISTRY`, `RATEPAYERS`, `SMS_CENTER`, `DEFAULTERS`, `TREASURY`, `AUDIT_LOGS`) with no administrative settings interface.
+
+### Architectural Solution
+1. **Dedicated Settings Module (`SETTINGS`)**:
+   - Added `SETTINGS` to the admin sidebar navigation and URL routing (`?tab=SETTINGS`).
+   - Implemented `SettingsTab.tsx` adhering to strict Zero-Pill minimalist typography and fluid layouts.
+2. **Interactive Live vs. Test Dispatch Mode Toggle**:
+   - **Test / Simulation Mode (Sandbox)**: Safe testing environment generating dual deep links and audit logs with mock tracking references (`mock-arkesel-...`) without burning SMS credits.
+   - **Live Gateway Mode (Production)**: Real outbound transmission via Arkesel HTTP API to Ghanaian carriers (+233), capturing authentic carrier SIDs.
+   - Guarded with an explicit confirmation dialog before activating Live mode to prevent accidental credit consumption.
+3. **Gateway Diagnostics & Balance Monitoring**:
+   - Integrated live balance verification calling `https://sms.arkesel.com/api/v2/clients/balance-details`.
+   - Real-time diagnostic connection test button allowing one-click health checks of the configured API key directly in the UI.
+4. **Surgical, Zero-Bloat Engine Integration**:
+   - `batchDispatchSms` in `actions.ts` directly honors the active dispatch mode.
+   - Settings updates and mode switches are immutably recorded in the municipal `AuditLog`.

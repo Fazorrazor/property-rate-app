@@ -6,10 +6,25 @@ import { cookies } from 'next/headers';
 import { TwilioProvider } from '@/lib/sms/twilio';
 import { ArkeselProvider } from '@/lib/sms/arkesel';
 
-const smsService = (process.env.SMS_PROVIDER || 'arkesel').toLowerCase() === 'twilio' 
-  ? new TwilioProvider() 
-  : new ArkeselProvider();
-const twilioService = smsService;
+const arkeselService = new ArkeselProvider();
+const twilioServiceInstance = new TwilioProvider();
+
+let activeSmsConfig = {
+  dispatchMode: (process.env.SMS_DISPATCH_MODE || 'TEST') as 'TEST' | 'LIVE',
+  provider: (process.env.SMS_PROVIDER || 'arkesel').toLowerCase() as 'arkesel' | 'twilio',
+  arkeselApiKey: process.env.ARKESEL_API_KEY || 'YUlJRXNnTUdJaUdndHRNd2Zubms',
+  arkeselSenderId: process.env.ARKESEL_SENDER_ID || 'Arnold',
+};
+
+arkeselService.setApiKey(activeSmsConfig.arkeselApiKey);
+arkeselService.setSenderId(activeSmsConfig.arkeselSenderId);
+
+const getActiveSmsProvider = () => {
+  return activeSmsConfig.provider === 'twilio' ? twilioServiceInstance : arkeselService;
+};
+
+const smsService = arkeselService;
+const twilioService = arkeselService;
 
 
 export interface AdminPropertyReceipt {
@@ -1070,7 +1085,13 @@ export async function getSmsRolloutAudience(params: {
   }
 }
 
-export async function batchDispatchSms(accountNumbers: string[], adminPassword?: string, customTemplate?: string, baseUrl?: string) {
+export async function batchDispatchSms(
+  accountNumbers: string[],
+  adminPassword?: string,
+  customTemplate?: string,
+  baseUrl?: string,
+  overrideMode?: 'TEST' | 'LIVE'
+) {
   try {
     const admin = await verifyAdminSession();
 
@@ -1096,6 +1117,7 @@ export async function batchDispatchSms(accountNumbers: string[], adminPassword?:
 
     let count = 0;
     const notificationsToCreate = [];
+    const effectiveMode = overrideMode || activeSmsConfig.dispatchMode;
 
     for (const p of properties) {
       const primaryUser = p.users?.[0];
@@ -1120,18 +1142,26 @@ export async function batchDispatchSms(accountNumbers: string[], adminPassword?:
 
         let deliveryStatus: 'DELIVERED' | 'FAILED' = 'DELIVERED';
         let externalMessageId: string | null = null;
-        try {
-          const smsRes = await smsService.sendSMS(ownerPhone, formatted.messageText);
-          if (smsRes && smsRes.success) {
-            deliveryStatus = 'DELIVERED';
-            externalMessageId = smsRes.messageId || null;
-          } else {
+
+        if (effectiveMode === 'LIVE') {
+          try {
+            const provider = getActiveSmsProvider();
+            const smsRes = await provider.sendSMS(ownerPhone, formatted.messageText);
+            if (smsRes && smsRes.success) {
+              deliveryStatus = 'DELIVERED';
+              externalMessageId = smsRes.messageId || null;
+            } else {
+              deliveryStatus = 'FAILED';
+              console.error(`SMS dispatch rejected for ${ownerPhone}:`, smsRes?.error || 'Provider returned failure');
+            }
+          } catch (smsErr) {
+            console.error(`SMS dispatch exception for ${ownerPhone}:`, smsErr);
             deliveryStatus = 'FAILED';
-            console.error(`SMS dispatch rejected for ${ownerPhone}:`, smsRes?.error || 'Provider returned failure');
           }
-        } catch (smsErr) {
-          console.error(`SMS dispatch exception for ${ownerPhone}:`, smsErr);
-          deliveryStatus = 'FAILED';
+        } else {
+          // Safe Simulation Mode (Sandbox)
+          deliveryStatus = 'DELIVERED';
+          externalMessageId = `mock-arkesel-${Date.now()}`;
         }
 
         if (primaryUser) {
@@ -1157,7 +1187,7 @@ export async function batchDispatchSms(accountNumbers: string[], adminPassword?:
         data: {
           action: 'BATCH_SMS_DISPATCH',
           entityType: 'Notification',
-          details: `Dispatched dual-link SMS rollout to ${count} property accounts.`,
+          details: `Dispatched dual-link SMS rollout (${effectiveMode} mode) to ${count} property accounts.`,
           adminId: admin.id,
         },
       });
@@ -1176,11 +1206,125 @@ export async function batchDispatchSms(accountNumbers: string[], adminPassword?:
     return {
       success: true,
       dispatchedCount: count,
+      mode: effectiveMode,
       timestamp: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
     };
   } catch (error) {
     console.error('Error in batch SMS dispatch:', error);
     return { success: false, error: 'Batch dispatch failed.' };
+  }
+}
+
+export interface SmsSettingsData {
+  dispatchMode: 'TEST' | 'LIVE';
+  provider: 'arkesel' | 'twilio';
+  arkeselApiKey: string;
+  arkeselSenderId: string;
+  balanceInfo?: {
+    smsBalance: number;
+    mainBalance: string;
+  } | null;
+}
+
+export async function getSmsSettings(): Promise<SmsSettingsData> {
+  await verifyAdminSession();
+  let balanceInfo = null;
+
+  if (activeSmsConfig.provider === 'arkesel' && activeSmsConfig.arkeselApiKey) {
+    try {
+      const res = await fetch('https://sms.arkesel.com/api/v2/clients/balance-details', {
+        method: 'GET',
+        headers: { 'api-key': activeSmsConfig.arkeselApiKey },
+      });
+      const data = await res.json();
+      if (res.ok && data.status === 'success') {
+        balanceInfo = {
+          smsBalance: data.data?.sms_balance ?? 0,
+          mainBalance: data.data?.main_balance ?? 'GHS 0.00',
+        };
+      }
+    } catch {
+      // non-fatal
+    }
+  }
+
+  return {
+    dispatchMode: activeSmsConfig.dispatchMode,
+    provider: activeSmsConfig.provider,
+    arkeselApiKey: activeSmsConfig.arkeselApiKey,
+    arkeselSenderId: activeSmsConfig.arkeselSenderId,
+    balanceInfo,
+  };
+}
+
+export async function updateSmsSettings(newConfig: {
+  dispatchMode?: 'TEST' | 'LIVE';
+  provider?: 'arkesel' | 'twilio';
+  arkeselApiKey?: string;
+  arkeselSenderId?: string;
+}) {
+  const admin = await verifyAdminSession();
+
+  if (newConfig.dispatchMode) activeSmsConfig.dispatchMode = newConfig.dispatchMode;
+  if (newConfig.provider) activeSmsConfig.provider = newConfig.provider;
+  if (newConfig.arkeselApiKey !== undefined) activeSmsConfig.arkeselApiKey = newConfig.arkeselApiKey;
+  if (newConfig.arkeselSenderId !== undefined) activeSmsConfig.arkeselSenderId = newConfig.arkeselSenderId;
+
+  if (activeSmsConfig.arkeselApiKey) {
+    arkeselService.setApiKey(activeSmsConfig.arkeselApiKey);
+  }
+  if (activeSmsConfig.arkeselSenderId) {
+    arkeselService.setSenderId(activeSmsConfig.arkeselSenderId);
+  }
+
+  await prisma.auditLog.create({
+    data: {
+      action: 'SYSTEM_SETTINGS_UPDATE',
+      entityType: 'SystemConfig',
+      details: `Updated SMS settings: Mode=${activeSmsConfig.dispatchMode}, Provider=${activeSmsConfig.provider}, SenderID=${activeSmsConfig.arkeselSenderId}`,
+      adminId: admin.id,
+    },
+  });
+
+  revalidatePath('/');
+  return { success: true, settings: activeSmsConfig };
+}
+
+export async function testArkeselGatewayConnection(apiKey?: string) {
+  await verifyAdminSession();
+  const keyToTest = apiKey || activeSmsConfig.arkeselApiKey;
+
+  if (!keyToTest || keyToTest.trim() === '') {
+    return { success: false, error: 'Please enter an Arkesel API key to test connection.' };
+  }
+
+  try {
+    const res = await fetch('https://sms.arkesel.com/api/v2/clients/balance-details', {
+      method: 'GET',
+      headers: { 'api-key': keyToTest.trim() },
+    });
+    const data = await res.json();
+
+    if (res.ok && data.status === 'success') {
+      const smsUnits = data.data?.sms_balance ?? 0;
+      const balance = data.data?.main_balance ?? 'GHS 0.00';
+      return {
+        success: true,
+        smsBalance: smsUnits,
+        mainBalance: balance,
+        message: `Arkesel Gateway Connected. Available balance: ${smsUnits} SMS credits (${balance}).`,
+      };
+    }
+
+    return {
+      success: false,
+      error: data.message || `Arkesel returned HTTP ${res.status}: Invalid key or credentials.`,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      error: err.message || 'Network error attempting to reach sms.arkesel.com.',
+    };
   }
 }
 

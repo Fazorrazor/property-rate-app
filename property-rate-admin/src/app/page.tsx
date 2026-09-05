@@ -25,6 +25,7 @@ import {
   Eye,
   EyeOff,
   UploadCloud,
+  Settings,
 } from "lucide-react";
 import {
   getAdminOverview,
@@ -49,6 +50,7 @@ import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "framer-motion";
 import { AdminDashboardSkeleton } from "@/components/Skeletons";
 import { RatepayerDossierSheet } from "@/components/RatepayerDossierSheet";
+import { SettingsTab } from "@/components/SettingsTab";
 
 const PropertyModal = dynamic(
   () => import("@/components/PropertyModal").then((m) => m.PropertyModal),
@@ -73,7 +75,7 @@ const SmsRolloutSimulator = dynamic(
   }
 );
 
-type NavTab = "REGISTRY" | "RATEPAYERS" | "SMS_CENTER" | "DEFAULTERS" | "TREASURY" | "AUDIT_LOGS";
+type NavTab = "REGISTRY" | "RATEPAYERS" | "SMS_CENTER" | "DEFAULTERS" | "TREASURY" | "AUDIT_LOGS" | "SETTINGS";
 
 export default function AdminDashboardPage() {
   const [data, setData] = useState<AdminDashboardData | null>(null);
@@ -136,7 +138,7 @@ export default function AdminDashboardPage() {
       const params = new URLSearchParams(window.location.search);
       const urlTab = params.get("tab") as NavTab | null;
       const savedTab = localStorage.getItem("admin_active_tab") as NavTab | null;
-      const validTabs: NavTab[] = ["REGISTRY", "RATEPAYERS", "SMS_CENTER", "DEFAULTERS", "TREASURY", "AUDIT_LOGS"];
+      const validTabs: NavTab[] = ["REGISTRY", "RATEPAYERS", "SMS_CENTER", "DEFAULTERS", "TREASURY", "AUDIT_LOGS", "SETTINGS"];
 
       if (urlTab && validTabs.includes(urlTab)) {
         setActiveTab(urlTab);
@@ -1008,6 +1010,7 @@ export default function AdminDashboardPage() {
             { key: "DEFAULTERS", label: "Statutory Defaulters", icon: ShieldAlert },
             { key: "TREASURY", label: "Treasury Reconciliation", icon: Landmark },
             { key: "AUDIT_LOGS", label: "System Audit Trail", icon: ShieldCheck },
+            { key: "SETTINGS", label: "Settings & SMS Gateway", icon: Settings },
           ] as { key: NavTab; label: string; icon: any }[]).map((tab) => {
             const isActive = activeTab === tab.key;
             const Icon = tab.icon;
@@ -1095,9 +1098,9 @@ export default function AdminDashboardPage() {
           </div>
         </header>
 
-        {/* Main Dashboard Workspace (Viewport Fitted & Full-Bleed for SMS Engine) */}
+        {/* Main Dashboard Workspace (Viewport Fitted & Full-Bleed for SMS Engine & Settings) */}
         <main className={`flex-1 min-h-0 w-full flex flex-col overflow-hidden ${
-          activeTab === "SMS_CENTER"
+          activeTab === "SMS_CENTER" || activeTab === "SETTINGS"
             ? "p-0 max-w-none"
             : "px-6 py-3 max-w-7xl mx-auto gap-3"
         }`}>
@@ -1885,6 +1888,11 @@ export default function AdminDashboardPage() {
                 <span>{auditLogs.length} of {auditLogsTotal} records shown</span>
               </div>
             </section>
+          )}
+
+          {/* TAB 7: SETTINGS & SMS GATEWAY CONFIGURATION */}
+          {activeTab === "SETTINGS" && (
+            <SettingsTab onNotify={showToast} />
           )}
         </main>
 

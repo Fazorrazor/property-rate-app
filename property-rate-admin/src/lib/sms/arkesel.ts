@@ -5,8 +5,24 @@ export class ArkeselProvider implements ISMSProvider {
   private senderId: string;
 
   constructor() {
-    this.apiKey = process.env.ARKESEL_API_KEY || '';
+    this.apiKey = process.env.ARKESEL_API_KEY || 'YUlJRXNnTUdJaUdndHRNd2Zubms';
     this.senderId = process.env.ARKESEL_SENDER_ID || 'Arnold';
+  }
+
+  public setApiKey(key: string) {
+    this.apiKey = key;
+  }
+
+  public setSenderId(senderId: string) {
+    this.senderId = senderId;
+  }
+
+  public getApiKey(): string {
+    return this.apiKey;
+  }
+
+  public getSenderId(): string {
+    return this.senderId;
   }
 
   /**
