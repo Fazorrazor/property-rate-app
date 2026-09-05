@@ -48,6 +48,7 @@ import {
 import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "framer-motion";
 import { AdminDashboardSkeleton } from "@/components/Skeletons";
+import { RatepayerDossierSheet } from "@/components/RatepayerDossierSheet";
 
 const PropertyModal = dynamic(
   () => import("@/components/PropertyModal").then((m) => m.PropertyModal),
@@ -56,11 +57,6 @@ const PropertyModal = dynamic(
 
 const CsvImportModal = dynamic(
   () => import("@/components/CsvImportModal").then((m) => m.CsvImportModal),
-  { ssr: false }
-);
-
-const RatepayerDossierSheet = dynamic(
-  () => import("@/components/RatepayerDossierSheet").then((m) => m.RatepayerDossierSheet),
   { ssr: false }
 );
 
@@ -156,6 +152,7 @@ export default function AdminDashboardPage() {
 
   // Ratepayer Dossier State
   const [selectedRatepayerDossier, setSelectedRatepayerDossier] = useState<RatepayerHistoryDossier | null>(null);
+  const [previewRatepayer, setPreviewRatepayer] = useState<AdminRatepayerSummary | null>(null);
   const [isDossierOpen, setIsDossierOpen] = useState(false);
   const [isFetchingDossier, setIsFetchingDossier] = useState(false);
 
@@ -468,23 +465,29 @@ export default function AdminDashboardPage() {
   }, [selectedAccount, showBatchModal, showPaymentModal, isDossierOpen, showSmsAuthModal]);
 
 
-  // Open Ratepayer Dossier
-  const handleOpenRatepayerDossier = async (userId: string) => {
+  // Open Ratepayer Dossier (Instant popup <50ms with background lazy loading)
+  const handleOpenRatepayerDossier = (userId: string, preview?: AdminRatepayerSummary) => {
+    const initialPreview = preview || ratepayers.find((r) => r.id === userId) || null;
+    setPreviewRatepayer(initialPreview);
+    setSelectedRatepayerDossier(null);
+    setIsDossierOpen(true);
     setIsFetchingDossier(true);
-    try {
-      const dossier = await getRatepayerHistory(userId);
-      if (dossier) {
-        setSelectedRatepayerDossier(dossier);
-        setIsDossierOpen(true);
-      } else {
-        showToast("Could not load ratepayer history.", "error");
-      }
-    } catch (err) {
-      console.error(err);
-      showToast("Error retrieving citizen dossier.", "error");
-    } finally {
-      setIsFetchingDossier(false);
-    }
+
+    getRatepayerHistory(userId)
+      .then((dossier) => {
+        if (dossier) {
+          setSelectedRatepayerDossier(dossier);
+        } else {
+          showToast("Could not load full ratepayer history.", "error");
+        }
+      })
+      .catch((err) => {
+        console.error("Error retrieving ratepayer dossier:", err);
+        showToast("Error retrieving citizen dossier.", "error");
+      })
+      .finally(() => {
+        setIsFetchingDossier(false);
+      });
   };
 
   const handleBatchDispatchSms = async (accountNumbers?: string[], customTpl?: string, adminPassword?: string) => {
@@ -1270,7 +1273,7 @@ export default function AdminDashboardPage() {
                       filteredRatepayers.map((ratepayer) => (
                         <tr
                           key={ratepayer.id}
-                          onClick={() => handleOpenRatepayerDossier(ratepayer.id)}
+                          onClick={() => handleOpenRatepayerDossier(ratepayer.id, ratepayer)}
                           className="hover:bg-[#F8F9FA] transition-colors cursor-pointer"
                         >
                           <td className="py-2.5 px-4 font-semibold text-[#2C2C2C]">
@@ -1323,7 +1326,7 @@ export default function AdminDashboardPage() {
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleOpenRatepayerDossier(ratepayer.id);
+                                handleOpenRatepayerDossier(ratepayer.id, ratepayer);
                               }}
                               className="text-xs text-[#612D53] hover:underline font-semibold cursor-pointer"
                             >
@@ -1828,13 +1831,18 @@ export default function AdminDashboardPage() {
       {/* RATEPAYER FULL HISTORY DOSSIER SLIDING SHEET */}
       <RatepayerDossierSheet
         dossier={selectedRatepayerDossier}
+        preview={previewRatepayer}
+        isLoading={isFetchingDossier}
         isOpen={isDossierOpen}
         onClose={() => {
           setIsDossierOpen(false);
           setSelectedRatepayerDossier(null);
+          setPreviewRatepayer(null);
         }}
         onSelectProperty={(acc) => {
-          const prop = properties.find((p) => p.accountNumber === acc);
+          const propFromDossier = selectedRatepayerDossier?.properties.find((p) => p.accountNumber === acc);
+          const propFromList = properties.find((p) => p.accountNumber === acc);
+          const prop = propFromDossier || propFromList;
           if (prop) setSelectedAccount(prop);
         }}
       />
