@@ -26,6 +26,10 @@ export interface AdminPropertyReceipt {
 export interface AdminProperty {
   id: string;
   accountNumber: string;
+  valuationNo?: string;
+  physicalAddress?: string;
+  houseNo?: string;
+  plotNo?: string;
   municipality: string;
   ownerPhone: string;
   ownerName: string;

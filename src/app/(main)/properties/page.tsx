@@ -102,23 +102,34 @@ function PropertiesContent() {
     load();
   }, [deepLinkAccount]);
 
-  const filteredProperties = properties
-    .filter((property) => {
-      if (!searchQuery.trim()) return true;
-      const query = searchQuery.toLowerCase();
-      return (
-        property.accountNumber.toLowerCase().includes(query) ||
-        property.ownerDigitalAddress.toLowerCase().includes(query) ||
-        property.propertyClassification.toLowerCase().includes(query)
-      );
-    })
-    .sort((a, b) => {
-      const aPaid = a.status === "PAID";
-      const bPaid = b.status === "PAID";
-      if (aPaid && !bPaid) return 1;
-      if (!aPaid && bPaid) return -1;
-      return b.totalAmountDue - a.totalAmountDue;
-    });
+  const filteredProperties = useMemo(() => {
+    if (!searchQuery.trim()) return properties;
+    const tokens = searchQuery.toLowerCase().trim().split(/\s+/).filter(Boolean);
+    return properties
+      .filter((property) => {
+        const acc = (property.accountNumber || "").toLowerCase();
+        const addr = (property.ownerDigitalAddress || "").toLowerCase();
+        const classif = (property.propertyClassification || "").toLowerCase();
+        const stat = (property.status || "").toLowerCase();
+        const year = (property.billYear || "").toString();
+
+        return tokens.every(
+          (t) =>
+            acc.includes(t) ||
+            addr.includes(t) ||
+            classif.includes(t) ||
+            stat.includes(t) ||
+            year.includes(t)
+        );
+      })
+      .sort((a, b) => {
+        const aPaid = a.status === "PAID";
+        const bPaid = b.status === "PAID";
+        if (aPaid && !bPaid) return 1;
+        if (!aPaid && bPaid) return -1;
+        return b.totalAmountDue - a.totalAmountDue;
+      });
+  }, [properties, searchQuery]);
 
   // Ensure selected property remains valid when filtered
   useEffect(() => {
@@ -258,6 +269,9 @@ function PropertiesContent() {
               placeholder="Search Account No. or GPS Address..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") setSearchQuery("");
+              }}
               className="w-full h-10 pl-10 pr-9 rounded-xl bg-surface border border-border-light text-xs font-normal text-foreground placeholder:text-on-surface-subtle focus:outline-none focus:border-[#4B1426] transition-colors shadow-sm"
             />
             {searchQuery && (

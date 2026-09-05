@@ -178,6 +178,10 @@ export default function AdminDashboardPage() {
   const [classificationFilter, setClassificationFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "PAID" | "UNPAID">("ALL");
 
+  const activePropertyQueryRef = useRef("");
+  const activeRatepayerQueryRef = useRef("");
+  const activeAuditQueryRef = useRef("");
+
   // Selection & Drawer states
   const [selectedAccount, setSelectedAccount] = useState<AdminProperty | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -226,6 +230,10 @@ export default function AdminDashboardPage() {
         classification,
         status as any
       );
+      // Discard stale responses if user cleared search in the meantime
+      if (query && activePropertyQueryRef.current !== query) {
+        return;
+      }
       setData(overviewRes);
       setPropertiesList(overviewRes?.properties || []);
       setCurrentPropertyPage(1);
@@ -380,15 +388,27 @@ export default function AdminDashboardPage() {
     loadData(1, "", "ALL", "ALL", "ALL", true);
   }, []);
 
-  // Debounced server search for Properties without unmounting whole page
+  // Debounced background server search for Properties without unmounting whole page
   useEffect(() => {
     if (isInitialLoading) return;
+    activePropertyQueryRef.current = searchQuery;
+    if (!searchQuery.trim()) {
+      setIsSearchingProperties(false);
+      return;
+    }
     setIsSearchingProperties(true);
     const timer = setTimeout(() => {
       loadData(1, searchQuery, municipalityFilter, classificationFilter, activeTab === "DEFAULTERS" ? "DEFAULTER" : statusFilter, false);
-    }, 300);
+    }, 250);
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  const handleClearPropertySearch = () => {
+    setSearchQuery("");
+    activePropertyQueryRef.current = "";
+    setIsSearchingProperties(false);
+    loadData(1, "", municipalityFilter, classificationFilter, activeTab === "DEFAULTERS" ? "DEFAULTER" : statusFilter, false);
+  };
 
   // Instant server query for dropdown changes
   useEffect(() => {
@@ -397,14 +417,20 @@ export default function AdminDashboardPage() {
   }, [municipalityFilter, classificationFilter, statusFilter, activeTab]);
 
 
-  // Debounced server search for Ratepayers without unmounting whole page
+  // Debounced background server search for Ratepayers
   useEffect(() => {
     if (isInitialLoading) return;
+    activeRatepayerQueryRef.current = ratepayerSearchQuery;
+    if (!ratepayerSearchQuery.trim()) {
+      setIsSearchingRatepayers(false);
+      return;
+    }
     setIsSearchingRatepayers(true);
     const timer = setTimeout(async () => {
       try {
-        const res = await getRatepayersList(ratepayerSearchQuery, 1, 100);
-        if (res) {
+        const q = ratepayerSearchQuery;
+        const res = await getRatepayersList(q, 1, 100);
+        if (res && activeRatepayerQueryRef.current === q) {
           setRatepayers(res.ratepayers);
           setRatepayersTotal(res.total);
           setCurrentRatepayerPage(1);
@@ -413,11 +439,44 @@ export default function AdminDashboardPage() {
       } catch (err) {
         console.error("Error searching ratepayers:", err);
       } finally {
-        setIsSearchingRatepayers(false);
+        if (activeRatepayerQueryRef.current === ratepayerSearchQuery) {
+          setIsSearchingRatepayers(false);
+        }
       }
-    }, 300);
+    }, 250);
     return () => clearTimeout(timer);
   }, [ratepayerSearchQuery]);
+
+  const handleClearRatepayerSearch = () => {
+    setRatepayerSearchQuery("");
+    activeRatepayerQueryRef.current = "";
+    setIsSearchingRatepayers(false);
+    getRatepayersList("", 1, 100).then((res) => {
+      if (res && activeRatepayerQueryRef.current === "") {
+        setRatepayers(res.ratepayers);
+        setRatepayersTotal(res.total);
+        setCurrentRatepayerPage(1);
+        setHasMoreRatepayers(res.ratepayers.length < res.total);
+      }
+    });
+  };
+
+  // Debounced background server search for Audit Trail
+  useEffect(() => {
+    if (isInitialLoading) return;
+    activeAuditQueryRef.current = auditLogSearchQuery;
+    if (!auditLogSearchQuery.trim()) return;
+    const timer = setTimeout(() => {
+      loadAuditLogs(auditLogSearchQuery, auditLogActionFilter, 1);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [auditLogSearchQuery]);
+
+  const handleClearAuditLogSearch = () => {
+    setAuditLogSearchQuery("");
+    activeAuditQueryRef.current = "";
+    loadAuditLogs("", auditLogActionFilter, 1);
+  };
 
   // Infinite scroll loader inside Ratepayers table container
   const handleRatepayerTableScroll = async (e: React.UIEvent<HTMLDivElement>) => {
@@ -696,8 +755,97 @@ export default function AdminDashboardPage() {
     collectionRatePercent: 0,
   };
 
-  const filteredProperties = properties;
-  const filteredRatepayers = ratepayers;
+  // Google Instant Reactive Search for Cadastre Properties (Synchronous <16ms on every keystroke)
+  const filteredProperties = useMemo(() => {
+    if (!searchQuery.trim()) return properties;
+    const tokens = searchQuery.toLowerCase().trim().split(/\s+/).filter(Boolean);
+    return properties.filter((p) => {
+      const acc = (p.accountNumber || "").toLowerCase();
+      const val = (p.valuationNo || "").toLowerCase();
+      const owner = (p.ownerName || "").toLowerCase();
+      const phone = (p.ownerPhone || "").toLowerCase();
+      const addr = (p.ownerDigitalAddress || "").toLowerCase();
+      const phys = (p.physicalAddress || "").toLowerCase();
+      const house = (p.houseNo || "").toLowerCase();
+      const plot = (p.plotNo || "").toLowerCase();
+      const muni = (p.municipality || "").toLowerCase();
+      const classif = (p.propertyClassification || "").toLowerCase();
+      const stat = (p.status || "").toLowerCase();
+      const due = (p.totalAmountDueFormatted || "").toLowerCase();
+
+      return tokens.every(
+        (token) =>
+          acc.includes(token) ||
+          val.includes(token) ||
+          owner.includes(token) ||
+          phone.includes(token) ||
+          addr.includes(token) ||
+          phys.includes(token) ||
+          house.includes(token) ||
+          plot.includes(token) ||
+          muni.includes(token) ||
+          classif.includes(token) ||
+          stat.includes(token) ||
+          due.includes(token)
+      );
+    });
+  }, [properties, searchQuery]);
+
+  // Google Instant Reactive Search for Ratepayers (Synchronous <16ms on every keystroke)
+  const filteredRatepayers = useMemo(() => {
+    if (!ratepayerSearchQuery.trim()) return ratepayers;
+    const tokens = ratepayerSearchQuery.toLowerCase().trim().split(/\s+/).filter(Boolean);
+    return ratepayers.filter((r) => {
+      const name = (r.name || "").toLowerCase();
+      const phone = (r.phoneNumber || "").toLowerCase();
+      const role = (r.role || "").toLowerCase();
+      const stat = (r.status || "").toLowerCase();
+      const due = (r.totalDueFormatted || "").toLowerCase();
+      const arrears = (r.totalArrearsFormatted || "").toLowerCase();
+      const val = (r.totalValuationFormatted || "").toLowerCase();
+      const date = (r.createdAtFormatted || "").toLowerCase();
+
+      return tokens.every(
+        (token) =>
+          name.includes(token) ||
+          phone.includes(token) ||
+          role.includes(token) ||
+          stat.includes(token) ||
+          due.includes(token) ||
+          arrears.includes(token) ||
+          val.includes(token) ||
+          date.includes(token)
+      );
+    });
+  }, [ratepayers, ratepayerSearchQuery]);
+
+  // Google Instant Reactive Search for Audit Trail (Synchronous <16ms on every keystroke)
+  const filteredAuditLogs = useMemo(() => {
+    if (!auditLogSearchQuery.trim()) return auditLogs;
+    const tokens = auditLogSearchQuery.toLowerCase().trim().split(/\s+/).filter(Boolean);
+    return auditLogs.filter((log) => {
+      const act = (log.action || "").toLowerCase();
+      const actLbl = (log.actionLabel || "").toLowerCase();
+      const admin = (log.adminName || "").toLowerCase();
+      const det = (log.details || "").toLowerCase();
+      const entId = (log.entityId || "").toLowerCase();
+      const entType = (log.entityType || "").toLowerCase();
+      const dt = (log.createdAtFormatted || "").toLowerCase();
+      const time = (log.timeFormatted || "").toLowerCase();
+
+      return tokens.every(
+        (token) =>
+          act.includes(token) ||
+          actLbl.includes(token) ||
+          admin.includes(token) ||
+          det.includes(token) ||
+          entId.includes(token) ||
+          entType.includes(token) ||
+          dt.includes(token) ||
+          time.includes(token)
+      );
+    });
+  }, [auditLogs, auditLogSearchQuery]);
 
   const selectedPropertiesList = properties.filter((p) => selectedIds.includes(p.accountNumber));
   const selectedUnpaidList = selectedPropertiesList.filter((p) => p.status !== "PAID" && p.totalAmountDue > 0);
@@ -959,12 +1107,15 @@ export default function AdminDashboardPage() {
                       placeholder="Search Account ID, Valuation No, Ratepayer, Phone, GPS (e.g. GK-0010), Landmark, Receipt..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") handleClearPropertySearch();
+                      }}
                       className="w-full h-8 pl-9 pr-8 rounded-lg border border-[#DADCE0] bg-white text-xs text-[#2C2C2C] placeholder:text-[#80868B] focus:border-[#612D53] focus:outline-none transition-colors"
                     />
                     {searchQuery && (
                       <button
                         type="button"
-                        onClick={() => setSearchQuery("")}
+                        onClick={handleClearPropertySearch}
                         className="absolute right-2 text-[#717171] hover:text-[#2C2C2C] p-1 cursor-pointer"
                         title="Clear search"
                       >
@@ -1090,9 +1241,7 @@ export default function AdminDashboardPage() {
               <div
                 ref={tableContainerRef}
                 onScroll={handleTableScroll}
-                className={`w-full flex-1 min-h-0 overflow-y-auto overflow-x-auto transition-opacity duration-200 ${
-                  isSearchingProperties ? "opacity-60" : "opacity-100"
-                }`}
+                className="w-full flex-1 min-h-0 overflow-y-auto overflow-x-auto"
               >
                 <table className="w-full text-left text-xs border-collapse">
                   <thead className="bg-[#F8F9FA] border-b border-[#DADCE0] text-[#717171] font-semibold text-[11px] sticky top-0 z-10 shadow-xs">
@@ -1229,12 +1378,15 @@ export default function AdminDashboardPage() {
                     placeholder="Search Ratepayer Name, Phone, Account ID, GPS Address, Municipality..."
                     value={ratepayerSearchQuery}
                     onChange={(e) => setRatepayerSearchQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") handleClearRatepayerSearch();
+                    }}
                     className="w-full h-8 pl-9 pr-8 rounded-lg border border-[#DADCE0] bg-white text-xs text-[#2C2C2C] placeholder:text-[#80868B] focus:border-[#612D53] focus:outline-none transition-colors"
                   />
                   {ratepayerSearchQuery && (
                     <button
                       type="button"
-                      onClick={() => setRatepayerSearchQuery("")}
+                      onClick={handleClearRatepayerSearch}
                       className="absolute right-2 text-[#717171] hover:text-[#2C2C2C] p-1 cursor-pointer"
                       title="Clear search"
                     >
@@ -1390,6 +1542,9 @@ export default function AdminDashboardPage() {
                       placeholder="Search Receipt / GCR No., Account ID, Ratepayer, Channel, Date..."
                       value={treasurySearchQuery}
                       onChange={(e) => setTreasurySearchQuery(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") setTreasurySearchQuery("");
+                      }}
                       className="w-full h-8 pl-9 pr-8 rounded-lg border border-[#DADCE0] bg-white text-xs text-[#2C2C2C] placeholder:text-[#80868B] focus:border-[#612D53] focus:outline-none transition-colors"
                     />
                     {treasurySearchQuery && (
@@ -1524,21 +1679,18 @@ export default function AdminDashboardPage() {
                       type="text"
                       placeholder="Search by action, narrative, administrator, or reference..."
                       value={auditLogSearchQuery}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setAuditLogSearchQuery(val);
-                        loadAuditLogs(val, auditLogActionFilter, 1);
+                      onChange={(e) => setAuditLogSearchQuery(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") handleClearAuditLogSearch();
                       }}
                       className="w-full pl-8 pr-8 py-1.5 bg-white border border-[#DADCE0] rounded-lg text-xs text-[#2C2C2C] focus:outline-none focus:border-[#612D53]"
                     />
                     {auditLogSearchQuery && (
                       <button
                         type="button"
-                        onClick={() => {
-                          setAuditLogSearchQuery("");
-                          loadAuditLogs("", auditLogActionFilter, 1);
-                        }}
+                        onClick={handleClearAuditLogSearch}
                         className="absolute right-2.5 top-2 text-[#717171] hover:text-[#2C2C2C] p-0.5 cursor-pointer"
+                        title="Clear search"
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
@@ -1585,14 +1737,14 @@ export default function AdminDashboardPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#E8EAED] bg-white font-sans">
-                    {auditLogs.length === 0 ? (
+                    {filteredAuditLogs.length === 0 ? (
                       <tr>
                         <td colSpan={6} className="py-12 text-center text-[#717171] italic">
                           {isLoadingAuditLogs ? "Loading system audit events..." : "No audit trail records found matching your filter."}
                         </td>
                       </tr>
                     ) : (
-                      auditLogs.map((log) => (
+                      filteredAuditLogs.map((log) => (
                         <tr key={log.id} className="hover:bg-[#F8F9FA] transition-colors">
                           <td className="py-2.5 px-4 whitespace-nowrap">
                             <span className="font-medium text-[#2C2C2C]">{log.createdAtFormatted}</span>

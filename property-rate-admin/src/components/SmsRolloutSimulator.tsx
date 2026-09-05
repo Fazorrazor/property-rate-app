@@ -443,6 +443,12 @@ export function SmsRolloutSimulator({
                       type="text"
                       value={accountSearchQuery}
                       onChange={(e) => setAccountSearchQuery(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") {
+                          setAccountSearchQuery("");
+                          setSearchResults([]);
+                        }
+                      }}
                       placeholder="Search Valuation ID, Ratepayer, Phone, GPS (e.g. GK-0010), Landmark, Class..."
                       className="w-full h-8 pl-8 pr-7 rounded-lg border border-[#DADCE0] bg-white text-xs text-[#2C2C2C] focus:outline-none focus:border-[#612D53]"
                     />

@@ -82,12 +82,15 @@ export default function ReceiptsPage() {
     if (selectedProperty !== "ALL" && r.propertyName !== selectedProperty) return false;
 
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      return (
-        r.receiptNumber.toLowerCase().includes(q) ||
-        r.propertyName.toLowerCase().includes(q) ||
-        r.digitalAddress.toLowerCase().includes(q) ||
-        r.amountFormatted.toLowerCase().includes(q)
+      const tokens = searchQuery.toLowerCase().trim().split(/\s+/).filter(Boolean);
+      return tokens.every(
+        (t) =>
+          r.receiptNumber.toLowerCase().includes(t) ||
+          r.propertyName.toLowerCase().includes(t) ||
+          r.digitalAddress.toLowerCase().includes(t) ||
+          r.amountFormatted.toLowerCase().includes(t) ||
+          (r.fiscalYear && r.fiscalYear.toString().includes(t)) ||
+          (r.paymentMethod && r.paymentMethod.toLowerCase().includes(t))
       );
     }
 
@@ -111,6 +114,9 @@ export default function ReceiptsPage() {
               placeholder="Search by receipt #, account, or GPS..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") setSearchQuery("");
+              }}
               className="w-full h-10 pl-10 pr-9 rounded-xl bg-surface border border-border-light shadow-sm text-xs font-normal text-foreground placeholder:text-on-surface-subtle focus:outline-none focus:border-[#4B1426] transition-colors"
             />
             {searchQuery && (
