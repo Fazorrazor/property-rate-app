@@ -67,3 +67,10 @@ For every UI format, update, addition, or component created in both the Citizen 
 - You MUST STOP and ask for the user's 'go ahead' or explicit approval BEFORE you write any code or modify any files.
 - Treat every request as an interactive diagnostic session where compromise and alignment are required before action is taken.
 
+## ANTI-AI CODE BLOAT, OVER-ENGINEERING & YAGNI GOVERNANCE
+- **Anti-Over-Abstraction / YAGNI ("You Aren't Gonna Need It")**: Under no circumstances spin up brand-new helper functions, wrappers, utility classes, or speculative layers to solve simple 2-line inline fixes. Solve problems directly and idiomatically at the site of failure.
+- **Eliminate Hallucinated Boilerplate**: Avoid verbose, multi-tiered boilerplate patterns where a simple, native TypeScript or React expression (e.g. `useMemo`, native array operations, standard hooks) suffices.
+- **Contextual Economy & Surgical Precision**: Maintain architectural continuity across sessions. Do not patch bugs by blindly piling new functions or layers on top of old ones. Always simplify, prune, and consolidate existing logic instead of accumulating dead code.
+- **Dead Code Purging**: Proactively remove orphaned variables, unused functions, obsolete state parameters, and redundant wrapper abstractions on every modification.
+
+

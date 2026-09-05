@@ -10,6 +10,7 @@ This document serves as an engineering audit of faults identified within the **M
 3. [Defect 3: Database N+1 Relational Lookups & Slow Cadastre Overview](#defect-3-database-n1-relational-lookups--slow-cadastre-overview)
 4. [Defect 4: SMS Rollout Engine & Audience Filter Discrepancies](#defect-4-sms-rollout-engine--audience-filter-discrepancies)
 5. [Defect 5: UI Governance: Zero-Pill Requirement & Dynamic Fluid Layouts](#defect-5-ui-governance-zero-pill-requirement--dynamic-fluid-layouts)
+6. [Defect 6: Search Clear Restoration Bug & Anti-AI Code Bloat / YAGNI Governance](#defect-6-search-clear-restoration-bug--anti-ai-code-bloat--yagni-governance)
 
 ---
 
@@ -158,3 +159,47 @@ Ad-hoc styling introduced rounded pill badges (`rounded-full bg-green-100 text-g
 2. **Dynamic Responsive Layouts**:
    - Replaced fixed widths and padding with fluid Flexbox and CSS Grid structures (`flex-1`, `w-full`, `min-h-0`, `items-stretch`).
    - Handled sticky headers and status bars dynamically without magic number offsets.
+
+---
+
+## Defect 6: Search Clear Restoration Bug & Anti-AI Code Bloat / YAGNI Governance
+
+### Symptoms
+- After searching for a specific account or owner (e.g. searching "Heinz"), the table correctly filtered down to that single property and the top metrics cards updated to show "1 accounts".
+- However, when the user subsequently cleared the search bar (via backspacing, deleting the text, or pressing clear), the table remained permanently stuck on the searched record ("KKDA03991001 • Heinz").
+- The table records and executive metric counters failed to restore back to their normal 50+ baseline state.
+
+### Root Cause Analysis
+1. **Premature Early Return on Empty Query**:
+   In `property-rate-admin/src/app/page.tsx`, the debounced search `useEffect` contained:
+   ```typescript
+   // ANTI-PATTERN: Early return prevents re-fetching baseline dataset
+   useEffect(() => {
+     if (isInitialLoading) return;
+     activePropertyQueryRef.current = searchQuery;
+     if (!searchQuery.trim()) {
+       setIsSearchingProperties(false);
+       return; // Aborted execution without calling loadData(1, "", ...)
+     }
+     ...
+   }, [searchQuery]);
+   ```
+   When the user backspaced the input to an empty string (`""`), `!searchQuery.trim()` triggered an immediate early return. Consequently, `loadData(1, "", ...)` was never invoked to reload the full municipal cadastre, leaving the React state (`data` and `propertiesList`) permanently locked to the previous search results.
+2. **Missing In-Memory Baseline Snapshot**:
+   Because `loadData` previously overwrote the `data` state with whatever response came back from the server, clearing the search required waiting for an asynchronous network round-trip. Without an in-memory baseline ref, 0ms instant restoration was impossible.
+3. **Replication Across Tabs**:
+   The exact same pattern was present in `ratepayerSearchQuery` and `auditLogSearchQuery`, leaving both secondary directories stuck when cleared via backspace.
+
+### Architectural Solution & Anti-AI Code Bloat / YAGNI Governance
+1. **Instant 0ms Baseline Cache Refs**:
+   Added `baselineOverviewRef`, `baselineRatepayersRef`, and `baselineAuditLogsRef` in `page.tsx`. On initial load and whenever unqueried baseline datasets are retrieved, the full 50-record response is cached in memory.
+2. **Fast-Path Synchronous Restoration (<16ms)**:
+   When `searchQuery`, `ratepayerSearchQuery`, or `auditLogSearchQuery` is cleared (or backspaced to `""`), the state is synchronously and immediately repopulated from the baseline ref in 0ms—restoring all table rows, pagination markers, and KPI metrics without any loading spinners.
+3. **Server Sync with Active Query Validation**:
+   Immediately dispatches a background fetch for `loadData(1, "", ...)` to ensure the database state is fresh. The stale-response guard was upgraded to `if (activePropertyQueryRef.current !== query) return;` across all handlers to eliminate race conditions.
+4. **Anti-AI Code Bloat, Over-Engineering & YAGNI Governance**:
+   Formalized strict rules in `AGENTS.md` (root and admin projects):
+   - **Anti-Over-Abstraction / YAGNI ("You Aren't Gonna Need It")**: Prohibit creating speculative helper functions, wrapper classes, or multi-tiered utilities for simple inline fixes. Solve problems directly and idiomatically at the site of failure.
+   - **Elimination of Hallucinated Boilerplate**: Use native TypeScript and React expressions (`useMemo`, native arrays, standard hooks) rather than AI-generated boilerplate layers.
+   - **Contextual Economy & Surgical Precision**: Maintain architectural continuity; do not patch bugs by piling new functions on top of old ones. Consolidate and prune dead code proactively.
+

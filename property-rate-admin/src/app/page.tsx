@@ -182,6 +182,10 @@ export default function AdminDashboardPage() {
   const activeRatepayerQueryRef = useRef("");
   const activeAuditQueryRef = useRef("");
 
+  const baselineOverviewRef = useRef<AdminDashboardData | null>(null);
+  const baselineRatepayersRef = useRef<{ ratepayers: AdminRatepayerSummary[]; total: number } | null>(null);
+  const baselineAuditLogsRef = useRef<{ logs: AdminAuditLogItem[]; total: number } | null>(null);
+
   // Selection & Drawer states
   const [selectedAccount, setSelectedAccount] = useState<AdminProperty | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -230,14 +234,19 @@ export default function AdminDashboardPage() {
         classification,
         status as any
       );
-      // Discard stale responses if user cleared search in the meantime
-      if (query && activePropertyQueryRef.current !== query) {
+      // Discard stale responses if user changed query in the meantime
+      if (activePropertyQueryRef.current !== query) {
         return;
       }
       setData(overviewRes);
       setPropertiesList(overviewRes?.properties || []);
       setCurrentPropertyPage(1);
       setHasMoreProperties((overviewRes?.pagination?.page || 1) < (overviewRes?.pagination?.totalPages || 1));
+
+      // Cache baseline dataset when query is empty and filters are default
+      if (!query && muni === "ALL" && classification === "ALL" && (status === "ALL" || !status)) {
+        baselineOverviewRef.current = overviewRes;
+      }
 
       if (tableContainerRef.current) {
         tableContainerRef.current.scrollTop = 0;
@@ -264,6 +273,7 @@ export default function AdminDashboardPage() {
           getAuditTrailList("", "ALL", 1, 50),
         ]);
         if (ratepayersRes) {
+          baselineRatepayersRef.current = ratepayersRes;
           setRatepayers(ratepayersRes.ratepayers);
           setRatepayersTotal(ratepayersRes.total);
           setCurrentRatepayerPage(1);
@@ -271,6 +281,7 @@ export default function AdminDashboardPage() {
         }
         if (logsRes) setSmsLogs(logsRes);
         if (auditRes) {
+          baselineAuditLogsRef.current = auditRes;
           setAuditLogs(auditRes.logs);
           setAuditLogsTotal(auditRes.total);
           setCurrentAuditLogPage(1);
@@ -286,6 +297,9 @@ export default function AdminDashboardPage() {
     setIsLoadingAuditLogs(true);
     try {
       const res = await getAuditTrailList(query, actionFilter, page, 50);
+      if (activeAuditQueryRef.current !== query) {
+        return;
+      }
       if (res) {
         if (append) {
           setAuditLogs((prev) => [...prev, ...res.logs]);
@@ -295,6 +309,9 @@ export default function AdminDashboardPage() {
         setAuditLogsTotal(res.total);
         setCurrentAuditLogPage(page);
         setHasMoreAuditLogs((page * 50) < res.total);
+        if (!query && actionFilter === "ALL") {
+          baselineAuditLogsRef.current = res;
+        }
       }
     } catch (err) {
       console.error("Error loading audit logs:", err);
@@ -394,6 +411,23 @@ export default function AdminDashboardPage() {
     activePropertyQueryRef.current = searchQuery;
     if (!searchQuery.trim()) {
       setIsSearchingProperties(false);
+      // Fast-path: instant 0ms restoration of baseline overview
+      if (
+        baselineOverviewRef.current &&
+        municipalityFilter === "ALL" &&
+        classificationFilter === "ALL" &&
+        statusFilter === "ALL" &&
+        activeTab !== "DEFAULTERS"
+      ) {
+        setData(baselineOverviewRef.current);
+        setPropertiesList(baselineOverviewRef.current.properties || []);
+        setCurrentPropertyPage(1);
+        setHasMoreProperties(
+          (baselineOverviewRef.current.pagination?.page || 1) <
+            (baselineOverviewRef.current.pagination?.totalPages || 1)
+        );
+      }
+      loadData(1, "", municipalityFilter, classificationFilter, activeTab === "DEFAULTERS" ? "DEFAULTER" : statusFilter, false);
       return;
     }
     setIsSearchingProperties(true);
@@ -407,6 +441,21 @@ export default function AdminDashboardPage() {
     setSearchQuery("");
     activePropertyQueryRef.current = "";
     setIsSearchingProperties(false);
+    if (
+      baselineOverviewRef.current &&
+      municipalityFilter === "ALL" &&
+      classificationFilter === "ALL" &&
+      statusFilter === "ALL" &&
+      activeTab !== "DEFAULTERS"
+    ) {
+      setData(baselineOverviewRef.current);
+      setPropertiesList(baselineOverviewRef.current.properties || []);
+      setCurrentPropertyPage(1);
+      setHasMoreProperties(
+        (baselineOverviewRef.current.pagination?.page || 1) <
+          (baselineOverviewRef.current.pagination?.totalPages || 1)
+      );
+    }
     loadData(1, "", municipalityFilter, classificationFilter, activeTab === "DEFAULTERS" ? "DEFAULTER" : statusFilter, false);
   };
 
@@ -423,6 +472,22 @@ export default function AdminDashboardPage() {
     activeRatepayerQueryRef.current = ratepayerSearchQuery;
     if (!ratepayerSearchQuery.trim()) {
       setIsSearchingRatepayers(false);
+      if (baselineRatepayersRef.current) {
+        setRatepayers(baselineRatepayersRef.current.ratepayers);
+        setRatepayersTotal(baselineRatepayersRef.current.total);
+        setCurrentRatepayerPage(1);
+        setHasMoreRatepayers(
+          baselineRatepayersRef.current.ratepayers.length < baselineRatepayersRef.current.total
+        );
+      }
+      getRatepayersList("", 1, 100).then((res) => {
+        if (res && activeRatepayerQueryRef.current === "") {
+          setRatepayers(res.ratepayers);
+          setRatepayersTotal(res.total);
+          setCurrentRatepayerPage(1);
+          setHasMoreRatepayers(res.ratepayers.length < res.total);
+        }
+      });
       return;
     }
     setIsSearchingRatepayers(true);
@@ -451,6 +516,14 @@ export default function AdminDashboardPage() {
     setRatepayerSearchQuery("");
     activeRatepayerQueryRef.current = "";
     setIsSearchingRatepayers(false);
+    if (baselineRatepayersRef.current) {
+      setRatepayers(baselineRatepayersRef.current.ratepayers);
+      setRatepayersTotal(baselineRatepayersRef.current.total);
+      setCurrentRatepayerPage(1);
+      setHasMoreRatepayers(
+        baselineRatepayersRef.current.ratepayers.length < baselineRatepayersRef.current.total
+      );
+    }
     getRatepayersList("", 1, 100).then((res) => {
       if (res && activeRatepayerQueryRef.current === "") {
         setRatepayers(res.ratepayers);
@@ -465,7 +538,18 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     if (isInitialLoading) return;
     activeAuditQueryRef.current = auditLogSearchQuery;
-    if (!auditLogSearchQuery.trim()) return;
+    if (!auditLogSearchQuery.trim()) {
+      if (baselineAuditLogsRef.current && auditLogActionFilter === "ALL") {
+        setAuditLogs(baselineAuditLogsRef.current.logs);
+        setAuditLogsTotal(baselineAuditLogsRef.current.total);
+        setCurrentAuditLogPage(1);
+        setHasMoreAuditLogs(
+          baselineAuditLogsRef.current.logs.length < baselineAuditLogsRef.current.total
+        );
+      }
+      loadAuditLogs("", auditLogActionFilter, 1);
+      return;
+    }
     const timer = setTimeout(() => {
       loadAuditLogs(auditLogSearchQuery, auditLogActionFilter, 1);
     }, 250);
@@ -475,6 +559,14 @@ export default function AdminDashboardPage() {
   const handleClearAuditLogSearch = () => {
     setAuditLogSearchQuery("");
     activeAuditQueryRef.current = "";
+    if (baselineAuditLogsRef.current && auditLogActionFilter === "ALL") {
+      setAuditLogs(baselineAuditLogsRef.current.logs);
+      setAuditLogsTotal(baselineAuditLogsRef.current.total);
+      setCurrentAuditLogPage(1);
+      setHasMoreAuditLogs(
+        baselineAuditLogsRef.current.logs.length < baselineAuditLogsRef.current.total
+      );
+    }
     loadAuditLogs("", auditLogActionFilter, 1);
   };
 
