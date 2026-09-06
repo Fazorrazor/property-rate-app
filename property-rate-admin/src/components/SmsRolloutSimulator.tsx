@@ -351,38 +351,14 @@ export function SmsRolloutSimulator({
     }
   };
 
-  const handleDragEnd = (
-    _event: MouseEvent | TouchEvent | PointerEvent,
-    info: { offset: { x: number; y: number }; velocity: { x: number; y: number } }
-  ) => {
-    const swipeThreshold = 60;
-    const velocityThreshold = 250;
-
-    if (
-      (info.offset.x < -swipeThreshold || info.velocity.x < -velocityThreshold) &&
-      activeView === "SIMULATOR"
-    ) {
-      setActiveView("LOGS");
-    } else if (
-      (info.offset.x > swipeThreshold || info.velocity.x > velocityThreshold) &&
-      activeView === "LOGS"
-    ) {
-      setActiveView("SIMULATOR");
-    }
-  };
-
   return (
     <div
       onWheel={handleWheelSwipe}
       className="relative w-full h-full flex-1 min-h-0 overflow-hidden flex flex-col font-sans"
     >
-      {/* Synchronized Dual-Pane Motion Slider Track with Swiping Gestures */}
+      {/* Synchronized Dual-Pane Motion Slider Track */}
       <motion.div
         className="w-[200%] h-full flex flex-row flex-1 min-h-0"
-        drag="x"
-        dragConstraints={{ left: 0, right: 0 }}
-        dragElastic={0.08}
-        onDragEnd={handleDragEnd}
         animate={{ x: activeView === "SIMULATOR" ? "0%" : "-50%" }}
         transition={{ type: "spring", damping: 26, stiffness: 220, mass: 0.8 }}
       >
