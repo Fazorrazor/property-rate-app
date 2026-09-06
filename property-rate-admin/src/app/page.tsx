@@ -1805,6 +1805,7 @@ export default function AdminDashboardPage() {
                     <option value="RECORD_PAYMENT">Cash Settlements (RECORD_PAYMENT)</option>
                     <option value="BATCH_BILLING">Annual Billing Rollouts (BATCH_BILLING)</option>
                     <option value="BATCH_SMS_DISPATCH">SMS Batch Notices (BATCH_SMS_DISPATCH)</option>
+                    <option value="SINGLE_SMS_DISPATCH">Direct SMS Notices (SINGLE_SMS_DISPATCH)</option>
                     <option value="EDIT_PROPERTY">Property Valuation Edits (EDIT_PROPERTY)</option>
                     <option value="CREATE_PROPERTY">Parcel Registrations (CREATE_PROPERTY)</option>
                   </select>
@@ -1823,12 +1824,12 @@ export default function AdminDashboardPage() {
                 <table className="w-full text-left text-xs border-collapse">
                   <thead className="bg-[#F8F9FA] border-b border-[#DADCE0] text-[#717171] font-semibold text-[11px] sticky top-0 z-10 shadow-xs">
                     <tr>
-                      <th className="py-2.5 px-4 bg-[#F8F9FA] whitespace-nowrap min-w-[140px]">Date &amp; Time</th>
-                      <th className="py-2.5 px-4 bg-[#F8F9FA] whitespace-nowrap min-w-[190px]">Administrative Action</th>
-                      <th className="py-2.5 px-4 bg-[#F8F9FA] whitespace-nowrap min-w-[130px]">Target Entity</th>
-                      <th className="py-2.5 px-4 bg-[#F8F9FA] whitespace-nowrap min-w-[170px]">Authorized Actor</th>
-                      <th className="py-2.5 px-4 bg-[#F8F9FA] min-w-[280px]">Audit Narrative &amp; Scope</th>
-                      <th className="py-2.5 px-4 text-center bg-[#F8F9FA] whitespace-nowrap min-w-[120px]">Tamper Status</th>
+                      <th className="py-2.5 px-3 bg-[#F8F9FA] whitespace-nowrap">Date &amp; Time</th>
+                      <th className="py-2.5 px-3 bg-[#F8F9FA] whitespace-nowrap">Administrative Action</th>
+                      <th className="py-2.5 px-3 bg-[#F8F9FA] whitespace-nowrap">Target Entity</th>
+                      <th className="py-2.5 px-3 bg-[#F8F9FA] whitespace-nowrap">Authorized Actor</th>
+                      <th className="py-2.5 px-3 bg-[#F8F9FA]">Audit Narrative &amp; Scope</th>
+                      <th className="py-2.5 px-3 text-right bg-[#F8F9FA] whitespace-nowrap">Tamper Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#E8EAED] bg-white font-sans">
@@ -1841,11 +1842,11 @@ export default function AdminDashboardPage() {
                     ) : (
                       filteredAuditLogs.map((log) => (
                         <tr key={log.id} className="hover:bg-[#F8F9FA] transition-colors">
-                          <td className="py-2.5 px-4 whitespace-nowrap">
+                          <td className="py-2.5 px-3 whitespace-nowrap">
                             <span className="font-medium text-[#2C2C2C]">{log.createdAtFormatted}</span>
                             <span className="text-[11px] text-[#717171] block font-mono">{log.timeFormatted}</span>
                           </td>
-                          <td className="py-2.5 px-4 whitespace-nowrap">
+                          <td className="py-2.5 px-3 whitespace-nowrap">
                             <span className="flex items-center gap-1.5 font-medium text-[#2C2C2C]">
                               <span
                                 className="w-2 h-2 rounded-full shrink-0"
@@ -1855,7 +1856,7 @@ export default function AdminDashboardPage() {
                             </span>
                             <span className="text-[10px] text-[#717171] font-mono block pl-3.5">{log.action}</span>
                           </td>
-                          <td className="py-2.5 px-4 whitespace-nowrap text-[#717171]">
+                          <td className="py-2.5 px-3 whitespace-nowrap text-[#717171]">
                             <span className="font-medium text-[#2C2C2C]">{log.entityType}</span>
                             {log.entityId && (
                               <span className="text-[11px] text-[#717171] font-mono block truncate max-w-[120px]">
@@ -1863,14 +1864,14 @@ export default function AdminDashboardPage() {
                               </span>
                             )}
                           </td>
-                          <td className="py-2.5 px-4 whitespace-nowrap">
+                          <td className="py-2.5 px-3 whitespace-nowrap">
                             <span className="font-semibold text-[#2C2C2C]">{log.adminName}</span>
                             <span className="text-[11px] text-[#717171] block">{log.adminRole}</span>
                           </td>
-                          <td className="py-2.5 px-4 text-[#2C2C2C] leading-relaxed">
+                          <td className="py-2.5 px-3 text-[#2C2C2C] leading-relaxed break-words">
                             {log.details}
                           </td>
-                          <td className="py-2.5 px-4 text-center whitespace-nowrap">
+                          <td className="py-2.5 px-3 text-right whitespace-nowrap">
                             <span className="text-[11px] font-medium text-[#188038]">
                               &bull; Verified Immutable
                             </span>

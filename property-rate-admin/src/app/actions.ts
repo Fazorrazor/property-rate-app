@@ -873,6 +873,10 @@ export async function getAuditTrailList(
           actionLabel = 'SMS Batch Dispatch';
           actionBadgeColor = '#E37400';
           break;
+        case 'SINGLE_SMS_DISPATCH':
+          actionLabel = 'Direct SMS Notice';
+          actionBadgeColor = '#E37400';
+          break;
         case 'EDIT_PROPERTY':
           actionLabel = 'Property Valuation Modified';
           actionBadgeColor = '#8430CE';
@@ -1183,11 +1187,17 @@ export async function batchDispatchSms(
         data: notificationsToCreate
       });
 
+      const isSingle = count === 1;
+      const targetAccount = properties[0]?.accountNumber;
+
       await prisma.auditLog.create({
         data: {
-          action: 'BATCH_SMS_DISPATCH',
+          action: isSingle ? 'SINGLE_SMS_DISPATCH' : 'BATCH_SMS_DISPATCH',
           entityType: 'Notification',
-          details: `Dispatched dual-link SMS rollout (${effectiveMode} mode) to ${count} property accounts.`,
+          entityId: isSingle && targetAccount ? targetAccount : null,
+          details: isSingle
+            ? `Dispatched direct dual-link SMS demand notice (${effectiveMode} mode) to account #${targetAccount}.`
+            : `Dispatched dual-link SMS rollout (${effectiveMode} mode) to ${count} property accounts.`,
           adminId: admin.id,
         },
       });
