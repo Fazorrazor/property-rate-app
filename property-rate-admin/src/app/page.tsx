@@ -1336,9 +1336,9 @@ export default function AdminDashboardPage() {
               <div
                 ref={tableContainerRef}
                 onScroll={handleTableScroll}
-                className="w-full flex-1 min-h-0 overflow-y-auto overflow-x-auto"
+                className="w-full flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
               >
-                <table className="w-full text-left text-xs border-collapse">
+                <table className="table-fixed w-full text-left text-xs border-collapse">
                   <thead className="bg-[#F8F9FA] border-b border-[#DADCE0] text-[#717171] font-semibold text-[11px] sticky top-0 z-10 shadow-xs">
                     <tr>
                       <th className="py-2.5 px-3 text-center w-8 bg-[#F8F9FA]">
@@ -1349,12 +1349,12 @@ export default function AdminDashboardPage() {
                           className="rounded border-[#DADCE0] text-[#612D53] focus:ring-0 cursor-pointer"
                         />
                       </th>
-                      <th className="py-2.5 px-3 bg-[#F8F9FA]">Account &amp; Cadastre</th>
-                      <th className="py-2.5 px-3 bg-[#F8F9FA]">Ratepayer Particulars</th>
-                      <th className="py-2.5 px-3 bg-[#F8F9FA] whitespace-nowrap">Classification</th>
-                      <th className="py-2.5 px-3 text-right bg-[#F8F9FA] whitespace-nowrap">Rateable Value</th>
-                      <th className="py-2.5 px-3 text-right bg-[#F8F9FA] whitespace-nowrap">Total Assessment Due</th>
-                      <th className="py-2.5 px-3 text-center bg-[#F8F9FA] whitespace-nowrap">Status</th>
+                      <th className="py-2.5 px-3 w-[24%] bg-[#F8F9FA]">Account &amp; Cadastre</th>
+                      <th className="py-2.5 px-3 w-[23%] bg-[#F8F9FA]">Ratepayer Particulars</th>
+                      <th className="py-2.5 px-3 w-[15%] bg-[#F8F9FA] truncate">Classification</th>
+                      <th className="py-2.5 px-3 w-[13%] text-right bg-[#F8F9FA] whitespace-nowrap">Rateable Value</th>
+                      <th className="py-2.5 px-3 w-[14%] text-right bg-[#F8F9FA] whitespace-nowrap">Assessment Due</th>
+                      <th className="py-2.5 px-3 w-[11%] text-center bg-[#F8F9FA] whitespace-nowrap">Status</th>
                     </tr>
                   </thead>
 
@@ -1494,18 +1494,18 @@ export default function AdminDashboardPage() {
               <div
                 ref={ratepayerTableContainerRef}
                 onScroll={handleRatepayerTableScroll}
-                className={`w-full flex-1 min-h-0 overflow-y-auto overflow-x-auto transition-opacity duration-200 ${isSearchingRatepayers ? "opacity-60" : "opacity-100"}`}
+                className={`w-full flex-1 min-h-0 overflow-y-auto overflow-x-hidden transition-opacity duration-200 ${isSearchingRatepayers ? "opacity-60" : "opacity-100"}`}
               >
-                <table className="w-full text-left text-xs border-collapse">
+                <table className="table-fixed w-full text-left text-xs border-collapse">
                   <thead className="bg-[#F8F9FA] border-b border-[#DADCE0] text-[#717171] font-semibold text-[11px] sticky top-0 z-10 shadow-xs">
                     <tr>
-                      <th className="py-2.5 px-3 bg-[#F8F9FA]">Ratepayer Name &amp; Role</th>
-                      <th className="py-2.5 px-3 bg-[#F8F9FA] whitespace-nowrap">Telephone</th>
-                      <th className="py-2.5 px-3 text-center bg-[#F8F9FA] whitespace-nowrap">Properties Linked</th>
-                      <th className="py-2.5 px-3 text-right bg-[#F8F9FA] whitespace-nowrap">Total Valuation</th>
-                      <th className="py-2.5 px-3 text-right bg-[#F8F9FA] whitespace-nowrap">Total Assessment Due</th>
-                      <th className="py-2.5 px-3 text-center bg-[#F8F9FA] whitespace-nowrap">Status</th>
-                      <th className="py-2.5 px-3 text-right bg-[#F8F9FA] whitespace-nowrap">Action</th>
+                      <th className="py-2.5 px-3 w-[24%] bg-[#F8F9FA]">Ratepayer Name &amp; Role</th>
+                      <th className="py-2.5 px-3 w-[13%] bg-[#F8F9FA] whitespace-nowrap">Telephone</th>
+                      <th className="py-2.5 px-3 w-[12%] text-center bg-[#F8F9FA] whitespace-nowrap">Properties Linked</th>
+                      <th className="py-2.5 px-3 w-[14%] text-right bg-[#F8F9FA] whitespace-nowrap">Total Valuation</th>
+                      <th className="py-2.5 px-3 w-[14%] text-right bg-[#F8F9FA] whitespace-nowrap">Assessment Due</th>
+                      <th className="py-2.5 px-3 w-[12%] text-center bg-[#F8F9FA] whitespace-nowrap">Status</th>
+                      <th className="py-2.5 px-3 w-[11%] text-right bg-[#F8F9FA] whitespace-nowrap">Action</th>
                     </tr>
                   </thead>
 
@@ -1523,7 +1523,7 @@ export default function AdminDashboardPage() {
                           onClick={() => handleOpenRatepayerDossier(ratepayer.id, ratepayer)}
                           className="hover:bg-[#F8F9FA] transition-colors cursor-pointer"
                         >
-                          <td className="py-2.5 px-3 font-semibold text-[#2C2C2C]">
+                          <td className="py-2.5 px-3 font-semibold text-[#2C2C2C] min-w-0">
                             <span className="block truncate">{ratepayer.name}</span>
                             <span className="text-[11px] text-[#717171] font-normal block mt-0.5 truncate">
                               {ratepayer.role} &bull; Registered {ratepayer.createdAtFormatted}
@@ -1565,7 +1565,7 @@ export default function AdminDashboardPage() {
                                 ? "• Defaulter"
                                 : ratepayer.status === "OUTSTANDING"
                                 ? "• Balance Due"
-                                : "• No Properties Linked"}
+                                : "• Unlinked"}
                             </span>
                           </td>
                           <td className="py-2.5 px-3 text-right whitespace-nowrap">
@@ -1575,9 +1575,9 @@ export default function AdminDashboardPage() {
                                 e.stopPropagation();
                                 handleOpenRatepayerDossier(ratepayer.id, ratepayer);
                               }}
-                              className="text-xs text-[#612D53] hover:underline font-semibold cursor-pointer"
+                              className="text-xs text-[#612D53] hover:underline font-semibold cursor-pointer whitespace-nowrap"
                             >
-                              View History &rarr;
+                              View &rarr;
                             </button>
                           </td>
                         </tr>
@@ -1672,16 +1672,16 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
 
-              <div className="w-full flex-1 min-h-0 overflow-y-auto overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
+              <div className="w-full flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
+                <table className="table-fixed w-full text-left text-xs border-collapse">
                   <thead className="bg-[#F8F9FA] border-b border-[#DADCE0] text-[#717171] font-semibold text-[11px] sticky top-0 z-10 shadow-xs">
                     <tr>
-                      <th className="py-2.5 px-3 bg-[#F8F9FA] whitespace-nowrap">Receipt Reference</th>
-                      <th className="py-2.5 px-3 bg-[#F8F9FA]">Account Head &amp; Ratepayer</th>
-                      <th className="py-2.5 px-3 bg-[#F8F9FA] whitespace-nowrap">Settlement Date</th>
-                      <th className="py-2.5 px-3 bg-[#F8F9FA] whitespace-nowrap">Payment Channel</th>
-                      <th className="py-2.5 px-3 text-right bg-[#F8F9FA] whitespace-nowrap">Amount Settled</th>
-                      <th className="py-2.5 px-3 text-center bg-[#F8F9FA] whitespace-nowrap">Audit Status</th>
+                      <th className="py-2.5 px-3 w-[20%] bg-[#F8F9FA] whitespace-nowrap">Receipt Reference</th>
+                      <th className="py-2.5 px-3 w-[25%] bg-[#F8F9FA]">Account Head &amp; Ratepayer</th>
+                      <th className="py-2.5 px-3 w-[14%] bg-[#F8F9FA] whitespace-nowrap">Settlement Date</th>
+                      <th className="py-2.5 px-3 w-[16%] bg-[#F8F9FA] whitespace-nowrap">Payment Channel</th>
+                      <th className="py-2.5 px-3 w-[13%] text-right bg-[#F8F9FA] whitespace-nowrap">Amount Settled</th>
+                      <th className="py-2.5 px-3 w-[12%] text-center bg-[#F8F9FA] whitespace-nowrap">Audit Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#E8EAED] bg-white">
@@ -1819,17 +1819,17 @@ export default function AdminDashboardPage() {
               {/* Table Container */}
               <div
                 ref={auditLogTableContainerRef}
-                className="w-full flex-1 min-h-0 overflow-y-auto overflow-x-auto"
+                className="w-full flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
               >
-                <table className="w-full text-left text-xs border-collapse">
+                <table className="table-fixed w-full text-left text-xs border-collapse">
                   <thead className="bg-[#F8F9FA] border-b border-[#DADCE0] text-[#717171] font-semibold text-[11px] sticky top-0 z-10 shadow-xs">
                     <tr>
-                      <th className="py-2.5 px-3 bg-[#F8F9FA] whitespace-nowrap">Date &amp; Time</th>
-                      <th className="py-2.5 px-3 bg-[#F8F9FA] whitespace-nowrap">Administrative Action</th>
-                      <th className="py-2.5 px-3 bg-[#F8F9FA] whitespace-nowrap">Target Entity</th>
-                      <th className="py-2.5 px-3 bg-[#F8F9FA] whitespace-nowrap">Authorized Actor</th>
-                      <th className="py-2.5 px-3 bg-[#F8F9FA]">Audit Narrative &amp; Scope</th>
-                      <th className="py-2.5 px-3 text-right bg-[#F8F9FA] whitespace-nowrap">Tamper Status</th>
+                      <th className="py-2.5 px-3 w-[14%] bg-[#F8F9FA] whitespace-nowrap">Date &amp; Time</th>
+                      <th className="py-2.5 px-3 w-[19%] bg-[#F8F9FA] whitespace-nowrap">Administrative Action</th>
+                      <th className="py-2.5 px-3 w-[13%] bg-[#F8F9FA] whitespace-nowrap">Target Entity</th>
+                      <th className="py-2.5 px-3 w-[16%] bg-[#F8F9FA] whitespace-nowrap">Authorized Actor</th>
+                      <th className="py-2.5 px-3 w-[26%] bg-[#F8F9FA]">Audit Narrative &amp; Scope</th>
+                      <th className="py-2.5 px-3 w-[12%] text-right bg-[#F8F9FA] whitespace-nowrap">Tamper Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#E8EAED] bg-white font-sans">
