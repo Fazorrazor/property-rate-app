@@ -1073,7 +1073,7 @@ export default function AdminDashboardPage() {
           <div className="px-3 py-1.5 text-xs">
             <span className="text-[#717171] block text-[10px]">Logged in Administrator</span>
             <span className="font-semibold text-[#2C2C2C] truncate block">
-              {currentAdmin ? `${currentAdmin.name} (${currentAdmin.role})` : "Heinz (SUPER_ADMIN)"}
+              {currentAdmin?.username || currentAdmin?.name || "Heinz"}
             </span>
           </div>
           <button
