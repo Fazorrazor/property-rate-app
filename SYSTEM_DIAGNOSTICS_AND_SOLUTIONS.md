@@ -14,6 +14,7 @@ This document serves as an engineering audit of faults identified within the **M
 7. [Defect 7: In-App SMS Dispatch Mode Control (Live vs Test Simulation) & Settings Workspace](#defect-7-in-app-sms-dispatch-mode-control-live-vs-test-simulation--settings-workspace)
 8. [Defect 8: WCAG 2.1 AA Accessibility, Color Contrast Compliance & React 19 Keystroke Concurrency](#defect-8-wcag-21-aa-accessibility-color-contrast-compliance--react-19-keystroke-concurrency)
 9. [Defect 9: Municipal Portal Auth Hardening, SSR Pre-Auth Guards & Asynchronous Perceived Performance](#defect-9-municipal-portal-auth-hardening-ssr-pre-auth-guards--asynchronous-perceived-performance)
+10. [Defect 10: Browser Autofill Heuristic Hijacking of Search Bars & Reactive Filter Cascades](#defect-10-browser-autofill-heuristic-hijacking-of-search-bars--reactive-filter-cascades)
 
 ---
 
@@ -313,3 +314,33 @@ Ad-hoc styling introduced rounded pill badges (`rounded-full bg-green-100 text-g
    Updated the admin sidebar sign-out button with `isLoggingOut` state management, immediately locking the button, showing `<Loader2 className="animate-spin" /> Signing out...`, executing `adminLogout()`, and redirecting cleanly.
 6. **Full Alignment with Architectural Governance (`AGENTS.md`)**:
    Codified Hydration / Partial Hydration, Perceived Performance, Loading State Management, and Optimistic UI Updates into workspace guidelines.
+
+---
+
+## Defect 10: Browser Autofill Heuristic Hijacking of Search Bars & Reactive Filter Cascades
+
+### Symptoms
+When an administrator opened the **Annual Batch Billing Rollout** modal from the Cadastre registry:
+- The Cadastre search field was unexpectedly auto-populated with the administrator's login phone number (`0000000000`).
+- Because search input changes trigger instant reactive client-side filtering, the property roll immediately filtered down to `0000000000`.
+- The main table instantly collapsed, displaying `"0 properties on record"`.
+
+### Root Cause Analysis
+1. **Unbounded Password Input in DOM**:
+   The Annual Batch Billing Rollout modal contained an `<input type="password">` (*Administrator Authorization Password*) rendered inside an open `<div>` without an enclosing `<form>` boundary.
+2. **Chromium / WebKit Password Manager Pairing Heuristic**:
+   When the modal rendered, browser password managers (Google Passwords, Chrome, Edge Autofill) detected the password field and scanned upward through the DOM tree to locate an associated "username/account" input.
+3. **Nearest Preceding Text Input Target**:
+   The nearest preceding input field in the page DOM was the Cadastre search bar (`<input type="text" value={searchQuery} />`).
+4. **Synthetic Event Triggering**:
+   The browser injected the saved phone number into the search bar, dispatching synthetic `input` and `change` events that updated React's controlled `searchQuery` state, instantaneously clearing the table.
+
+### Architectural Solution
+1. **Isolated Form Boundaries**:
+   Encapsulated the modal markup in an isolated `<form onSubmit={...} autoComplete="off">`, preventing browser form-pairing algorithms from reaching outside the modal container.
+2. **Disarmed Password Autofill (`autoComplete="new-password"`)**:
+   Added `autoComplete="new-password"` and distinct security names (`statutory_batch_rollout_auth_key` and `municipal_manual_settlement_auth_key`) to both modal authorization password fields. This instructs password managers not to link stored credentials.
+3. **Semantic Search Field Hardening Across Platform**:
+   - Converted all dashboard search inputs (Cadastre, Ratepayers Directory, Treasury Reconciliation, System Audit Trail) from `type="text"` to `type="search"`.
+   - Injected `autoComplete="off"`, unique semantic search names (`cadastre_property_search_filter`, etc.), and password-manager ignore attributes (`data-lpignore="true"`, `data-1p-ignore="true"`). Browsers strictly exclude `type="search"` inputs from login credential pairings.
+

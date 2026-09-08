@@ -1220,7 +1220,11 @@ export default function AdminDashboardPage() {
                       <Search className="w-4 h-4 text-[#717171] absolute left-3 pointer-events-none" />
                     )}
                     <input
-                      type="text"
+                      type="search"
+                      name="cadastre_property_search_filter"
+                      autoComplete="off"
+                      data-lpignore="true"
+                      data-1p-ignore="true"
                       placeholder="Search Account ID, Valuation No, Ratepayer, Phone, GPS (e.g. GK-0010), Landmark, Receipt..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
@@ -1496,7 +1500,11 @@ export default function AdminDashboardPage() {
                     <Search className="w-4 h-4 text-[#717171] absolute left-3 pointer-events-none" />
                   )}
                   <input
-                    type="text"
+                    type="search"
+                    name="ratepayer_directory_search_filter"
+                    autoComplete="off"
+                    data-lpignore="true"
+                    data-1p-ignore="true"
                     placeholder="Search Ratepayer Name, Phone, Account ID, GPS Address, Municipality..."
                     value={ratepayerSearchQuery}
                     onChange={(e) => setRatepayerSearchQuery(e.target.value)}
@@ -1661,7 +1669,11 @@ export default function AdminDashboardPage() {
                   <div className="relative flex items-center flex-1 max-w-md min-w-[260px]">
                     <Search className="w-4 h-4 text-[#717171] absolute left-3 pointer-events-none" />
                     <input
-                      type="text"
+                      type="search"
+                      name="treasury_reconciliation_search_filter"
+                      autoComplete="off"
+                      data-lpignore="true"
+                      data-1p-ignore="true"
                       placeholder="Search Receipt / GCR No., Account ID, Ratepayer, Channel, Date..."
                       value={treasurySearchQuery}
                       onChange={(e) => setTreasurySearchQuery(e.target.value)}
@@ -1801,7 +1813,11 @@ export default function AdminDashboardPage() {
                   <div className="relative flex-1 max-w-md">
                     <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-[#717171]" />
                     <input
-                      type="text"
+                      type="search"
+                      name="audit_trail_search_filter"
+                      autoComplete="off"
+                      data-lpignore="true"
+                      data-1p-ignore="true"
                       placeholder="Search by action, narrative, administrator, or reference..."
                       value={auditLogSearchQuery}
                       onChange={(e) => setAuditLogSearchQuery(e.target.value)}
@@ -2140,126 +2156,138 @@ export default function AdminDashboardPage() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-2xl border border-[#DADCE0] shadow-2xl p-6 max-w-md w-full space-y-4 font-sans"
+              className="bg-white rounded-2xl border border-[#DADCE0] shadow-2xl p-6 max-w-md w-full font-sans"
             >
-              <div className="flex items-center justify-between pb-3 border-b border-[#F1F3F4]">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-[#F6ECF2] text-[#612D53] flex items-center justify-center">
-                    <RefreshCw className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-semibold text-[#2C2C2C]">
-                      Annual Batch Billing Rollout
-                    </h3>
-                    <p className="text-xs text-[#717171]">Statutory Assessment Cycle</p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowBatchModal(false)}
-                  className="text-[#717171] hover:text-[#2C2C2C] p-1 rounded-lg cursor-pointer"
-                  aria-label="Close modal"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="p-3.5 rounded-xl bg-[#F6ECF2] text-xs text-[#2C2C2C] space-y-2">
-                <p className="font-semibold text-[#612D53]">
-                  Execute Annual Rollout for {properties.length} Properties
-                </p>
-                <div className="space-y-3 pt-2">
-                  <div className="space-y-1">
-                    <label className="text-[#717171] font-medium block">Residential Rate Factor</label>
-                    <input
-                      type="number"
-                      step="0.001"
-                      value={residentialRate}
-                      onChange={(e) => setResidentialRate(e.target.value)}
-                      aria-label="Residential Rate Factor"
-                      className="w-full h-9 px-3 rounded-md border border-[#DADCE0] text-xs focus:outline-none focus:border-[#612D53]"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[#717171] font-medium block">Commercial Rate Factor</label>
-                    <input
-                      type="number"
-                      step="0.001"
-                      value={commercialRate}
-                      onChange={(e) => setCommercialRate(e.target.value)}
-                      aria-label="Commercial Rate Factor"
-                      className="w-full h-9 px-3 rounded-md border border-[#DADCE0] text-xs focus:outline-none focus:border-[#612D53]"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[#717171] font-medium block">Statutory Due Date</label>
-                    <input
-                      type="text"
-                      value={dueDate}
-                      onChange={(e) => setDueDate(e.target.value)}
-                      aria-label="Statutory Due Date"
-                      className="w-full h-9 px-3 rounded-md border border-[#DADCE0] text-xs focus:outline-none focus:border-[#612D53]"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[#717171] font-medium block">Dual-Link SMS Notice Template</label>
-                    <textarea
-                      value={messageTemplate}
-                      onChange={(e) => setMessageTemplate(e.target.value)}
-                      aria-label="Dual-Link SMS Notice Template"
-                      rows={4}
-                      className="w-full p-2.5 rounded-md border border-[#DADCE0] text-xs focus:outline-none focus:border-[#612D53] resize-none"
-                    />
-                  </div>
-
-                  {/* Security Authorization Password */}
-                  <div className="space-y-1 pt-2 border-t border-[#E8D4E2]">
-                    <div className="flex items-center gap-1.5">
-                      <ShieldCheck className="w-3.5 h-3.5 text-[#612D53]" />
-                      <label className="text-[#612D53] font-semibold text-xs block">Administrator Authorization Password *</label>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleRunBatchBilling();
+                }}
+                autoComplete="off"
+                className="space-y-4"
+              >
+                <div className="flex items-center justify-between pb-3 border-b border-[#F1F3F4]">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-[#F6ECF2] text-[#612D53] flex items-center justify-center">
+                      <RefreshCw className="w-4 h-4" />
                     </div>
-                    <div className="relative">
+                    <div>
+                      <h3 className="text-sm font-semibold text-[#2C2C2C]">
+                        Annual Batch Billing Rollout
+                      </h3>
+                      <p className="text-xs text-[#717171]">Statutory Assessment Cycle</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowBatchModal(false)}
+                    className="text-[#717171] hover:text-[#2C2C2C] p-1 rounded-lg cursor-pointer"
+                    aria-label="Close modal"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-[#F6ECF2] text-xs text-[#2C2C2C] space-y-2">
+                  <p className="font-semibold text-[#612D53]">
+                    Execute Annual Rollout for {properties.length} Properties
+                  </p>
+                  <div className="space-y-3 pt-2">
+                    <div className="space-y-1">
+                      <label className="text-[#717171] font-medium block">Residential Rate Factor</label>
                       <input
-                        required
-                        type={showBatchPassword ? "text" : "password"}
-                        value={batchAdminPassword}
-                        onChange={(e) => setBatchAdminPassword(e.target.value)}
-                        aria-label="Administrator Authorization Password"
-                        placeholder="Enter admin password (e.g. admin123)"
-                        className="w-full h-9 px-3 pr-9 rounded-md border border-[#DADCE0] bg-white text-xs text-[#2C2C2C] focus:outline-none focus:border-[#612D53]"
+                        type="number"
+                        step="0.001"
+                        value={residentialRate}
+                        onChange={(e) => setResidentialRate(e.target.value)}
+                        aria-label="Residential Rate Factor"
+                        className="w-full h-9 px-3 rounded-md border border-[#DADCE0] text-xs focus:outline-none focus:border-[#612D53]"
                       />
-                      <button
-                        type="button"
-                        onClick={() => setShowBatchPassword(!showBatchPassword)}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#717171] hover:text-[#2C2C2C] p-1 cursor-pointer"
-                      >
-                        {showBatchPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                      </button>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[#717171] font-medium block">Commercial Rate Factor</label>
+                      <input
+                        type="number"
+                        step="0.001"
+                        value={commercialRate}
+                        onChange={(e) => setCommercialRate(e.target.value)}
+                        aria-label="Commercial Rate Factor"
+                        className="w-full h-9 px-3 rounded-md border border-[#DADCE0] text-xs focus:outline-none focus:border-[#612D53]"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[#717171] font-medium block">Statutory Due Date</label>
+                      <input
+                        type="text"
+                        value={dueDate}
+                        onChange={(e) => setDueDate(e.target.value)}
+                        aria-label="Statutory Due Date"
+                        className="w-full h-9 px-3 rounded-md border border-[#DADCE0] text-xs focus:outline-none focus:border-[#612D53]"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[#717171] font-medium block">Dual-Link SMS Notice Template</label>
+                      <textarea
+                        value={messageTemplate}
+                        onChange={(e) => setMessageTemplate(e.target.value)}
+                        aria-label="Dual-Link SMS Notice Template"
+                        rows={4}
+                        className="w-full p-2.5 rounded-md border border-[#DADCE0] text-xs focus:outline-none focus:border-[#612D53] resize-none"
+                      />
+                    </div>
+
+                    {/* Security Authorization Password */}
+                    <div className="space-y-1 pt-2 border-t border-[#E8D4E2]">
+                      <div className="flex items-center gap-1.5">
+                        <ShieldCheck className="w-3.5 h-3.5 text-[#612D53]" />
+                        <label className="text-[#612D53] font-semibold text-xs block">Administrator Authorization Password *</label>
+                      </div>
+                      <div className="relative">
+                        <input
+                          required
+                          type={showBatchPassword ? "text" : "password"}
+                          name="statutory_batch_rollout_auth_key"
+                          autoComplete="new-password"
+                          data-lpignore="true"
+                          data-1p-ignore="true"
+                          value={batchAdminPassword}
+                          onChange={(e) => setBatchAdminPassword(e.target.value)}
+                          aria-label="Administrator Authorization Password"
+                          placeholder="Enter admin password (e.g. admin123)"
+                          className="w-full h-9 px-3 pr-9 rounded-md border border-[#DADCE0] bg-white text-xs text-[#2C2C2C] focus:outline-none focus:border-[#612D53] [&:-webkit-autofill]:shadow-[inset_0_0_0_1000px_white] [&:-webkit-autofill]:text-fill-[#2C2C2C]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowBatchPassword(!showBatchPassword)}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#717171] hover:text-[#2C2C2C] p-1 cursor-pointer"
+                        >
+                          {showBatchPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#F1F3F4]">
-                <button
-                  type="button"
-                  onClick={() => setShowBatchModal(false)}
-                  disabled={isProcessing}
-                  className="h-9 px-3.5 rounded-lg border border-[#DADCE0] text-[#3C4043] font-medium text-xs cursor-pointer"
-                >
-                  Cancel
-                </button>
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#F1F3F4]">
+                  <button
+                    type="button"
+                    onClick={() => setShowBatchModal(false)}
+                    disabled={isProcessing}
+                    className="h-9 px-3.5 rounded-lg border border-[#DADCE0] text-[#3C4043] font-medium text-xs cursor-pointer"
+                  >
+                    Cancel
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={handleRunBatchBilling}
-                  disabled={isProcessing}
-                  className="btn-3d-primary h-9 px-4 rounded-lg text-xs font-semibold flex items-center gap-2 cursor-pointer disabled:opacity-50"
-                >
-                  {isProcessing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                  <span>Confirm &amp; Rollout Bills</span>
-                </button>
-              </div>
+                  <button
+                    type="submit"
+                    disabled={isProcessing}
+                    className="btn-3d-primary h-9 px-4 rounded-lg text-xs font-semibold flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {isProcessing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                    <span>Confirm &amp; Rollout Bills</span>
+                  </button>
+                </div>
+              </form>
             </motion.div>
           </div>
         )}
@@ -2335,11 +2363,15 @@ export default function AdminDashboardPage() {
                   <input
                     required
                     type={showPaymentPassword ? "text" : "password"}
+                    name="municipal_manual_settlement_auth_key"
+                    autoComplete="new-password"
+                    data-lpignore="true"
+                    data-1p-ignore="true"
                     value={paymentAdminPassword}
                     onChange={(e) => setPaymentAdminPassword(e.target.value)}
                     aria-label="Administrator Authorization Password"
                     placeholder="Enter admin password (e.g. admin123)"
-                    className="w-full h-10 px-3 pr-9 rounded-lg border border-[#DADCE0] bg-white text-xs font-semibold text-[#2C2C2C] focus:outline-none focus:border-[#612D53]"
+                    className="w-full h-10 px-3 pr-9 rounded-lg border border-[#DADCE0] bg-white text-xs font-semibold text-[#2C2C2C] focus:outline-none focus:border-[#612D53] [&:-webkit-autofill]:shadow-[inset_0_0_0_1000px_white] [&:-webkit-autofill]:text-fill-[#2C2C2C]"
                   />
                   <button
                     type="button"
