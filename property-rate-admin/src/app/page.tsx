@@ -1313,18 +1313,18 @@ export default function AdminDashboardPage() {
           </div>
         </header>
 
-        {/* Main Dashboard Workspace (Viewport Fitted & Full-Bleed for SMS Engine & Settings) */}
+        {/* Main Dashboard Workspace (Viewport Fitted & Full-Bleed on Mobile) */}
         <main className={`flex-1 min-h-0 w-full flex flex-col overflow-y-auto pb-16 lg:pb-3 ${
           activeTab === "SMS_CENTER" || activeTab === "SETTINGS"
             ? "p-0 max-w-none"
-            : "px-3 sm:px-6 py-2.5 sm:py-3 max-w-7xl mx-auto gap-2.5 sm:gap-3"
+            : "p-0 lg:px-6 lg:py-3 max-w-none lg:max-w-7xl lg:mx-auto gap-0 lg:gap-3 bg-white lg:bg-transparent"
         }`}>
-          {/* Top KPI Cards (Zero Pills - High Density Compact Single Row) */}
+          {/* Top KPI Cards (Zero Pills - Flat Edge-to-Edge on Mobile, Cards on Desktop) */}
           {activeTab === "REGISTRY" && (
-            <section aria-label="Executive KPIs" className="shrink-0">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
+            <section aria-label="Executive KPIs" className="shrink-0 bg-white border-b border-[#DADCE0] lg:border-b-0 lg:bg-transparent">
+              <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-y lg:divide-x-0 lg:divide-y-0 divide-[#E8EAED] lg:gap-3">
                 {/* 1. Total Assessed Demand */}
-                <div className="px-3.5 sm:px-4 py-2 sm:py-2.5 bg-white border border-[#DADCE0] rounded-xl hover:border-[#BDC1C6] transition-colors flex items-center justify-between shadow-xs">
+                <div className="p-3.5 sm:p-4 lg:p-3 lg:bg-white lg:border lg:border-[#DADCE0] lg:rounded-xl hover:bg-[#F8F9FA] lg:hover:border-[#BDC1C6] transition-colors flex items-center justify-between lg:shadow-xs">
                   <div className="min-w-0 pr-2">
                     <span className="text-[11px] text-[#717171] font-medium block truncate">Total Assessed Demand</span>
                     <span className="text-base xl:text-lg font-bold text-[#2C2C2C] tracking-tight whitespace-nowrap tabular-nums block">{metrics.totalBilledFormatted}</span>
@@ -1336,7 +1336,7 @@ export default function AdminDashboardPage() {
                 </div>
 
                 {/* 2. Revenue Collected */}
-                <div className="px-3.5 sm:px-4 py-2 sm:py-2.5 bg-white border border-[#DADCE0] rounded-xl hover:border-[#BDC1C6] transition-colors flex items-center justify-between shadow-xs">
+                <div className="p-3.5 sm:p-4 lg:p-3 lg:bg-white lg:border lg:border-[#DADCE0] lg:rounded-xl hover:bg-[#F8F9FA] lg:hover:border-[#BDC1C6] transition-colors flex items-center justify-between lg:shadow-xs">
                   <div className="min-w-0 pr-2">
                     <span className="text-[11px] text-[#717171] font-medium block truncate">Revenue Collected</span>
                     <span className="text-base xl:text-lg font-bold text-[#188038] tracking-tight whitespace-nowrap tabular-nums block">{metrics.totalCollectedFormatted}</span>
@@ -1348,7 +1348,7 @@ export default function AdminDashboardPage() {
                 </div>
 
                 {/* 3. Cumulative Arrears */}
-                <div className="px-3.5 sm:px-4 py-2 sm:py-2.5 bg-white border border-[#DADCE0] rounded-xl hover:border-[#BDC1C6] transition-colors flex items-center justify-between shadow-xs">
+                <div className="p-3.5 sm:p-4 lg:p-3 lg:bg-white lg:border lg:border-[#DADCE0] lg:rounded-xl hover:bg-[#F8F9FA] lg:hover:border-[#BDC1C6] transition-colors flex items-center justify-between lg:shadow-xs">
                   <div className="min-w-0 pr-2">
                     <span className="text-[11px] text-[#717171] font-medium block truncate">Cumulative Arrears</span>
                     <span className="text-base xl:text-lg font-bold text-[#D93025] tracking-tight whitespace-nowrap tabular-nums block">{metrics.totalArrearsFormatted}</span>
@@ -1360,7 +1360,7 @@ export default function AdminDashboardPage() {
                 </div>
 
                 {/* 4. Statutory Defaulters */}
-                <div className="px-3.5 sm:px-4 py-2 sm:py-2.5 bg-white border border-[#DADCE0] rounded-xl hover:border-[#BDC1C6] transition-colors flex items-center justify-between shadow-xs">
+                <div className="p-3.5 sm:p-4 lg:p-3 lg:bg-white lg:border lg:border-[#DADCE0] lg:rounded-xl hover:bg-[#F8F9FA] lg:hover:border-[#BDC1C6] transition-colors flex items-center justify-between lg:shadow-xs">
                   <div className="min-w-0 pr-2">
                     <span className="text-[11px] text-[#717171] font-medium block truncate">Statutory Defaulters</span>
                     <span className="text-base xl:text-lg font-bold text-[#2C2C2C] tracking-tight whitespace-nowrap tabular-nums block">{metrics.defaultersCount.toLocaleString()}</span>
@@ -1380,7 +1380,7 @@ export default function AdminDashboardPage() {
 
           {/* TAB 1 & TAB 4: CADASTRE & VALUATION ROLL / DEFAULTERS */}
           {(activeTab === "REGISTRY" || activeTab === "DEFAULTERS") && (
-            <section className="bg-white border border-[#DADCE0] rounded-xl shadow-sm flex-1 min-h-0 flex flex-col overflow-hidden">
+            <section className="bg-white border-b border-[#DADCE0] lg:border lg:border-[#DADCE0] rounded-none lg:rounded-xl shadow-none lg:shadow-sm flex-1 min-h-0 flex flex-col overflow-hidden w-full">
               <div className="p-3.5 border-b border-[#DADCE0] space-y-2.5 shrink-0">
                 <div className="flex items-center justify-between">
                   <div>
@@ -1404,9 +1404,9 @@ export default function AdminDashboardPage() {
                 </div>
 
                 {/* Filter & Action Bar */}
-                <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-[#F1F3F4]">
+                <div className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 pt-2 border-t border-[#F1F3F4]">
                   {/* Search */}
-                  <div className="relative flex items-center flex-1 max-w-md min-w-[260px]">
+                  <div className="relative flex items-center w-full lg:flex-1 lg:max-w-md">
                     {isSearchingProperties ? (
                       <Loader2 className="w-4 h-4 text-[#612D53] animate-spin absolute left-3 pointer-events-none" />
                     ) : (
@@ -1439,8 +1439,8 @@ export default function AdminDashboardPage() {
                     )}
                   </div>
 
-                  {/* Dropdowns */}
-                  <div className="flex flex-wrap items-center gap-2">
+                  {/* Dropdowns & Actions */}
+                  <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
                     <select
                       value={classificationFilter}
                       onChange={(e) => setClassificationFilter(e.target.value)}
@@ -1808,7 +1808,7 @@ export default function AdminDashboardPage() {
 
           {/* TAB 2: RATEPAYERS & USER HISTORY DIRECTORY */}
           {activeTab === "RATEPAYERS" && (
-            <section className="bg-white border border-[#DADCE0] rounded-xl shadow-sm flex-1 min-h-0 flex flex-col overflow-hidden">
+            <section className="bg-white border-b border-[#DADCE0] lg:border lg:border-[#DADCE0] rounded-none lg:rounded-xl shadow-none lg:shadow-sm flex-1 min-h-0 flex flex-col overflow-hidden w-full">
               <div className="p-3.5 border-b border-[#DADCE0] flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
                 <div>
                   <h2 className="text-base font-semibold text-[#2C2C2C]">
@@ -1819,7 +1819,7 @@ export default function AdminDashboardPage() {
                   </p>
                 </div>
 
-                <div className="relative flex items-center flex-1 max-w-md min-w-[260px]">
+                <div className="relative flex items-center w-full lg:flex-1 lg:max-w-md">
                   {isSearchingRatepayers ? (
                     <Loader2 className="w-4 h-4 text-[#612D53] animate-spin absolute left-3 pointer-events-none" />
                   ) : (
@@ -2061,7 +2061,7 @@ export default function AdminDashboardPage() {
 
           {/* TAB 5: TREASURY RECONCILIATION */}
           {activeTab === "TREASURY" && (
-            <section className="bg-white border border-[#DADCE0] rounded-xl shadow-sm flex-1 min-h-0 flex flex-col overflow-hidden">
+            <section className="bg-white border-b border-[#DADCE0] lg:border lg:border-[#DADCE0] rounded-none lg:rounded-xl shadow-none lg:shadow-sm flex-1 min-h-0 flex flex-col overflow-hidden w-full">
               <div className="p-3.5 border-b border-[#DADCE0] flex flex-col gap-3 shrink-0">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div>
@@ -2076,8 +2076,8 @@ export default function AdminDashboardPage() {
                 </div>
 
                 {/* Treasury Dynamic Search & Filter Bar */}
-                <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-[#F1F3F4]">
-                  <div className="relative flex items-center flex-1 max-w-md min-w-[260px]">
+                <div className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 pt-2 border-t border-[#F1F3F4]">
+                  <div className="relative flex items-center w-full lg:flex-1 lg:max-w-md">
                     <Search className="w-4 h-4 text-[#717171] absolute left-3 pointer-events-none" />
                     <input
                       type="search"
@@ -2235,9 +2235,9 @@ export default function AdminDashboardPage() {
 
           {/* TAB: SYSTEM AUDIT TRAIL */}
           {activeTab === "AUDIT_LOGS" && (
-            <section className="flex-1 flex flex-col min-h-0 bg-white border border-[#DADCE0] rounded-xl shadow-xs overflow-hidden">
+            <section className="flex-1 flex flex-col min-h-0 bg-white border-b border-[#DADCE0] lg:border lg:border-[#DADCE0] rounded-none lg:rounded-xl shadow-none lg:shadow-xs overflow-hidden w-full">
               {/* Audit Header Bar */}
-              <div className="px-6 py-4 border-b border-[#DADCE0] flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0 bg-white">
+              <div className="px-4 lg:px-6 py-3.5 sm:py-4 border-b border-[#DADCE0] flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 shrink-0 bg-white">
                 <div>
                   <div className="flex items-center gap-2">
                     <h2 className="text-base font-bold text-[#2C2C2C] tracking-tight">
@@ -2271,9 +2271,9 @@ export default function AdminDashboardPage() {
               </div>
 
               {/* Filter Toolbar */}
-              <div className="px-6 py-2.5 bg-[#F8F9FA] border-b border-[#DADCE0] flex flex-wrap items-center justify-between gap-3 shrink-0">
-                <div className="flex items-center gap-3 flex-1 min-w-[280px]">
-                  <div className="relative flex-1 max-w-md">
+              <div className="px-4 lg:px-6 py-2.5 bg-[#F8F9FA] border-b border-[#DADCE0] flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 shrink-0">
+                <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 sm:gap-3 w-full lg:flex-1">
+                  <div className="relative flex-1 w-full sm:w-auto max-w-none sm:max-w-md">
                     <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-[#717171]" />
                     <input
                       type="search"
@@ -2453,7 +2453,7 @@ export default function AdminDashboardPage() {
         </main>
 
         {/* Static Grounded Footer */}
-        <footer className="shrink-0 h-8 bg-white border-t border-[#DADCE0] px-6 flex items-center justify-between text-[11px] text-[#717171] font-sans">
+        <footer className="shrink-0 h-8 bg-white border-t border-[#DADCE0] px-6 hidden lg:flex items-center justify-between text-[11px] text-[#717171] font-sans">
           <span>Kpone-Katamanso Municipal Assembly (KKMA) &bull; Revenue Administration Platform</span>
           <span>Local Governance Act, 2016 (Act 936)</span>
         </footer>
