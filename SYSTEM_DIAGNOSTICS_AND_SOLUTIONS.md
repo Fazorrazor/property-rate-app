@@ -12,6 +12,7 @@ This document serves as an engineering audit of faults identified within the **M
 5. [Defect 5: UI Governance: Zero-Pill Requirement & Dynamic Fluid Layouts](#defect-5-ui-governance-zero-pill-requirement--dynamic-fluid-layouts)
 6. [Defect 6: Search Clear Restoration Bug & Anti-AI Code Bloat / YAGNI Governance](#defect-6-search-clear-restoration-bug--anti-ai-code-bloat--yagni-governance)
 7. [Defect 7: In-App SMS Dispatch Mode Control (Live vs Test Simulation) & Settings Workspace](#defect-7-in-app-sms-dispatch-mode-control-live-vs-test-simulation--settings-workspace)
+8. [Defect 8: WCAG 2.1 AA Accessibility, Color Contrast Compliance & React 19 Keystroke Concurrency](#defect-8-wcag-21-aa-accessibility-color-contrast-compliance--react-19-keystroke-concurrency)
 
 ---
 
@@ -233,3 +234,36 @@ Ad-hoc styling introduced rounded pill badges (`rounded-full bg-green-100 text-g
 4. **Surgical, Zero-Bloat Engine Integration**:
    - `batchDispatchSms` in `actions.ts` directly honors the active dispatch mode.
    - Settings updates and mode switches are immutably recorded in the municipal `AuditLog`.
+
+---
+
+## Defect 8: WCAG 2.1 AA Accessibility, Color Contrast Compliance & React 19 Keystroke Concurrency
+
+### Symptoms
+- DevTools Accessibility audit flagged: `"Select element must have an accessible name"` on dropdowns across the back-office admin portal.
+- DevTools color contrast audit flagged WCAG AA failure on orange warning indicators (`#E37400` on white `#FFFFFF`).
+- DevTools Performance panel recorded a 224ms `keyup` latency (156.5ms scripting + 67ms rendering) during search input typing, making keyboard entry feel sluggish.
+
+### Root Cause Analysis
+1. **Unlabelled Form Controls**:
+   `<select>` dropdowns and search `<input>` fields lacked explicit `aria-label` or programmatic `<label htmlFor="...">` associations.
+2. **Insufficient Contrast Ratio (3.11:1)**:
+   Warning text `#E37400` against `#FFFFFF` yielded a contrast ratio of only 3.11:1, failing the WCAG 2.1 AA minimum threshold of 4.5:1 for normal text.
+3. **Synchronous Keystroke Loop & Cascading Re-Renders**:
+   - Every keystroke synchronously triggered string-matching operations across 12 properties per record.
+   - The `useEffect([searchQuery])` fired `setIsSearchingProperties(true)` immediately on every keypress, triggering a duplicate component re-render right after the typing render.
+
+### Architectural Solution
+1. **WCAG 2.1 AA Accessible Names**:
+   - Added explicit `aria-label` attributes to all 13 `<select>` elements and all search/action `<input>` elements across `page.tsx`, `PropertyModal.tsx`, `SettingsTab.tsx`, and `SmsRolloutSimulator.tsx`.
+2. **WCAG 2.1 AA Contrast Compliance (5.02:1)**:
+   - Upgraded `#E37400` across all 10 locations to `#B45309` (Amber-700). Contrast ratio increased from 3.11:1 to **5.02:1**, comfortably exceeding the 4.5:1 threshold while preserving the warm municipal amber aesthetic.
+3. **React 19 Keystroke Concurrency (`useDeferredValue`)**:
+   - Introduced `useDeferredValue` for `searchQuery`, `ratepayerSearchQuery`, `auditLogSearchQuery`, and `treasurySearchQuery`.
+   - The typing input updates state on Frame 1 (<5ms, zero input lag).
+   - React concurrently schedules the deep array filtering as a non-blocking background transition.
+   - Moved `setIsSearchingProperties(true)` inside the debounce `setTimeout`, eliminating cascading re-renders during active typing.
+4. **Citizen App Cleanups**:
+   - Resolved temporal dead zone / react-hooks immutability warning in `receipts/verify/page.tsx` by declaring `handleVerify` prior to `useEffect`.
+   - Converted empty interfaces to type aliases in `Input.tsx` and `Label.tsx` to satisfy `@typescript-eslint/no-empty-object-type`.
+
