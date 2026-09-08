@@ -73,11 +73,30 @@ For every UI format, update, addition, or component created in both the Citizen 
 - **Contextual Economy & Surgical Precision**: Maintain architectural continuity across sessions. Do not patch bugs by blindly piling new functions or layers on top of old ones. Always simplify, prune, and consolidate existing logic instead of accumulating dead code.
 - **Dead Code Purging**: Proactively remove orphaned variables, unused functions, obsolete state parameters, and redundant wrapper abstractions on every modification.
 
-## HYDRATION, PERCEIVED PERFORMANCE & ASYNCHRONOUS UI ARCHITECTURE
-- **Hydration / Partial Hydration**: Server-rendered HTML must be brought to life on the client side without layout shifts or client flashes, mapping background data states and event listeners cleanly to pre-rendered markup. Client interactivity must be surgically isolated to focused client components wrapped by Server Components.
-- **Perceived Performance**: Manage wait times through immediate, continuous visual feedback (<100ms / Doherty Threshold). Never leave the user guessing whether an action was received; use responsive spinners, progress indicators, or skeleton placeholders to make asynchronous latency feel instant.
-- **Loading State Management**: Programmatically track distinct asynchronous lifecycle phases (`idle`, `pending`, `success`, `error`). The interface must dynamically shift between states—locking form inputs during transmission, rendering contextual operation feedback, and preventing duplicate submissions.
-- **Optimistic UI Updates**: Instantly reflect user intent in the interface before the server completes processing. In destructive or navigation actions (e.g. Sign Out, Payment Posting, Bill Rollout), immediately show optimistic progress and lock controls to reassure the user on Frame 1.
+## ADVANCED SOFTWARE ARCHITECTURE & MASTER DESIGN PATTERNS
+All implementations across both the Citizen App and the Admin Portal must adhere to these 7 architectural pillars:
+
+1. **SSR & Hydration (Rendering Architectures)**:
+   - Server-rendered HTML must be delivered first without layout shifts or unauthenticated client flashes.
+   - Server components handle pre-auth verification and data retrieval; client interactivity is surgically isolated into focused client island components (Partial Hydration).
+2. **Resumability (Modern Client-Server Architecture)**:
+   - Preserve client execution budget by keeping structural municipal shells, table scaffolding, and static typography purely server-rendered.
+   - Avoid downloading or executing client JavaScript for non-interactive content.
+3. **Asynchronous Event-Driven Architecture (Distributed Systems / Event-Driven Architecture)**:
+   - Decouple heavy multi-record workloads (e.g., batch SMS rollout dispatches, municipal audit trails, ledger calculations) from synchronous request threads.
+   - UI dispatches operations asynchronously and continues serving the user without UI lockup.
+4. **State Lifecycle Management (State Management / Distributed State)**:
+   - Programmatically enforce explicit finite state lifecycles (`idle` → `submitting`/`pending` → `success` / `error`).
+   - Eliminate phantom or orphaned states: form controls and triggers must lock during transmission, preventing duplicate submissions and race conditions.
+5. **Perceived Performance Engineering (Software Performance & UX Engineering)**:
+   - Strict enforcement of the Doherty Threshold (<100ms visual response).
+   - Manage wait times through immediate visual feedback (spinners, skeleton loaders, button transition locks) to eliminate psychological friction and make operations feel instantaneous.
+6. **Optimistic UI Design (Reactive Systems / UI Design Patterns)**:
+   - Instantly reflect user intent on Frame 1 before server completion (e.g. Sign Out button transition, inline status toggles, instant dossier preview seeding).
+   - Provide graceful, non-destructive rollbacks with contextual human-readable Ghanaian alerts if backend processing fails.
+7. **Full-Stack Resilience & Ergonomics (Software Architecture Quality Attributes / Resilient Systems)**:
+   - **Resilience**: The system bends without breaking through graceful degradation (safe SMS simulation/live modes, fallback providers, and isolated error boundaries).
+   - **Ergonomics**: Codebases must remain clean, predictable, and maintainable. Strictly governed by our Anti-AI Code Bloat / YAGNI rule (solve problems directly at the site of failure with zero hallucinated wrappers or speculative boilerplate).
 
 
 
