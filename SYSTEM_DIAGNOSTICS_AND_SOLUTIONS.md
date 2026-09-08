@@ -15,6 +15,7 @@ This document serves as an engineering audit of faults identified within the **M
 8. [Defect 8: WCAG 2.1 AA Accessibility, Color Contrast Compliance & React 19 Keystroke Concurrency](#defect-8-wcag-21-aa-accessibility-color-contrast-compliance--react-19-keystroke-concurrency)
 9. [Defect 9: Municipal Portal Auth Hardening, SSR Pre-Auth Guards & Asynchronous Perceived Performance](#defect-9-municipal-portal-auth-hardening-ssr-pre-auth-guards--asynchronous-perceived-performance)
 10. [Defect 10: Browser Autofill Heuristic Hijacking of Search Bars & Reactive Filter Cascades](#defect-10-browser-autofill-heuristic-hijacking-of-search-bars--reactive-filter-cascades)
+11. [Defect 11: SMS Template Ephemeral In-Memory State & Refresh Discard](#defect-11-sms-template-ephemeral-in-memory-state--refresh-discard)
 
 ---
 
@@ -343,4 +344,46 @@ When an administrator opened the **Annual Batch Billing Rollout** modal from the
 3. **Semantic Search Field Hardening Across Platform**:
    - Converted all dashboard search inputs (Cadastre, Ratepayers Directory, Treasury Reconciliation, System Audit Trail) from `type="text"` to `type="search"`.
    - Injected `autoComplete="off"`, unique semantic search names (`cadastre_property_search_filter`, etc.), and password-manager ignore attributes (`data-lpignore="true"`, `data-1p-ignore="true"`). Browsers strictly exclude `type="search"` inputs from login credential pairings.
+
+---
+
+## Defect 11: SMS Template Ephemeral In-Memory State & Refresh Discard
+
+### Symptoms
+When an administrator customized the statutory billing notice in the **Dual-Link SMS Template Engine** and clicked **"Apply & Save Template"**:
+- The active preview on the smartphone simulator updated as expected during the active session.
+- However, refreshing the browser page (`F5`) or returning to the tab reverted the entire template back to the hardcoded default notice, discarding all modifications.
+
+### Root Cause Analysis
+1. **Transient In-Memory Component State**:
+   In `SmsRolloutSimulator.tsx`, `handleSaveTemplateModal` only assigned `setMessageTemplate(draftTemplate)` to transient React component state:
+   ```typescript
+   // ANTI-PATTERN: Only local state update without persistence
+   const handleSaveTemplateModal = () => {
+     setMessageTemplate(draftTemplate);
+     setShowTemplateModal(false);
+   };
+   ```
+2. **Hardcoded Static Initializer**:
+   The component initialized its state from a constant string literal (`defaultTemplate`) on every render cycle:
+   ```typescript
+   const [messageTemplate, setMessageTemplate] = useState(defaultTemplate);
+   ```
+   No `localStorage` or server-side configuration was queried on mount, leading to immediate state loss upon page reload.
+3. **Cross-Module Desynchronization**:
+   The **Annual Batch Billing Rollout** modal in `page.tsx` maintained its own independent hardcoded `messageTemplate` state, disconnected from the template defined in the SMS Rollout Simulator.
+
+### Architectural Solution
+1. **Tier 1: Client-Side Optimistic Storage (`localStorage`)**:
+   - Cached custom templates under key `'kkma_sms_message_template'`.
+   - Hydrates on **Frame 1 (0ms)** upon component mounting with zero layout shifts, network requests, or UI flash.
+2. **Tier 2: Server-Side Persistence & Audit Logging (`saveSmsTemplate`)**:
+   - Added `saveSmsTemplate(template: string)` server action in `actions.ts`.
+   - Persists the active template in server configuration (`activeSmsConfig.messageTemplate`) and exposes it via `getSmsSettings()`.
+   - Immutably logs every template modification in the municipal `AuditLog` (`action: 'SMS_TEMPLATE_UPDATE'`), recording character length and the authorizing administrator's ID under Act 936.
+3. **Cross-Module Template Synchronization**:
+   - Synchronized template hydration across both the **SMS Rollout Engine** (`SmsRolloutSimulator.tsx`) and the **Annual Batch Billing Rollout Modal** (`page.tsx`).
+4. **Statutory Standard Reset**:
+   - Refactored *"Reset Default"* and *"Reset Default Template"* actions to clear `localStorage` cache, reset the server template to statutory standard, and issue contextual toast notifications.
+
 

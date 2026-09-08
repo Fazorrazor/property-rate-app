@@ -26,7 +26,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-import { AdminProperty, SmsRolloutLogItem, getSmsRolloutAudience } from "@/app/actions";
+import { AdminProperty, SmsRolloutLogItem, getSmsRolloutAudience, saveSmsTemplate, getSmsSettings, DEFAULT_SMS_NOTICE_TEMPLATE } from "@/app/actions";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface SmsRolloutSimulatorProps {
@@ -36,6 +36,7 @@ interface SmsRolloutSimulatorProps {
   isProcessing: boolean;
   selectedProperties?: AdminProperty[];
   onClearSelectedProperties?: () => void;
+  onNotify?: (message: string, type: "success" | "error" | "info") => void;
 }
 
 export function SmsRolloutSimulator({
@@ -43,8 +44,9 @@ export function SmsRolloutSimulator({
   smsLogs,
   onTriggerBatchRollout,
   isProcessing,
-  selectedProperties = [],
+  selectedProperties,
   onClearSelectedProperties,
+  onNotify,
 }: SmsRolloutSimulatorProps) {
   // Active View Pane: 'SIMULATOR' (SMS rollout engine & phone) vs 'LOGS' (audit delivery table)
   const [activeView, setActiveView] = useState<"SIMULATOR" | "LOGS">("SIMULATOR");
@@ -87,13 +89,37 @@ export function SmsRolloutSimulator({
   const [isAuthorizing, setIsAuthorizing] = useState(false);
 
   // Template State & Focus Modal
-  const defaultTemplate =
-    "Dear {{municipality}} Resident,\n\nDo find below your {{billYear}} Property Rate bill:\n\nValuation ID: {{accountNumber}}\n\nAmount due: GH₵ {{totalAmountDue}}\n\nView your bills: {{billLink}}\n\nPay Via *227*4362# or {{paymentLink}} with your payment reference {{accountNumber}}\n\nFor payment & enquiries kindly call 0256039385/0538702445\nDisregard if already paid. Keep receipt for verification.";
+  const defaultTemplate = DEFAULT_SMS_NOTICE_TEMPLATE;
 
   const [messageTemplate, setMessageTemplate] = useState(defaultTemplate);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [draftTemplate, setDraftTemplate] = useState(defaultTemplate);
+  const [isSavingTemplate, setIsSavingTemplate] = useState(false);
   const modalTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Hydrate persistent template from localStorage cache or server configuration
+  useEffect(() => {
+    try {
+      const cached = localStorage.getItem("kkma_sms_message_template");
+      if (cached && cached.trim()) {
+        setMessageTemplate(cached);
+        setDraftTemplate(cached);
+        return;
+      }
+    } catch {}
+
+    getSmsSettings()
+      .then((settings) => {
+        if (settings?.messageTemplate) {
+          setMessageTemplate(settings.messageTemplate);
+          setDraftTemplate(settings.messageTemplate);
+          try {
+            localStorage.setItem("kkma_sms_message_template", settings.messageTemplate);
+          } catch {}
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const dynamicTokens = [
     { tag: "{{municipality}}", label: "Municipality" },
@@ -244,9 +270,37 @@ export function SmsRolloutSimulator({
     setShowTemplateModal(true);
   };
 
-  const handleSaveTemplateModal = () => {
-    setMessageTemplate(draftTemplate);
-    setShowTemplateModal(false);
+  const handleSaveTemplateModal = async () => {
+    setIsSavingTemplate(true);
+    try {
+      const templateToSave = draftTemplate.trim() || defaultTemplate;
+      setMessageTemplate(templateToSave);
+      try {
+        localStorage.setItem("kkma_sms_message_template", templateToSave);
+      } catch {}
+
+      await saveSmsTemplate(templateToSave);
+      onNotify?.("SMS notice template saved successfully and audit logged.", "success");
+      setShowTemplateModal(false);
+    } catch (err) {
+      console.error("Failed to save template to server:", err);
+      onNotify?.("Template saved locally for this terminal session.", "info");
+      setShowTemplateModal(false);
+    } finally {
+      setIsSavingTemplate(false);
+    }
+  };
+
+  const handleResetDefaultTemplate = async () => {
+    setDraftTemplate(defaultTemplate);
+    setMessageTemplate(defaultTemplate);
+    try {
+      localStorage.removeItem("kkma_sms_message_template");
+    } catch {}
+    try {
+      await saveSmsTemplate(defaultTemplate);
+    } catch {}
+    onNotify?.("SMS template reset to statutory standard.", "info");
   };
 
   const insertVariableTag = (tag: string) => {
@@ -664,7 +718,7 @@ export function SmsRolloutSimulator({
                   </h3>
                   <button
                     type="button"
-                    onClick={() => setMessageTemplate(defaultTemplate)}
+                    onClick={handleResetDefaultTemplate}
                     className="text-[11px] text-[#612D53] hover:underline font-medium cursor-pointer"
                   >
                     Reset Default
@@ -1132,7 +1186,7 @@ export function SmsRolloutSimulator({
               <div className="flex items-center justify-between pt-3 border-t border-[#F1F3F4] shrink-0">
                 <button
                   type="button"
-                  onClick={() => setDraftTemplate(defaultTemplate)}
+                  onClick={handleResetDefaultTemplate}
                   className="text-xs text-[#717171] hover:text-[#2C2C2C] hover:underline cursor-pointer font-medium"
                 >
                   Reset Default Template
@@ -1149,10 +1203,15 @@ export function SmsRolloutSimulator({
                   <button
                     type="button"
                     onClick={handleSaveTemplateModal}
-                    className="btn-3d-primary h-8.5 px-4 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                    disabled={isSavingTemplate}
+                    className="btn-3d-primary h-8.5 px-4 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                   >
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Apply &amp; Save Template</span>
+                    {isSavingTemplate ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                    )}
+                    <span>{isSavingTemplate ? "Saving..." : "Apply & Save Template"}</span>
                   </button>
                 </div>
               </div>

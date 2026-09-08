@@ -9,11 +9,15 @@ import { ArkeselProvider } from '@/lib/sms/arkesel';
 const arkeselService = new ArkeselProvider();
 const twilioServiceInstance = new TwilioProvider();
 
+export const DEFAULT_SMS_NOTICE_TEMPLATE =
+  "Dear {{municipality}} Resident,\n\nDo find below your {{billYear}} Property Rate bill:\n\nValuation ID: {{accountNumber}}\n\nAmount due: GH₵ {{totalAmountDue}}\n\nView your bills: {{billLink}}\n\nPay Via *227*4362# or {{paymentLink}} with your payment reference {{accountNumber}}\n\nFor payment & enquiries kindly call 0256039385/0538702445\nDisregard if already paid. Keep receipt for verification.";
+
 let activeSmsConfig = {
   dispatchMode: (process.env.SMS_DISPATCH_MODE || 'TEST') as 'TEST' | 'LIVE',
   provider: (process.env.SMS_PROVIDER || 'arkesel').toLowerCase() as 'arkesel' | 'twilio',
   arkeselApiKey: process.env.ARKESEL_API_KEY || 'YUlJRXNnTUdJaUdndHRNd2Zubms',
   arkeselSenderId: process.env.ARKESEL_SENDER_ID || 'Arnold',
+  messageTemplate: DEFAULT_SMS_NOTICE_TEMPLATE,
 };
 
 arkeselService.setApiKey(activeSmsConfig.arkeselApiKey);
@@ -1199,6 +1203,7 @@ export interface SmsSettingsData {
   provider: 'arkesel' | 'twilio';
   arkeselApiKey: string;
   arkeselSenderId: string;
+  messageTemplate?: string;
   balanceInfo?: {
     smsBalance: number;
     mainBalance: string;
@@ -1232,6 +1237,7 @@ export async function getSmsSettings(): Promise<SmsSettingsData> {
     provider: activeSmsConfig.provider,
     arkeselApiKey: activeSmsConfig.arkeselApiKey,
     arkeselSenderId: activeSmsConfig.arkeselSenderId,
+    messageTemplate: activeSmsConfig.messageTemplate,
     balanceInfo,
   };
 }
@@ -1241,6 +1247,7 @@ export async function updateSmsSettings(newConfig: {
   provider?: 'arkesel' | 'twilio';
   arkeselApiKey?: string;
   arkeselSenderId?: string;
+  messageTemplate?: string;
 }) {
   const admin = await verifyAdminSession();
 
@@ -1248,6 +1255,7 @@ export async function updateSmsSettings(newConfig: {
   if (newConfig.provider) activeSmsConfig.provider = newConfig.provider;
   if (newConfig.arkeselApiKey !== undefined) activeSmsConfig.arkeselApiKey = newConfig.arkeselApiKey;
   if (newConfig.arkeselSenderId !== undefined) activeSmsConfig.arkeselSenderId = newConfig.arkeselSenderId;
+  if (newConfig.messageTemplate !== undefined) activeSmsConfig.messageTemplate = newConfig.messageTemplate;
 
   if (activeSmsConfig.arkeselApiKey) {
     arkeselService.setApiKey(activeSmsConfig.arkeselApiKey);
@@ -1260,13 +1268,31 @@ export async function updateSmsSettings(newConfig: {
     data: {
       action: 'SYSTEM_SETTINGS_UPDATE',
       entityType: 'SystemConfig',
-      details: `Updated SMS settings: Mode=${activeSmsConfig.dispatchMode}, Provider=${activeSmsConfig.provider}, SenderID=${activeSmsConfig.arkeselSenderId}`,
+      details: `Updated SMS settings: Mode=${activeSmsConfig.dispatchMode}, Provider=${activeSmsConfig.provider}, SenderID=${activeSmsConfig.arkeselSenderId}${newConfig.messageTemplate !== undefined ? ', TemplateUpdated=true' : ''}`,
       adminId: admin.id,
     },
   });
 
   revalidatePath('/');
   return { success: true, settings: activeSmsConfig };
+}
+
+export async function saveSmsTemplate(template: string) {
+  const admin = await verifyAdminSession();
+  const cleanTemplate = template.trim() || DEFAULT_SMS_NOTICE_TEMPLATE;
+  activeSmsConfig.messageTemplate = cleanTemplate;
+
+  await prisma.auditLog.create({
+    data: {
+      action: 'SMS_TEMPLATE_UPDATE',
+      entityType: 'SystemConfig',
+      details: `Saved statutory SMS notice template (${cleanTemplate.length} characters)`,
+      adminId: admin.id,
+    },
+  });
+
+  revalidatePath('/');
+  return { success: true, template: cleanTemplate };
 }
 
 export async function testArkeselGatewayConnection(apiKey?: string) {

@@ -219,6 +219,16 @@ export default function AdminDashboardPage() {
     "Dear {{municipality}} Resident,\n\nDo find below your {{billYear}} Property Rate bill:\n\nValuation ID: {{accountNumber}}\n\nAmount due: GH₵ {{totalAmountDue}}\n\nView your bills: {{billLink}}\n\nPay Via *227*4362# or {{paymentLink}} with your payment reference {{accountNumber}}\n\nFor payment & enquiries kindly call 0256039385/0538702445\nDisregard if already paid. Keep receipt for verification."
   );
 
+  // Hydrate persistent template from localStorage cache
+  useEffect(() => {
+    try {
+      const cached = localStorage.getItem("kkma_sms_message_template");
+      if (cached && cached.trim()) {
+        setMessageTemplate(cached);
+      }
+    } catch {}
+  }, []);
+
   const loadData = async (
     page = 1,
     query = searchQuery,
@@ -1644,6 +1654,7 @@ export default function AdminDashboardPage() {
                 isProcessing={isProcessing}
                 selectedProperties={selectedUnpaidList}
                 onClearSelectedProperties={() => setSelectedIds([])}
+                onNotify={(msg, type) => setToast({ message: msg, type })}
               />
             </div>
           )}
