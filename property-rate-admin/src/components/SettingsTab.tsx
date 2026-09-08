@@ -155,20 +155,20 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
   }
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col overflow-y-auto bg-[#F8F9FA] p-6 font-sans">
-      <div className="max-w-4xl w-full mx-auto space-y-6">
+    <div className="flex-1 min-h-0 flex flex-col overflow-y-auto scrollbar-none bg-white sm:bg-[#F8F9FA] p-0 sm:p-6 font-sans">
+      <div className="max-w-4xl w-full mx-auto space-y-0 sm:space-y-6 divide-y divide-[#E8EAED] sm:divide-y-0">
         {/* Header */}
-        <div className="border-b border-[#DADCE0] pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="bg-white p-4 sm:p-0 sm:bg-transparent sm:border-b sm:border-[#DADCE0] sm:pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shrink-0">
           <div>
-            <h1 className="text-lg font-bold text-[#2C2C2C] tracking-tight">
+            <h1 className="text-base sm:text-lg font-bold text-[#2C2C2C] tracking-tight">
               System &amp; SMS Dispatch Settings
             </h1>
             <p className="text-xs text-[#717171] mt-0.5">
-              Manage SMS gateway routes, carrier API credentials, and toggle between Live and Test simulation modes.
+              Configure carrier gateway routes, API credentials, and telephony rollout modes.
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 pt-1 sm:pt-0">
             <span
               className={`text-xs font-semibold ${
                 dispatchMode === "LIVE" ? "text-[#188038]" : "text-[#B45309]"
@@ -182,96 +182,94 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
         </div>
 
         {/* SECTION 1: DISPATCH MODE TOGGLE (LIVE VS TEST) */}
-        <div className="bg-white border border-[#DADCE0] rounded-xl p-5 shadow-xs space-y-4">
-          <div className="flex items-start justify-between">
-            <div>
-              <div className="flex items-center gap-2">
-                <Radio className="w-4 h-4 text-[#612D53]" />
-                <h2 className="text-sm font-semibold text-[#2C2C2C]">
-                  Outbound SMS Dispatch Mode
-                </h2>
-              </div>
-              <p className="text-xs text-[#717171] mt-1">
-                Select whether rollout demand notices and SMS messages are broadcast live to citizens or tested in simulation mode.
-              </p>
+        <div className="bg-white border-0 sm:border sm:border-[#DADCE0] rounded-none sm:rounded-xl p-4 sm:p-5 shadow-none sm:shadow-xs space-y-3.5">
+          <div>
+            <div className="flex items-center gap-2">
+              <Radio className="w-4 h-4 text-[#612D53]" />
+              <h2 className="text-sm font-semibold text-[#2C2C2C]">
+                Outbound SMS Dispatch Mode
+              </h2>
             </div>
+            <p className="text-xs text-[#717171] mt-1">
+              Select whether rollout demand notices and SMS messages are broadcast live to citizens or tested in simulation mode.
+            </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
             {/* Mode Option 1: Test / Simulation */}
             <div
               onClick={() => handleModeChange("TEST")}
-              className={`p-4 border rounded-xl cursor-pointer transition-all ${
+              className={`p-3.5 sm:p-4 rounded-lg border transition-all cursor-pointer ${
                 dispatchMode === "TEST"
                   ? "border-[#612D53] bg-[#612D53]/5 shadow-xs"
-                  : "border-[#DADCE0] bg-white hover:border-[#BDC1C6]"
+                  : "border-[#E8EAED] hover:border-[#BDC1C6] bg-white"
               }`}
             >
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2.5">
                   <span
-                    className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${
+                    className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
                       dispatchMode === "TEST"
                         ? "border-[#612D53]"
                         : "border-[#BDC1C6]"
                     }`}
                   >
                     {dispatchMode === "TEST" && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#612D53]" />
+                      <span className="w-2 h-2 rounded-full bg-[#612D53]" />
                     )}
                   </span>
                   <span className="text-xs font-semibold text-[#2C2C2C]">
-                    Test / Simulation Mode (Sandbox)
+                    Test / Simulation Mode
                   </span>
                 </div>
-                <span className="text-[11px] font-medium text-[#B45309]">
-                  • Zero Cost
+                <span className="text-[11px] font-semibold text-[#B45309] shrink-0">
+                  &bull; Zero Cost
                 </span>
               </div>
-              <p className="text-xs text-[#717171] mt-2 pl-5">
-                Emulates SMS dispatches safely. Message templates and dual deep links are generated, logged in audit records with mock gateway IDs (<code className="text-[10px] text-[#5F6368]">mock-arkesel-...</code>), with zero carrier charges.
+              <p className="text-xs text-[#717171] mt-2 pl-6 leading-relaxed">
+                Emulates SMS dispatches safely. Generates deep links and audit entries with mock gateway IDs (<code className="text-[10px] text-[#5F6368]">mock-arkesel-...</code>) with zero carrier charges.
               </p>
             </div>
 
             {/* Mode Option 2: Live Dispatch */}
             <div
               onClick={() => handleModeChange("LIVE")}
-              className={`p-4 border rounded-xl cursor-pointer transition-all ${
+              className={`p-3.5 sm:p-4 rounded-lg border transition-all cursor-pointer ${
                 dispatchMode === "LIVE"
                   ? "border-[#188038] bg-[#188038]/5 shadow-xs"
-                  : "border-[#DADCE0] bg-white hover:border-[#BDC1C6]"
+                  : "border-[#E8EAED] hover:border-[#BDC1C6] bg-white"
               }`}
             >
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2.5">
                   <span
-                    className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${
+                    className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
                       dispatchMode === "LIVE"
                         ? "border-[#188038]"
                         : "border-[#BDC1C6]"
                     }`}
                   >
                     {dispatchMode === "LIVE" && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#188038]" />
+                      <span className="w-2 h-2 rounded-full bg-[#188038]" />
                     )}
                   </span>
                   <span className="text-xs font-semibold text-[#2C2C2C]">
-                    Live Gateway Mode (Production)
+                    Live Gateway Mode
                   </span>
                 </div>
-                <span className="text-[11px] font-semibold text-[#188038]">
-                  • Real Carrier SMS
+                <span className="text-[11px] font-semibold text-[#188038] shrink-0">
+                  &bull; Real Carrier SMS
                 </span>
               </div>
-              <p className="text-xs text-[#717171] mt-2 pl-5">
-                Routes dispatches through the Arkesel HTTP API over Ghana mobile network operators (MTN, Telecel, AT). Delivers physical SMS to ratepayers and consumes account SMS balance.
+              <p className="text-xs text-[#717171] mt-2 pl-6 leading-relaxed">
+                Routes dispatches through the Arkesel HTTP API over Ghana mobile network operators (MTN, Telecel, AT). Delivers real SMS to ratepayers and deducts account credits.
               </p>
             </div>
           </div>
         </div>
 
         {/* SECTION 2: ARKESEL GATEWAY CONFIGURATION */}
-        <div className="bg-white border border-[#DADCE0] rounded-xl p-5 shadow-xs space-y-4">
+        <div className="bg-white border-0 sm:border sm:border-[#DADCE0] rounded-none sm:rounded-xl p-4 sm:p-5 shadow-none sm:shadow-xs space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#F1F3F4] pb-3 gap-3">
             <div className="flex items-center gap-2">
               <Key className="w-4 h-4 text-[#612D53] shrink-0" />
@@ -285,9 +283,9 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
               </div>
             </div>
 
-            {/* Live Gateway Balance Indicator & Direct Payment Portal Link */}
-            <div className="text-left sm:text-right text-xs space-y-0.5">
-              <span className="text-[#717171] block text-[10px]">Live Account Balance</span>
+            {/* Live Gateway Balance Indicator & Direct Top-up Link */}
+            <div className="p-2.5 sm:p-0 bg-[#F8F9FA] sm:bg-transparent rounded-lg sm:rounded-none border sm:border-0 border-[#E8EAED] text-left sm:text-right text-xs space-y-0.5">
+              <span className="text-[#717171] block text-[10px] uppercase font-semibold tracking-wider">Live Gateway Balance</span>
               <div className="flex flex-wrap items-center sm:justify-end gap-2">
                 <span className="font-semibold text-[#188038]">
                   {settings?.balanceInfo
@@ -318,11 +316,11 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
               {/* API Key */}
               <div className="space-y-1.5 md:col-span-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-medium text-[#2C2C2C]">
+                  <label className="text-xs font-semibold text-[#2C2C2C]">
                     Arkesel API Key
                   </label>
                   <span className="text-[11px] text-[#717171]">
-                    Required for Live dispatches and balance checks
+                    Required for live dispatches &amp; balance lookups
                   </span>
                 </div>
                 <div className="relative flex items-center">
@@ -332,18 +330,20 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
                     onChange={(e) => setApiKey(e.target.value)}
                     aria-label="Arkesel API Key"
                     placeholder="Enter Arkesel API key..."
-                    className="w-full h-9 px-3 pr-10 border border-[#DADCE0] rounded-lg text-xs font-mono text-[#2C2C2C] focus:border-[#612D53] focus:outline-none transition-colors"
+                    autoComplete="off"
+                    data-form-type="other"
+                    className="w-full h-11 sm:h-9 px-3 pr-10 border border-[#DADCE0] rounded-lg text-xs font-mono text-[#2C2C2C] focus:border-[#612D53] focus:outline-none transition-colors"
                   />
                   <button
                     type="button"
                     onClick={() => setShowApiKey(!showApiKey)}
-                    className="absolute right-3 text-[#717171] hover:text-[#2C2C2C] cursor-pointer"
+                    className="absolute right-3 text-[#717171] hover:text-[#2C2C2C] cursor-pointer p-1"
                     title={showApiKey ? "Hide Key" : "Reveal Key"}
                   >
                     {showApiKey ? (
-                      <EyeOff className="w-3.5 h-3.5" />
+                      <EyeOff className="w-4 h-4" />
                     ) : (
-                      <Eye className="w-3.5 h-3.5" />
+                      <Eye className="w-4 h-4" />
                     )}
                   </button>
                 </div>
@@ -351,7 +351,7 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
 
               {/* Sender ID */}
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-[#2C2C2C]">
+                <label className="text-xs font-semibold text-[#2C2C2C]">
                   Registered Sender ID
                 </label>
                 <input
@@ -361,7 +361,9 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
                   onChange={(e) => setSenderId(e.target.value)}
                   aria-label="Registered SMS Sender ID"
                   placeholder="e.g. Arnold or KKMA-Rev"
-                  className="w-full h-9 px-3 border border-[#DADCE0] rounded-lg text-xs font-mono text-[#2C2C2C] focus:border-[#612D53] focus:outline-none transition-colors"
+                  autoComplete="off"
+                  data-form-type="other"
+                  className="w-full h-11 sm:h-9 px-3 border border-[#DADCE0] rounded-lg text-xs font-mono text-[#2C2C2C] focus:border-[#612D53] focus:outline-none transition-colors"
                 />
                 <p className="text-[10px] text-[#717171]">
                   Max 11 alphanumeric characters approved by Ghana NCA.
@@ -370,14 +372,14 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
 
               {/* SMS Provider Selection */}
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-[#2C2C2C]">
+                <label className="text-xs font-semibold text-[#2C2C2C]">
                   Active Telephony Engine
                 </label>
                 <select
                   value={provider}
                   onChange={(e) => setProvider(e.target.value as any)}
                   aria-label="Active Telephony Engine"
-                  className="w-full h-9 px-3 border border-[#DADCE0] rounded-lg text-xs text-[#2C2C2C] bg-white focus:border-[#612D53] focus:outline-none cursor-pointer"
+                  className="w-full h-11 sm:h-9 px-3 border border-[#DADCE0] rounded-lg text-xs text-[#2C2C2C] bg-white focus:border-[#612D53] focus:outline-none cursor-pointer"
                 >
                   <option value="arkesel">Arkesel (Ghana Domestic Gateway)</option>
                   <option value="twilio">Twilio (International Gateway)</option>
@@ -415,13 +417,13 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
               </div>
             )}
 
-            {/* Action Buttons */}
-            <div className="pt-2 flex flex-wrap items-center justify-between gap-3 border-t border-[#F1F3F4]">
+            {/* Action Buttons: 44px min target on mobile */}
+            <div className="pt-2 flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-2.5 border-t border-[#F1F3F4]">
               <button
                 type="button"
                 onClick={handleTestConnection}
                 disabled={isTesting || !apiKey.trim()}
-                className="h-8 px-3 rounded-lg border border-[#DADCE0] hover:bg-[#F8F9FA] text-xs font-medium text-[#2C2C2C] flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors"
+                className="w-full sm:w-auto h-11 sm:h-9 px-4 rounded-lg border border-[#DADCE0] hover:bg-[#F8F9FA] active:bg-[#F1F3F4] text-xs font-semibold text-[#2C2C2C] flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors"
               >
                 {isTesting ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin text-[#612D53]" />
@@ -434,7 +436,7 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
               <button
                 type="submit"
                 disabled={isSaving}
-                className="btn-3d h-8 px-4 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                className="btn-3d w-full sm:w-auto h-11 sm:h-9 px-5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 {isSaving ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
@@ -448,29 +450,29 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
         </div>
 
         {/* SECTION 3: SYSTEM REFERENCE DETAILS */}
-        <div className="bg-white border border-[#DADCE0] rounded-xl p-5 shadow-xs space-y-3">
+        <div className="bg-white border-0 sm:border sm:border-[#DADCE0] rounded-none sm:rounded-xl p-4 sm:p-5 shadow-none sm:shadow-xs space-y-3">
           <div className="flex items-center gap-2">
             <Server className="w-4 h-4 text-[#717171]" />
             <h3 className="text-xs font-semibold text-[#2C2C2C]">
               Carrier Protocol Standards &bull; Act 936
             </h3>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs text-[#717171] pt-1">
-            <div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 text-xs text-[#717171] pt-1">
+            <div className="p-3 bg-[#F8F9FA] rounded-lg border border-[#E8EAED]">
               <span className="font-semibold text-[#2C2C2C] block">Dual Direct Links</span>
-              <span className="text-[11px] mt-0.5 block">
+              <span className="text-[11px] mt-1 block leading-relaxed">
                 Every demand notice embeds an assessment inspection link and an instant checkout link.
               </span>
             </div>
-            <div>
+            <div className="p-3 bg-[#F8F9FA] rounded-lg border border-[#E8EAED]">
               <span className="font-semibold text-[#2C2C2C] block">E.164 Normalization</span>
-              <span className="text-[11px] mt-0.5 block">
+              <span className="text-[11px] mt-1 block leading-relaxed">
                 Local formats (024, 050, 020) are automatically formatted to Ghana +233 standard before dispatch.
               </span>
             </div>
-            <div>
+            <div className="p-3 bg-[#F8F9FA] rounded-lg border border-[#E8EAED]">
               <span className="font-semibold text-[#2C2C2C] block">Auditing &amp; SIDs</span>
-              <span className="text-[11px] mt-0.5 block">
+              <span className="text-[11px] mt-1 block leading-relaxed">
                 All dispatches write to the municipal audit trail with provider transaction SIDs.
               </span>
             </div>
@@ -480,8 +482,8 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
 
       {/* Safety Confirmation Modal for Switching to LIVE Mode */}
       {showLiveConfirmModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 font-sans">
-          <div className="bg-white rounded-xl shadow-xl border border-[#DADCE0] max-w-md w-full p-5 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-xs p-0 sm:p-4 font-sans">
+          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl border border-[#DADCE0] max-w-md w-full p-5 space-y-4 animate-in slide-in-from-bottom-6 sm:zoom-in-95 duration-200">
             <div className="flex items-start gap-3">
               <div className="w-9 h-9 rounded-full bg-[#FEF7E0] border border-[#FEEFC3] flex items-center justify-center shrink-0 text-[#B06000]">
                 <AlertTriangle className="w-5 h-5" />
@@ -499,18 +501,18 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#F1F3F4]">
+            <div className="flex flex-col-reverse sm:flex-row items-center justify-end gap-2 pt-2 border-t border-[#F1F3F4]">
               <button
                 type="button"
                 onClick={() => setShowLiveConfirmModal(false)}
-                className="px-3 py-1.5 text-xs text-[#5F6368] hover:text-[#202124] hover:bg-[#F1F3F4] rounded-lg transition-colors cursor-pointer"
+                className="w-full sm:w-auto h-11 sm:h-9 px-4 text-xs font-semibold text-[#5F6368] hover:text-[#202124] hover:bg-[#F1F3F4] rounded-lg transition-colors cursor-pointer flex items-center justify-center"
               >
                 Cancel (Keep in Test Mode)
               </button>
               <button
                 type="button"
                 onClick={confirmLiveMode}
-                className="px-4 py-1.5 text-xs font-semibold text-white bg-[#188038] hover:bg-[#137333] rounded-lg transition-colors cursor-pointer"
+                className="w-full sm:w-auto h-11 sm:h-9 px-4 text-xs font-semibold text-white bg-[#188038] hover:bg-[#137333] active:bg-[#0D652D] rounded-lg transition-colors cursor-pointer flex items-center justify-center"
               >
                 Confirm Switch to Live Mode
               </button>

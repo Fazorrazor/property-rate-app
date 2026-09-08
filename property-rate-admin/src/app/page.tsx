@@ -98,6 +98,7 @@ export default function AdminDashboardPage() {
   const [hasMoreProperties, setHasMoreProperties] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const tableContainerRef = useRef<HTMLDivElement>(null);
+  const propertySentinelRef = useRef<HTMLDivElement>(null);
 
   const [ratepayers, setRatepayers] = useState<AdminRatepayerSummary[]>([]);
   const [ratepayersTotal, setRatepayersTotal] = useState(0);
@@ -105,6 +106,7 @@ export default function AdminDashboardPage() {
   const [hasMoreRatepayers, setHasMoreRatepayers] = useState(true);
   const [isLoadingMoreRatepayers, setIsLoadingMoreRatepayers] = useState(false);
   const ratepayerTableContainerRef = useRef<HTMLDivElement>(null);
+  const ratepayerSentinelRef = useRef<HTMLDivElement>(null);
   const [smsLogs, setSmsLogs] = useState<SmsRolloutLogItem[]>([]);
   const [auditLogs, setAuditLogs] = useState<AdminAuditLogItem[]>([]);
   const [auditLogsTotal, setAuditLogsTotal] = useState(0);
@@ -408,42 +410,64 @@ export default function AdminDashboardPage() {
   };
 
 
-  // Infinite scroll loader inside Cadastre table container
-  const handleTableScroll = async (e: React.UIEvent<HTMLDivElement>) => {
-    const target = e.currentTarget;
+  // Proactive pagination loader for Cadastre properties
+  const loadNextPropertyPage = async () => {
     if (isLoadingMore || !hasMoreProperties || isSearchingProperties) return;
-
-    if (target.scrollTop + target.clientHeight >= target.scrollHeight - 80) {
-      setIsLoadingMore(true);
-      const nextPage = currentPropertyPage + 1;
-      try {
-        const activeStatus = activeTab === "DEFAULTERS" ? "DEFAULTER" : statusFilter;
-        const nextRes = await getAdminOverview(
-          nextPage,
-          50,
-          municipalityFilter,
-          searchQuery,
-          classificationFilter,
-          activeStatus as any
-        );
-        if (nextRes && nextRes.properties.length > 0) {
-          setPropertiesList((prev) => {
-            const existingIds = new Set(prev.map((p) => p.id));
-            const newItems = nextRes.properties.filter((p) => !existingIds.has(p.id));
-            return [...prev, ...newItems];
-          });
-          setCurrentPropertyPage(nextPage);
-          setHasMoreProperties(nextPage < (nextRes.pagination?.totalPages || 1));
-        } else {
-          setHasMoreProperties(false);
-        }
-      } catch (err) {
-        console.error("Error loading next page of properties:", err);
-      } finally {
-        setIsLoadingMore(false);
+    setIsLoadingMore(true);
+    const nextPage = currentPropertyPage + 1;
+    try {
+      const activeStatus = activeTab === "DEFAULTERS" ? "DEFAULTER" : statusFilter;
+      const nextRes = await getAdminOverview(
+        nextPage,
+        50,
+        municipalityFilter,
+        searchQuery,
+        classificationFilter,
+        activeStatus as any
+      );
+      if (nextRes && nextRes.properties.length > 0) {
+        setPropertiesList((prev) => {
+          const existingIds = new Set(prev.map((p) => p.id));
+          const newItems = nextRes.properties.filter((p) => !existingIds.has(p.id));
+          return [...prev, ...newItems];
+        });
+        setCurrentPropertyPage(nextPage);
+        setHasMoreProperties(nextPage < (nextRes.pagination?.totalPages || 1));
+      } else {
+        setHasMoreProperties(false);
       }
+    } catch (err) {
+      console.error("Error loading next page of properties:", err);
+    } finally {
+      setIsLoadingMore(false);
     }
   };
+
+  // Fallback scroll handler inside Cadastre table container
+  const handleTableScroll = async (e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.currentTarget;
+    if (target.scrollTop + target.clientHeight >= target.scrollHeight - 80) {
+      loadNextPropertyPage();
+    }
+  };
+
+  // Proactive IntersectionObserver for endless scrolling of Cadastre properties
+  useEffect(() => {
+    const sentinel = propertySentinelRef.current;
+    if (!sentinel || !hasMoreProperties || isLoadingMore || isSearchingProperties) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          loadNextPropertyPage();
+        }
+      },
+      { rootMargin: "300px" }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMoreProperties, isLoadingMore, isSearchingProperties, currentPropertyPage, activeTab, municipalityFilter, searchQuery, classificationFilter, statusFilter]);
 
   // Initial load once on mount
   useEffect(() => {
@@ -615,34 +639,56 @@ export default function AdminDashboardPage() {
     loadAuditLogs("", auditLogActionFilter, 1);
   };
 
-  // Infinite scroll loader inside Ratepayers table container
-  const handleRatepayerTableScroll = async (e: React.UIEvent<HTMLDivElement>) => {
-    const target = e.currentTarget;
+  // Proactive pagination loader for Ratepayers
+  const loadNextRatepayerPage = async () => {
     if (isLoadingMoreRatepayers || !hasMoreRatepayers || isSearchingRatepayers) return;
-
-    if (target.scrollTop + target.clientHeight >= target.scrollHeight - 80) {
-      setIsLoadingMoreRatepayers(true);
-      const nextPage = currentRatepayerPage + 1;
-      try {
-        const nextRes = await getRatepayersList(ratepayerSearchQuery, nextPage, 100);
-        if (nextRes && nextRes.ratepayers.length > 0) {
-          setRatepayers((prev) => {
-            const existingIds = new Set(prev.map((r) => r.id));
-            const newItems = nextRes.ratepayers.filter((r) => !existingIds.has(r.id));
-            return [...prev, ...newItems];
-          });
-          setCurrentRatepayerPage(nextPage);
-          setHasMoreRatepayers(ratepayers.length + nextRes.ratepayers.length < (nextRes.total || 0));
-        } else {
-          setHasMoreRatepayers(false);
-        }
-      } catch (err) {
-        console.error("Error loading more ratepayers:", err);
-      } finally {
-        setIsLoadingMoreRatepayers(false);
+    setIsLoadingMoreRatepayers(true);
+    const nextPage = currentRatepayerPage + 1;
+    try {
+      const nextRes = await getRatepayersList(ratepayerSearchQuery, nextPage, 100);
+      if (nextRes && nextRes.ratepayers.length > 0) {
+        setRatepayers((prev) => {
+          const existingIds = new Set(prev.map((r) => r.id));
+          const newItems = nextRes.ratepayers.filter((r) => !existingIds.has(r.id));
+          return [...prev, ...newItems];
+        });
+        setCurrentRatepayerPage(nextPage);
+        setHasMoreRatepayers(ratepayers.length + nextRes.ratepayers.length < (nextRes.total || 0));
+      } else {
+        setHasMoreRatepayers(false);
       }
+    } catch (err) {
+      console.error("Error loading more ratepayers:", err);
+    } finally {
+      setIsLoadingMoreRatepayers(false);
     }
   };
+
+  // Fallback scroll handler inside Ratepayers table container
+  const handleRatepayerTableScroll = async (e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.currentTarget;
+    if (target.scrollTop + target.clientHeight >= target.scrollHeight - 80) {
+      loadNextRatepayerPage();
+    }
+  };
+
+  // Proactive IntersectionObserver for endless scrolling of Ratepayers
+  useEffect(() => {
+    const sentinel = ratepayerSentinelRef.current;
+    if (!sentinel || !hasMoreRatepayers || isLoadingMoreRatepayers || isSearchingRatepayers) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          loadNextRatepayerPage();
+        }
+      },
+      { rootMargin: "300px" }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMoreRatepayers, isLoadingMoreRatepayers, isSearchingRatepayers, currentRatepayerPage, ratepayerSearchQuery]);
 
 
   // Lock background scroll when modal or drawer is active
@@ -1566,7 +1612,7 @@ export default function AdminDashboardPage() {
               <div
                 ref={tableContainerRef}
                 onScroll={handleTableScroll}
-                className="w-full flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
+                className="w-full flex-1 min-h-0 overflow-y-auto overflow-x-hidden scrollbar-none"
               >
                 {/* Desktop Cadastre Table (>= 768px) */}
                 <table className="hidden md:table table-fixed w-full text-left text-xs border-collapse">
@@ -1658,13 +1704,35 @@ export default function AdminDashboardPage() {
                     )}
 
                     {isLoadingMore && (
-                      <tr>
-                        <td colSpan={7} className="py-3 text-center bg-[#F8F9FA]/40">
-                          <div className="flex items-center justify-center">
-                            <Loader2 className="w-4 h-4 animate-spin text-[#612D53]" />
-                          </div>
-                        </td>
-                      </tr>
+                      <>
+                        {[...Array(5)].map((_, i) => (
+                          <tr key={`cadastre-skel-desk-${i}`} className="animate-pulse bg-white border-b border-[#F1F3F4]">
+                            <td className="py-3 px-3 text-center">
+                              <div className="w-4 h-4 rounded bg-[#E8EAED] mx-auto" />
+                            </td>
+                            <td className="py-3 px-3 space-y-1.5">
+                              <div className="h-3 bg-[#E8EAED] rounded w-28" />
+                              <div className="h-2.5 bg-[#F1F3F4] rounded w-20" />
+                            </td>
+                            <td className="py-3 px-3 space-y-1.5">
+                              <div className="h-3 bg-[#E8EAED] rounded w-36" />
+                              <div className="h-2.5 bg-[#F1F3F4] rounded w-28" />
+                            </td>
+                            <td className="py-3 px-3">
+                              <div className="h-3 bg-[#F1F3F4] rounded w-32" />
+                            </td>
+                            <td className="py-3 px-3 text-right">
+                              <div className="h-3 bg-[#E8EAED] rounded w-20 ml-auto" />
+                            </td>
+                            <td className="py-3 px-3 text-right">
+                              <div className="h-3.5 bg-[#E8EAED] rounded w-20 ml-auto" />
+                            </td>
+                            <td className="py-3 px-3 text-center">
+                              <div className="h-3 bg-[#F1F3F4] rounded w-14 mx-auto" />
+                            </td>
+                          </tr>
+                        ))}
+                      </>
                     )}
                   </tbody>
                 </table>
@@ -1746,21 +1814,36 @@ export default function AdminDashboardPage() {
                   )}
 
                   {isLoadingMore && (
-                    <div className="py-3 text-center bg-[#F8F9FA]/40 flex items-center justify-center">
-                      <Loader2 className="w-4 h-4 animate-spin text-[#612D53]" />
+                    <div className="divide-y divide-[#E8EAED] bg-white animate-pulse">
+                      {[...Array(4)].map((_, i) => (
+                        <div key={`cadastre-skel-mob-${i}`} className="px-3.5 py-3 flex items-center justify-between gap-2.5">
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                            <div className="w-4 h-4 rounded bg-[#E8EAED] shrink-0" />
+                            <div className="min-w-0 flex-1 space-y-1.5">
+                              <div className="flex items-center gap-2">
+                                <div className="h-3.5 bg-[#E8EAED] rounded w-28" />
+                                <div className="h-2.5 bg-[#F1F3F4] rounded w-12" />
+                              </div>
+                              <div className="h-3 bg-[#F1F3F4] rounded w-44" />
+                            </div>
+                          </div>
+                          <div className="space-y-1 text-right shrink-0">
+                            <div className="h-3.5 bg-[#E8EAED] rounded w-16 ml-auto" />
+                            <div className="h-2.5 bg-[#F1F3F4] rounded w-12 ml-auto" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Endless Scroll Sentinel & Clean End Marker */}
+                  <div ref={propertySentinelRef} className="h-2 w-full" />
+                  {!hasMoreProperties && filteredProperties.length > 0 && (
+                    <div className="py-4 text-center text-[11px] text-[#717171] border-t border-[#F1F3F4]">
+                      &bull; End of cadastre roll ({filteredProperties.length.toLocaleString()} properties loaded)
                     </div>
                   )}
                 </div>
-              </div>
-
-              {/* Static Grounded Table Status Bar */}
-              <div className="px-4 py-2 border-t border-[#DADCE0] bg-[#F8F9FA] flex items-center justify-between text-xs text-[#717171] shrink-0">
-                <span>
-                  {(data?.pagination?.total ?? propertiesList.length).toLocaleString()} properties on record &bull; {filteredProperties.length} loaded
-                </span>
-                <span className="text-[11px] text-[#717171]">
-                  {hasMoreProperties ? "Scroll inside table to load more automatically" : "All records loaded"}
-                </span>
               </div>
             </section>
           )}
@@ -1820,7 +1903,7 @@ export default function AdminDashboardPage() {
               <div
                 ref={ratepayerTableContainerRef}
                 onScroll={handleRatepayerTableScroll}
-                className={`w-full flex-1 min-h-0 overflow-y-auto overflow-x-hidden transition-opacity duration-200 ${isSearchingRatepayers ? "opacity-60" : "opacity-100"}`}
+                className={`w-full flex-1 min-h-0 overflow-y-auto overflow-x-hidden scrollbar-none transition-opacity duration-200 ${isSearchingRatepayers ? "opacity-60" : "opacity-100"}`}
               >
                 {/* Desktop Ratepayers Table (>= 768px) */}
                 <table className="hidden md:table table-fixed w-full text-left text-xs border-collapse">
@@ -1910,6 +1993,37 @@ export default function AdminDashboardPage() {
                         </tr>
                       ))
                     )}
+
+                    {isLoadingMoreRatepayers && (
+                      <>
+                        {[...Array(5)].map((_, i) => (
+                          <tr key={`ratepayer-skel-${i}`} className="animate-pulse bg-white border-b border-[#F1F3F4]">
+                            <td className="py-2.5 px-3 space-y-1.5">
+                              <div className="h-3 bg-[#E8EAED] rounded w-36" />
+                              <div className="h-2.5 bg-[#F1F3F4] rounded w-28" />
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <div className="h-3 bg-[#F1F3F4] rounded w-24" />
+                            </td>
+                            <td className="py-2.5 px-3 text-center">
+                              <div className="h-3 bg-[#F1F3F4] rounded w-16 mx-auto" />
+                            </td>
+                            <td className="py-2.5 px-3 text-right">
+                              <div className="h-3 bg-[#E8EAED] rounded w-20 ml-auto" />
+                            </td>
+                            <td className="py-2.5 px-3 text-right">
+                              <div className="h-3.5 bg-[#E8EAED] rounded w-20 ml-auto" />
+                            </td>
+                            <td className="py-2.5 px-3 text-center">
+                              <div className="h-3 bg-[#F1F3F4] rounded w-16 mx-auto" />
+                            </td>
+                            <td className="py-2.5 px-3 text-right">
+                              <div className="h-3 bg-[#F1F3F4] rounded w-12 ml-auto" />
+                            </td>
+                          </tr>
+                        ))}
+                      </>
+                    )}
                   </tbody>
                 </table>
 
@@ -1973,20 +2087,33 @@ export default function AdminDashboardPage() {
                   )}
 
                   {isLoadingMoreRatepayers && (
-                    <div className="py-3 text-center bg-[#F8F9FA]/40 flex items-center justify-center">
-                      <Loader2 className="w-4 h-4 animate-spin text-[#612D53]" />
+                    <div className="divide-y divide-[#E8EAED] bg-white animate-pulse">
+                      {[...Array(4)].map((_, i) => (
+                        <div key={`ratepayer-skel-mob-${i}`} className="px-3.5 py-3 flex items-center justify-between gap-2.5">
+                          <div className="min-w-0 flex-1 space-y-1.5">
+                            <div className="flex items-center gap-2">
+                              <div className="h-3.5 bg-[#E8EAED] rounded w-32" />
+                              <div className="h-2.5 bg-[#F1F3F4] rounded w-14" />
+                            </div>
+                            <div className="h-3 bg-[#F1F3F4] rounded w-40" />
+                          </div>
+                          <div className="space-y-1 text-right shrink-0">
+                            <div className="h-3.5 bg-[#E8EAED] rounded w-16 ml-auto" />
+                            <div className="h-2.5 bg-[#F1F3F4] rounded w-16 ml-auto" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Endless Scroll Sentinel & Clean End Marker */}
+                  <div ref={ratepayerSentinelRef} className="h-2 w-full" />
+                  {!hasMoreRatepayers && filteredRatepayers.length > 0 && (
+                    <div className="py-4 text-center text-[11px] text-[#717171] border-t border-[#F1F3F4]">
+                      &bull; End of ratepayer roll ({filteredRatepayers.length.toLocaleString()} ratepayers loaded)
                     </div>
                   )}
                 </div>
-              </div>
-
-              {/* Ratepayers Status Bar */}
-              <div className="px-4 py-2 border-t border-[#DADCE0] bg-[#F8F9FA] flex items-center justify-between text-xs text-[#717171] shrink-0">
-                <span>{(ratepayersTotal || ratepayers.length).toLocaleString()} ratepayers registered in municipal directory</span>
-                <span className="text-[11px] text-[#717171] flex items-center gap-1.5">
-                  {isLoadingMoreRatepayers && <Loader2 className="w-3 h-3 animate-spin text-[#612D53]" />}
-                  <span>{filteredRatepayers.length} loaded of {(ratepayersTotal || ratepayers.length)}</span>
-                </span>
               </div>
             </section>
           )}
