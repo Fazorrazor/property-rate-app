@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { adminLogin } from '../app/actions';
-import { Lock, Phone, Eye, EyeOff, Loader2, CheckCircle2, ShieldAlert, ArrowRight } from 'lucide-react';
+import { Lock, Phone, Eye, EyeOff, Loader2, CheckCircle2, ShieldAlert } from 'lucide-react';
 
 export default function AdminLoginForm() {
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -149,10 +149,7 @@ export default function AdminLoginForm() {
               <span>Access Granted &bull; Redirecting...</span>
             </>
           ) : (
-            <>
-              <span>Authorize & Access Console</span>
-              <ArrowRight className="w-4 h-4 ml-0.5" />
-            </>
+            <span>Login</span>
           )}
         </button>
       </div>
