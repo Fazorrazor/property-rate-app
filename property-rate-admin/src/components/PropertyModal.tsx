@@ -93,10 +93,11 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm font-sans">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
-        <div className="flex items-center justify-between p-4 border-b border-[#DADCE0] bg-[#F6ECF2]/50">
-          <h2 className="font-semibold text-[#2C2C2C]">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-xs font-sans">
+      <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[90vh]">
+        <div className="w-10 h-1 bg-[#DADCE0] rounded-full mx-auto my-2 sm:hidden shrink-0" />
+        <div className="flex items-center justify-between p-3.5 sm:p-4 border-b border-[#DADCE0] bg-[#F6ECF2]/50 shrink-0">
+          <h2 className="font-semibold text-[#2C2C2C] text-sm sm:text-base">
             {property ? 'Edit Property Assessment' : 'Register New Property'}
           </h2>
           <button onClick={onClose} className="p-1 hover:bg-[#E8EAED] rounded-lg transition-colors cursor-pointer">
@@ -104,15 +105,15 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
           </button>
         </div>
         
-        <div className="p-6 overflow-y-auto">
+        <div className="p-4 sm:p-6 overflow-y-auto">
           {error && (
             <div className="mb-4 bg-[#FCE8E6] border border-[#FAD2CF] text-[#C5221F] px-4 py-3 rounded-md text-xs">
               {error}
             </div>
           )}
           
-          <form id="property-form" onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid grid-cols-2 gap-4">
+          <form id="property-form" onSubmit={handleSubmit} className="space-y-5 sm:space-y-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div>
                 <label className="block text-xs font-medium text-[#717171] mb-1">Account Number *</label>
                 <input
@@ -121,7 +122,7 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
                   value={formData.accountNumber}
                   onChange={(e) => setFormData({ ...formData, accountNumber: e.target.value })}
                   disabled={!!property}
-                  className="w-full text-xs p-2 border border-[#DADCE0] rounded-md focus:ring-[#612D53] focus:border-[#612D53] disabled:bg-[#F6ECF2]"
+                  className="w-full text-xs p-2.5 sm:p-2 border border-[#DADCE0] rounded-md focus:ring-[#612D53] focus:border-[#612D53] disabled:bg-[#F6ECF2]"
                   placeholder="e.g. KKDA03188007"
                 />
               </div>
@@ -131,7 +132,7 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
                   value={formData.municipality}
                   onChange={(e) => setFormData({ ...formData, municipality: e.target.value })}
                   aria-label="Select Municipality"
-                  className="w-full text-xs p-2 border border-[#DADCE0] rounded-md focus:ring-[#612D53] focus:border-[#612D53]"
+                  className="w-full text-xs p-2.5 sm:p-2 border border-[#DADCE0] rounded-md focus:ring-[#612D53] focus:border-[#612D53]"
                 >
                   <option>Kpone-Katamanso (KKMA)</option>
                   <option>Tema Metropolitan (TMA)</option>
@@ -140,7 +141,7 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div>
                 <label className="block text-xs font-medium text-[#717171] mb-1">Owner Name *</label>
                 <input
@@ -148,7 +149,7 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
                   type="text"
                   value={formData.ownerName}
                   onChange={(e) => setFormData({ ...formData, ownerName: e.target.value })}
-                  className="w-full text-xs p-2 border border-[#DADCE0] rounded-md focus:ring-[#612D53]"
+                  className="w-full text-xs p-2.5 sm:p-2 border border-[#DADCE0] rounded-md focus:ring-[#612D53]"
                   placeholder="Ratepayer Full Name"
                 />
               </div>
@@ -159,20 +160,20 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
                   type="text"
                   value={formData.ownerPhone}
                   onChange={(e) => setFormData({ ...formData, ownerPhone: e.target.value })}
-                  className="w-full text-xs p-2 border border-[#DADCE0] rounded-md focus:ring-[#612D53]"
+                  className="w-full text-xs p-2.5 sm:p-2 border border-[#DADCE0] rounded-md focus:ring-[#612D53]"
                   placeholder="024XXXXXXX"
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div>
                 <label className="block text-xs font-medium text-[#717171] mb-1">Digital Address (GPS)</label>
                 <input
                   type="text"
                   value={formData.ownerDigitalAddress}
                   onChange={(e) => setFormData({ ...formData, ownerDigitalAddress: e.target.value })}
-                  className="w-full text-xs p-2 border border-[#DADCE0] rounded-md focus:ring-[#612D53]"
+                  className="w-full text-xs p-2.5 sm:p-2 border border-[#DADCE0] rounded-md focus:ring-[#612D53]"
                   placeholder="e.g. GK-0010-9395"
                 />
               </div>
@@ -182,22 +183,22 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
                   type="text"
                   value={formData.physicalAddress}
                   onChange={(e) => setFormData({ ...formData, physicalAddress: e.target.value })}
-                  className="w-full text-xs p-2 border border-[#DADCE0] rounded-md focus:ring-[#612D53]"
+                  className="w-full text-xs p-2.5 sm:p-2 border border-[#DADCE0] rounded-md focus:ring-[#612D53]"
                   placeholder="e.g. Near Community Center"
                 />
               </div>
             </div>
 
             <div className="border-t border-[#DADCE0] pt-4">
-              <h3 className="text-xs font-semibold text-[#2C2C2C] mb-3">Assessment & Valuation</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="md:col-span-1">
+              <h3 className="text-xs font-semibold text-[#2C2C2C] mb-3">Assessment &amp; Valuation</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                <div className="sm:col-span-1">
                   <label className="block text-xs font-medium text-[#717171] mb-1">Classification *</label>
                   <select
                     value={formData.propertyClassification}
                     onChange={(e) => setFormData({ ...formData, propertyClassification: e.target.value })}
                     aria-label="Select Property Classification"
-                    className="w-full text-xs p-2 border border-[#DADCE0] rounded-md focus:ring-[#612D53]"
+                    className="w-full text-xs p-2.5 sm:p-2 border border-[#DADCE0] rounded-md focus:ring-[#612D53]"
                   >
                     <option>PRIVATE THIRD CLASS RESIDENTIAL</option>
                     <option>FIRST CLASS RESIDENTIAL</option>
@@ -215,7 +216,7 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
                     step="0.01"
                     value={formData.rateableValue}
                     onChange={(e) => setFormData({ ...formData, rateableValue: e.target.value })}
-                    className="w-full text-xs p-2 border border-[#DADCE0] rounded-md focus:ring-[#612D53]"
+                    className="w-full text-xs p-2.5 sm:p-2 border border-[#DADCE0] rounded-md focus:ring-[#612D53]"
                   />
                 </div>
                 <div>
@@ -227,7 +228,7 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
                     step="0.00001"
                     value={formData.rateImposed}
                     onChange={(e) => setFormData({ ...formData, rateImposed: e.target.value })}
-                    className="w-full text-xs p-2 border border-[#DADCE0] rounded-md focus:ring-[#612D53]"
+                    className="w-full text-xs p-2.5 sm:p-2 border border-[#DADCE0] rounded-md focus:ring-[#612D53]"
                   />
                 </div>
               </div>
@@ -265,11 +266,11 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
           </form>
         </div>
         
-        <div className="p-4 border-t border-[#DADCE0] bg-[#F6ECF2]/50 flex justify-end gap-3">
+        <div className="p-3.5 sm:p-4 border-t border-[#DADCE0] bg-[#F6ECF2]/50 flex justify-end gap-2.5 sm:gap-3 shrink-0">
           <button
             type="button"
             onClick={onClose}
-            className="btn-3d-secondary h-9 px-4 rounded-lg font-medium cursor-pointer"
+            className="btn-3d-secondary h-11 sm:h-9 px-4 rounded-lg font-medium text-xs cursor-pointer flex-1 sm:flex-none"
           >
             Cancel
           </button>
@@ -277,10 +278,10 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
             type="submit"
             form="property-form"
             disabled={isLoading}
-            className="btn-3d-primary h-9 px-4 rounded-lg font-medium flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            className="btn-3d-primary h-11 sm:h-9 px-4 rounded-lg font-medium text-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex-1 sm:flex-none"
           >
             {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            {property ? 'Save Changes' : 'Register Property'}
+            <span>{property ? 'Save Changes' : 'Register Property'}</span>
           </button>
         </div>
       </div>

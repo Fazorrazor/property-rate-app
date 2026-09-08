@@ -912,8 +912,8 @@ export function SmsRolloutSimulator({
             </div>
           </div>
 
-          {/* Persistent Floating Edge Arrow Tab for Logs (Reveals label on hover) */}
-          <div className="absolute right-0 top-1/2 -translate-y-1/2 z-30">
+          {/* Persistent Floating Edge Arrow Tab for Logs (Desktop Only) */}
+          <div className="hidden lg:flex absolute right-0 top-1/2 -translate-y-1/2 z-30">
             <div className="relative group flex items-center justify-end">
               {/* Hover Tooltip Label (Positioned absolutely so it takes 0 layout space) */}
               <div className="absolute right-full mr-2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-[#2C2C2C] text-white text-[11px] font-medium px-2.5 py-1.5 rounded-lg shadow-xl border border-white/10 whitespace-nowrap z-40">
@@ -1048,8 +1048,8 @@ export function SmsRolloutSimulator({
             </div>
           </div>
 
-          {/* Persistent Floating Edge Arrow Tab to Switch back to Simulator (Reveals label on hover) */}
-          <div className="absolute left-0 top-1/2 -translate-y-1/2 z-30">
+          {/* Persistent Floating Edge Arrow Tab to Switch back to Simulator (Desktop Only) */}
+          <div className="hidden lg:flex absolute left-0 top-1/2 -translate-y-1/2 z-30">
             <div className="relative group flex items-center">
               {/* Pure Arrow Button */}
               <button

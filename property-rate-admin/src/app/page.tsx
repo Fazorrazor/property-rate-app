@@ -28,6 +28,7 @@ import {
   Settings,
   Menu,
   CreditCard,
+  ChevronRight,
 } from "lucide-react";
 import {
   getAdminOverview,
@@ -1404,7 +1405,7 @@ export default function AdminDashboardPage() {
                 </div>
 
                 {/* Filter & Action Bar */}
-                <div className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 pt-2 border-t border-[#F1F3F4]">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 sm:gap-3 pt-2 border-t border-[#F1F3F4]">
                   {/* Search */}
                   <div className="relative flex items-center w-full lg:flex-1 lg:max-w-md">
                     {isSearchingProperties ? (
@@ -1439,13 +1440,13 @@ export default function AdminDashboardPage() {
                     )}
                   </div>
 
-                  {/* Dropdowns & Actions */}
-                  <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+                  {/* Horizontal Scrollable Strip for Dropdowns & Actions on Mobile */}
+                  <div className="flex items-center gap-2 w-full lg:w-auto overflow-x-auto whitespace-nowrap scrollbar-none py-1 lg:py-0">
                     <select
                       value={classificationFilter}
                       onChange={(e) => setClassificationFilter(e.target.value)}
                       aria-label="Filter by property classification"
-                      className="h-8 px-2.5 rounded-lg border border-[#DADCE0] bg-white text-xs text-[#2C2C2C] focus:outline-none focus:border-[#612D53]"
+                      className="h-8 px-2.5 rounded-lg border border-[#DADCE0] bg-white text-xs text-[#2C2C2C] focus:outline-none focus:border-[#612D53] shrink-0"
                     >
                       <option value="ALL">All Classifications</option>
                       <option value="COMMERCIAL MIXED USE">Commercial Mixed Use</option>
@@ -1453,12 +1454,11 @@ export default function AdminDashboardPage() {
                       <option value="FIRST CLASS RESIDENTIAL">First Class Residential</option>
                     </select>
 
-
                     <select
                       value={statusFilter}
                       onChange={(e) => setStatusFilter(e.target.value as any)}
                       aria-label="Filter by payment status"
-                      className="h-8 px-2.5 rounded-lg border border-[#DADCE0] bg-white text-xs text-[#2C2C2C] focus:outline-none focus:border-[#612D53]"
+                      className="h-8 px-2.5 rounded-lg border border-[#DADCE0] bg-white text-xs text-[#2C2C2C] focus:outline-none focus:border-[#612D53] shrink-0"
                     >
                       <option value="ALL">All Statuses</option>
                       <option value="UNPAID">Unpaid</option>
@@ -1661,7 +1661,7 @@ export default function AdminDashboardPage() {
                   </tbody>
                 </table>
 
-                {/* Mobile Cadastre Cards View (< 768px) */}
+                {/* Mobile Cadastre Google Material List Tiles (< 768px) */}
                 <div className="block md:hidden divide-y divide-[#E8EAED] bg-white">
                   {filteredProperties.length === 0 ? (
                     <div className="py-8 text-center text-[#717171] font-normal text-xs px-4">
@@ -1676,13 +1676,16 @@ export default function AdminDashboardPage() {
                         <div
                           key={`mobile-prop-${prop.id}`}
                           onClick={() => setSelectedAccount(prop)}
-                          className={`p-3.5 space-y-2.5 transition-colors cursor-pointer ${
-                            selectedAccount?.id === prop.id ? "bg-[#F6ECF2]" : "hover:bg-[#F8F9FA]"
+                          className={`px-3.5 py-3 flex items-center justify-between gap-2.5 transition-colors cursor-pointer ${
+                            selectedAccount?.id === prop.id ? "bg-[#F6ECF2]" : "hover:bg-[#F8F9FA] active:bg-[#F1F3F4]"
                           }`}
                         >
-                          {/* Top Row: Select checkbox, Account #, Status (Zero Pills) */}
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2.5 min-w-0" onClick={(e) => e.stopPropagation()}>
+                          {/* Left: Selection checkbox + Account details */}
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                            <div
+                              onClick={(e) => e.stopPropagation()}
+                              className="shrink-0 flex items-center"
+                            >
                               <input
                                 type="checkbox"
                                 checked={isSelected}
@@ -1690,96 +1693,44 @@ export default function AdminDashboardPage() {
                                 aria-label={`Select property ${prop.accountNumber}`}
                                 className="rounded border-[#DADCE0] text-[#612D53] focus:ring-0 cursor-pointer w-4 h-4"
                               />
-                              <span className="font-semibold text-xs text-[#2C2C2C] font-mono truncate">
-                                {prop.accountNumber}
-                              </span>
                             </div>
-
-                            <span
-                              className={`text-xs font-semibold shrink-0 ${
-                                isPaid
-                                  ? "text-[#188038]"
-                                  : prop.status === "PARTIALLY_PAID"
-                                  ? "text-[#B45309]"
-                                  : "text-[#D93025]"
-                              }`}
-                            >
-                              &bull; {isPaid ? "Paid" : prop.status === "PARTIALLY_PAID" ? "Partial" : "Unpaid"}
-                            </span>
-                          </div>
-
-                          {/* Middle Row: Owner & Cadastre Particulars */}
-                          <div className="text-xs space-y-0.5">
-                            <div className="flex items-center justify-between text-[#2C2C2C] font-medium">
-                              <span className="truncate">{prop.ownerName}</span>
-                              <span className="text-[11px] text-[#717171] font-mono shrink-0 ml-2">{prop.ownerPhone}</span>
-                            </div>
-                            <div className="text-[11px] text-[#717171] flex items-center justify-between gap-2">
-                              <span className="font-mono text-[#5F6368] truncate">{prop.ownerDigitalAddress}</span>
-                              <span className="truncate shrink-0 text-[#717171]">{prop.propertyClassification}</span>
-                            </div>
-                          </div>
-
-                          {/* Financial Breakdown Row */}
-                          <div className="pt-2 border-t border-[#F1F3F4] flex items-center justify-between">
-                            <div className="text-[11px] text-[#717171]">
-                              <span>Valuation: </span>
-                              <span className="font-medium text-[#2C2C2C] tabular-nums">{prop.rateableValueFormatted}</span>
-                              {prop.arrears > 0 && (
-                                <span className="text-[#D93025] ml-1.5 font-medium tabular-nums">
-                                  (Arr: {prop.arrearsFormatted})
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-xs text-[#2C2C2C] font-mono truncate">
+                                  {prop.accountNumber}
                                 </span>
-                              )}
-                            </div>
-
-                            <div className="text-right">
-                              <span className="text-xs text-[#717171] mr-1">Due:</span>
-                              <span className="text-sm font-bold text-[#2C2C2C] tabular-nums">
-                                {prop.totalAmountDueFormatted}
-                              </span>
+                                <span
+                                  className={`text-[11px] font-semibold shrink-0 ${
+                                    isPaid
+                                      ? "text-[#188038]"
+                                      : prop.status === "PARTIALLY_PAID"
+                                      ? "text-[#B45309]"
+                                      : "text-[#D93025]"
+                                  }`}
+                                >
+                                  &bull; {isPaid ? "Paid" : prop.status === "PARTIALLY_PAID" ? "Partial" : "Unpaid"}
+                                </span>
+                              </div>
+                              <div className="text-[11px] text-[#717171] truncate mt-0.5">
+                                <span>{prop.ownerName}</span>
+                                {prop.ownerDigitalAddress && (
+                                  <span className="text-[#80868B] font-mono ml-1.5">&bull; {prop.ownerDigitalAddress}</span>
+                                )}
+                              </div>
                             </div>
                           </div>
 
-                          {/* Action Bar (Min 44px Touch Targets) */}
-                          <div className="pt-2 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                            <button
-                              type="button"
-                              onClick={() => setSelectedAccount(prop)}
-                              className="btn-3d-secondary flex-1 h-11 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 cursor-pointer"
-                            >
-                              <Eye className="w-3.5 h-3.5 text-[#717171]" />
-                              <span>Details</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedAccount(prop);
-                                setShowPaymentModal(true);
-                              }}
-                              className="btn-3d-secondary flex-1 h-11 rounded-lg text-xs font-semibold text-[#188038] border-[#188038]/30 flex items-center justify-center gap-1.5 cursor-pointer"
-                            >
-                              <CreditCard className="w-3.5 h-3.5 text-[#188038]" />
-                              <span>Record Pay</span>
-                            </button>
-
-                            {prop.status !== "PAID" && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setSmsAuthTargetAccounts([prop]);
-                                  setSmsAuthPassword("");
-                                  setSmsAuthError(null);
-                                  setShowSmsAuthModal(true);
-                                }}
-                                disabled={isProcessing}
-                                className="btn-3d-primary px-3.5 h-11 rounded-lg text-xs font-medium flex items-center justify-center gap-1 cursor-pointer shrink-0"
-                                title="Send SMS Demand Notice"
-                              >
-                                <Send className="w-3.5 h-3.5" />
-                                <span>SMS</span>
-                              </button>
-                            )}
+                          {/* Right: Total Due Amount + Classification + Chevron */}
+                          <div className="flex items-center gap-1.5 shrink-0 text-right">
+                            <div>
+                              <div className="text-xs font-bold text-[#2C2C2C] tabular-nums">
+                                {prop.totalAmountDueFormatted}
+                              </div>
+                              <div className="text-[10px] text-[#80868B] uppercase tracking-wider">
+                                {prop.propertyClassification?.split(" ")[0] || "Rate"}
+                              </div>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-[#BDC1C6] shrink-0 ml-0.5" />
                           </div>
                         </div>
                       );
@@ -1949,7 +1900,7 @@ export default function AdminDashboardPage() {
                   </tbody>
                 </table>
 
-                {/* Mobile Ratepayer Cards (< 768px) */}
+                {/* Mobile Ratepayer Google Material List Tiles (< 768px) */}
                 <div className="block md:hidden divide-y divide-[#E8EAED] bg-white">
                   {filteredRatepayers.length === 0 ? (
                     <div className="py-8 text-center text-[#717171] font-normal italic text-xs px-4">
@@ -1960,66 +1911,49 @@ export default function AdminDashboardPage() {
                       <div
                         key={`mobile-ratepayer-${ratepayer.id}`}
                         onClick={() => handleOpenRatepayerDossier(ratepayer.id, ratepayer)}
-                        className="p-3.5 space-y-2.5 hover:bg-[#F8F9FA] transition-colors cursor-pointer"
+                        className="px-3.5 py-3 flex items-center justify-between gap-2.5 hover:bg-[#F8F9FA] active:bg-[#F1F3F4] transition-colors cursor-pointer"
                       >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0 pr-2">
-                            <span className="font-semibold text-xs text-[#2C2C2C] block truncate">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-xs text-[#2C2C2C] truncate">
                               {ratepayer.name}
                             </span>
-                            <span className="text-[11px] text-[#717171] block font-mono mt-0.5">
-                              {ratepayer.phoneNumber}
+                            <span
+                              className={`text-[11px] font-semibold shrink-0 ${
+                                ratepayer.status === "SETTLED"
+                                  ? "text-[#188038]"
+                                  : ratepayer.status === "DEFAULTER"
+                                  ? "text-[#D93025]"
+                                  : ratepayer.status === "OUTSTANDING"
+                                  ? "text-[#B45309]"
+                                  : "text-[#717171]"
+                              }`}
+                            >
+                              &bull; {ratepayer.status === "SETTLED"
+                                ? "Settled"
+                                : ratepayer.status === "DEFAULTER"
+                                ? "Defaulter"
+                                : ratepayer.status === "OUTSTANDING"
+                                ? "Balance Due"
+                                : "Unlinked"}
                             </span>
                           </div>
-
-                          <span
-                            className={`text-xs font-semibold shrink-0 ${
-                              ratepayer.status === "SETTLED"
-                                ? "text-[#188038]"
-                                : ratepayer.status === "DEFAULTER"
-                                ? "text-[#D93025]"
-                                : ratepayer.status === "OUTSTANDING"
-                                ? "text-[#B45309]"
-                                : "text-[#717171]"
-                            }`}
-                          >
-                            &bull; {ratepayer.status === "SETTLED"
-                              ? "Settled"
-                              : ratepayer.status === "DEFAULTER"
-                              ? "Defaulter"
-                              : ratepayer.status === "OUTSTANDING"
-                              ? "Balance Due"
-                              : "Unlinked"}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center justify-between text-xs text-[#717171] pt-1">
-                          <span>
-                            {ratepayer.propertyCount} {ratepayer.propertyCount === 1 ? "parcel" : "parcels"} &bull; Val: {ratepayer.totalValuationFormatted}
-                          </span>
-                          <span className="font-bold text-xs text-[#2C2C2C] tabular-nums">
-                            Due: {ratepayer.totalDueFormatted}
-                          </span>
-                        </div>
-
-                        {ratepayer.totalArrearsFormatted !== "GH₵ 0.00" && (
-                          <div className="text-[11px] text-[#D93025] font-medium text-right tabular-nums">
-                            Arrears: {ratepayer.totalArrearsFormatted}
+                          <div className="text-[11px] text-[#717171] truncate mt-0.5">
+                            <span className="font-mono">{ratepayer.phoneNumber}</span>
+                            <span className="ml-1.5">&bull; {ratepayer.propertyCount} {ratepayer.propertyCount === 1 ? "parcel" : "parcels"}</span>
                           </div>
-                        )}
+                        </div>
 
-                        <div className="pt-2 flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
-                          <span className="text-[10px] text-[#717171]">
-                            Registered: {ratepayer.createdAtFormatted}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handleOpenRatepayerDossier(ratepayer.id, ratepayer)}
-                            className="btn-3d-secondary h-11 px-4 rounded-lg text-xs font-semibold text-[#612D53] flex items-center gap-1.5 cursor-pointer"
-                          >
-                            <span>Open Dossier</span>
-                            <span>&rarr;</span>
-                          </button>
+                        <div className="flex items-center gap-1.5 shrink-0 text-right">
+                          <div>
+                            <div className="text-xs font-bold text-[#2C2C2C] tabular-nums">
+                              {ratepayer.totalDueFormatted}
+                            </div>
+                            <div className="text-[10px] text-[#717171]">
+                              Val: {ratepayer.totalValuationFormatted}
+                            </div>
+                          </div>
+                          <ChevronRight className="w-4 h-4 text-[#BDC1C6] shrink-0 ml-0.5" />
                         </div>
                       </div>
                     ))
@@ -2173,7 +2107,7 @@ export default function AdminDashboardPage() {
                   </tbody>
                 </table>
 
-                {/* Mobile Treasury Cards (< 768px) */}
+                {/* Mobile Treasury Google Material List Tiles (< 768px) */}
                 <div className="block md:hidden divide-y divide-[#E8EAED] bg-white">
                   {filteredTreasuryReceipts.length === 0 ? (
                     <div className="py-8 text-center text-[#717171] italic font-normal text-xs px-4">
@@ -2183,41 +2117,30 @@ export default function AdminDashboardPage() {
                     filteredTreasuryReceipts.map((receipt) => (
                       <div
                         key={`mobile-receipt-${receipt.id}`}
-                        className="p-3.5 space-y-2 hover:bg-[#F8F9FA] transition-colors"
+                        className="px-3.5 py-3 flex items-center justify-between gap-2.5 hover:bg-[#F8F9FA] transition-colors"
                       >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-semibold text-xs text-[#2C2C2C] font-mono">
-                            {receipt.receiptNumber}
-                          </span>
-                          <span className="text-xs font-semibold text-[#188038]">
-                            &bull; Reconciled
-                          </span>
-                        </div>
-
-                        <div className="flex items-start justify-between text-xs gap-2">
-                          <div className="min-w-0">
-                            <span className="font-mono font-medium text-[#2C2C2C] block">
-                              {receipt.accountNumber}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-xs text-[#2C2C2C] font-mono">
+                              {receipt.receiptNumber}
                             </span>
-                            {receipt.ownerName && (
-                              <span className="text-[11px] text-[#717171] block truncate">
-                                {receipt.ownerName}
-                              </span>
-                            )}
+                            <span className="text-[11px] font-semibold text-[#188038]">
+                              &bull; Reconciled
+                            </span>
                           </div>
-                          <div className="text-right shrink-0">
-                            <span className="text-sm font-bold text-[#188038] tabular-nums block">
-                              {receipt.amountFormatted}
-                            </span>
-                            <span className="text-[10px] text-[#717171] block">
-                              {receipt.paymentMethod}
-                            </span>
+                          <div className="text-[11px] text-[#717171] truncate mt-0.5">
+                            <span className="font-mono text-[#5F6368]">{receipt.accountNumber}</span>
+                            {receipt.ownerName && <span className="ml-1.5">&bull; {receipt.ownerName}</span>}
                           </div>
                         </div>
 
-                        <div className="text-[10px] text-[#717171] pt-1 border-t border-[#F1F3F4] flex items-center justify-between">
-                          <span>Settlement Date</span>
-                          <span className="font-medium text-[#5F6368]">{receipt.datePaid}</span>
+                        <div className="text-right shrink-0">
+                          <span className="text-xs font-bold text-[#188038] tabular-nums block">
+                            {receipt.amountFormatted}
+                          </span>
+                          <span className="text-[10px] text-[#717171] block mt-0.5">
+                            {receipt.paymentMethod} &bull; {receipt.datePaid}
+                          </span>
                         </div>
                       </div>
                     ))
@@ -2658,13 +2581,14 @@ export default function AdminDashboardPage() {
       {/* ANNUAL BATCH BILLING MODAL */}
       <AnimatePresence>
         {showBatchModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-xs font-sans">
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-2xl border border-[#DADCE0] shadow-2xl p-6 max-w-md w-full font-sans"
+              initial={{ opacity: 0, y: 20, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 20, scale: 0.98 }}
+              className="bg-white rounded-t-2xl sm:rounded-2xl border-t sm:border border-[#DADCE0] shadow-2xl p-4 sm:p-6 max-w-md w-full font-sans max-h-[92vh] sm:max-h-[90vh] overflow-y-auto"
             >
+              <div className="w-10 h-1 bg-[#DADCE0] rounded-full mx-auto mb-3 sm:hidden shrink-0" />
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -2780,7 +2704,7 @@ export default function AdminDashboardPage() {
                     type="button"
                     onClick={() => setShowBatchModal(false)}
                     disabled={isProcessing}
-                    className="h-9 px-3.5 rounded-lg border border-[#DADCE0] text-[#3C4043] font-medium text-xs cursor-pointer"
+                    className="h-11 sm:h-9 px-3.5 rounded-lg border border-[#DADCE0] text-[#3C4043] font-medium text-xs cursor-pointer flex-1 sm:flex-none"
                   >
                     Cancel
                   </button>
@@ -2788,7 +2712,7 @@ export default function AdminDashboardPage() {
                   <button
                     type="submit"
                     disabled={isProcessing}
-                    className="btn-3d-primary h-9 px-4 rounded-lg text-xs font-semibold flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                    className="btn-3d-primary h-11 sm:h-9 px-4 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 flex-1 sm:flex-none"
                   >
                     {isProcessing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
                     <span>Confirm &amp; Rollout Bills</span>
@@ -2803,14 +2727,15 @@ export default function AdminDashboardPage() {
       {/* RECORD PAYMENT MODAL */}
       <AnimatePresence>
         {showPaymentModal && selectedAccount && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-xs font-sans">
             <motion.form
               onSubmit={handleRecordPayment}
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="relative z-10 bg-white rounded-xl border border-[#DADCE0] shadow-xl p-5 max-w-md w-full space-y-3.5 text-xs font-sans"
+              initial={{ opacity: 0, y: 20, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 20, scale: 0.98 }}
+              className="relative z-10 bg-white rounded-t-2xl sm:rounded-xl border-t sm:border border-[#DADCE0] shadow-xl p-4 sm:p-5 max-w-md w-full space-y-3.5 text-xs font-sans max-h-[92vh] sm:max-h-[90vh] overflow-y-auto"
             >
+              <div className="w-10 h-1 bg-[#DADCE0] rounded-full mx-auto mb-2 sm:hidden shrink-0" />
               <div className="flex items-center justify-between border-b border-[#E8EAED] pb-2.5">
                 <h3 className="text-sm font-semibold text-[#2C2C2C]">
                   Record Manual Assembly Payment
@@ -2895,7 +2820,7 @@ export default function AdminDashboardPage() {
                   type="button"
                   onClick={() => setShowPaymentModal(false)}
                   disabled={isProcessing}
-                  className="h-9 px-3.5 rounded-lg border border-[#DADCE0] text-[#3C4043] font-medium transition-colors cursor-pointer"
+                  className="h-11 sm:h-9 px-3.5 rounded-lg border border-[#DADCE0] text-[#3C4043] font-medium transition-colors cursor-pointer flex-1 sm:flex-none"
                 >
                   Cancel
                 </button>
@@ -2903,7 +2828,7 @@ export default function AdminDashboardPage() {
                 <button
                   type="submit"
                   disabled={isProcessing}
-                  className="btn-3d-primary h-9 px-4 rounded-lg font-medium flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  className="btn-3d-primary h-11 sm:h-9 px-4 rounded-lg font-medium flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 flex-1 sm:flex-none"
                 >
                   {isProcessing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
                   <span>Issue &amp; Reconcile GCR</span>
@@ -2963,13 +2888,14 @@ export default function AdminDashboardPage() {
       {/* HIGH-SECURITY SMS AUTHORIZATION MODAL (INDIVIDUAL & SELECTIVE TARGETS) */}
       <AnimatePresence>
         {showSmsAuthModal && smsAuthTargetAccounts.length > 0 && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs font-sans">
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-xs font-sans">
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="bg-white rounded-2xl border border-[#DADCE0] shadow-2xl p-6 max-w-lg w-full space-y-4"
+              initial={{ opacity: 0, y: 20, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 20, scale: 0.98 }}
+              className="bg-white rounded-t-2xl sm:rounded-2xl border-t sm:border border-[#DADCE0] shadow-2xl p-4 sm:p-6 max-w-lg w-full space-y-4 max-h-[92vh] sm:max-h-[90vh] overflow-y-auto"
             >
+              <div className="w-10 h-1 bg-[#DADCE0] rounded-full mx-auto mb-2 sm:hidden shrink-0" />
               {/* Header */}
               <div className="flex items-center justify-between pb-3 border-b border-[#F1F3F4]">
                 <div className="flex items-center gap-2.5">
@@ -3095,7 +3021,7 @@ export default function AdminDashboardPage() {
                     setSmsAuthError(null);
                   }}
                   disabled={isProcessing}
-                  className="btn-3d-secondary h-9 px-4 rounded-lg text-xs font-medium cursor-pointer"
+                  className="btn-3d-secondary h-11 sm:h-9 px-4 rounded-lg text-xs font-medium cursor-pointer flex-1 sm:flex-none"
                 >
                   Cancel
                 </button>
@@ -3103,7 +3029,7 @@ export default function AdminDashboardPage() {
                   type="button"
                   onClick={handleExecuteSmsDispatch}
                   disabled={isProcessing || !smsAuthPassword.trim()}
-                  className="btn-3d-primary h-9 px-4 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  className="btn-3d-primary h-11 sm:h-9 px-4 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 flex-1 sm:flex-none"
                 >
                   {isProcessing ? (
                     <>

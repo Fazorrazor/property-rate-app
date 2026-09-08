@@ -141,10 +141,11 @@ export function CsvImportModal({ isOpen, onClose, onSuccess }: CsvImportModalPro
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs font-sans">
-      <div className="bg-white rounded-2xl border border-[#DADCE0] shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-xs font-sans">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl border-t sm:border border-[#DADCE0] shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[90vh]">
+        <div className="w-10 h-1 bg-[#DADCE0] rounded-full mx-auto my-2 sm:hidden shrink-0" />
         {/* Header */}
-        <div className="px-6 py-4 border-b border-[#DADCE0] flex items-center justify-between shrink-0 bg-white">
+        <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-[#DADCE0] flex items-center justify-between shrink-0 bg-white">
           <div>
             <h3 className="text-sm font-bold text-[#2C2C2C] tracking-tight">
               Bulk Cadastre &amp; Valuation Roll Importer
@@ -163,7 +164,7 @@ export function CsvImportModal({ isOpen, onClose, onSuccess }: CsvImportModalPro
         </div>
 
         {/* Content Body */}
-        <div className="p-6 overflow-y-auto space-y-4 flex-1 text-xs">
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1 text-xs">
           {/* File Dropzone */}
           {!file ? (
             <div
@@ -309,12 +310,12 @@ export function CsvImportModal({ isOpen, onClose, onSuccess }: CsvImportModalPro
         </div>
 
         {/* Modal Actions */}
-        <div className="px-6 py-3.5 border-t border-[#DADCE0] bg-white flex items-center justify-between shrink-0">
+        <div className="px-4 sm:px-6 py-3.5 border-t border-[#DADCE0] bg-white flex items-center justify-between gap-2.5 shrink-0">
           <button
             type="button"
             onClick={onClose}
             disabled={isProcessing}
-            className="btn-3d-secondary h-8 px-4 rounded-lg text-xs font-medium cursor-pointer"
+            className="btn-3d-secondary h-11 sm:h-8 px-4 rounded-lg text-xs font-medium cursor-pointer flex-1 sm:flex-none"
           >
             Cancel
           </button>
@@ -322,7 +323,7 @@ export function CsvImportModal({ isOpen, onClose, onSuccess }: CsvImportModalPro
             type="button"
             onClick={handleExecuteImport}
             disabled={isProcessing || parsedRows.length === 0 || !adminPassword.trim()}
-            className="btn-3d-primary h-8 px-4 rounded-lg text-xs font-medium cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+            className="btn-3d-primary h-11 sm:h-8 px-4 rounded-lg text-xs font-medium cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50 flex-1 sm:flex-none"
           >
             {isProcessing ? (
               <>
