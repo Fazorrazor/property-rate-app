@@ -73,4 +73,11 @@ For every UI format, update, addition, or component created in both the Citizen 
 - **Contextual Economy & Surgical Precision**: Maintain architectural continuity across sessions. Do not patch bugs by blindly piling new functions or layers on top of old ones. Always simplify, prune, and consolidate existing logic instead of accumulating dead code.
 - **Dead Code Purging**: Proactively remove orphaned variables, unused functions, obsolete state parameters, and redundant wrapper abstractions on every modification.
 
+## HYDRATION, PERCEIVED PERFORMANCE & ASYNCHRONOUS UI ARCHITECTURE
+- **Hydration / Partial Hydration**: Server-rendered HTML must be brought to life on the client side without layout shifts or client flashes, mapping background data states and event listeners cleanly to pre-rendered markup. Client interactivity must be surgically isolated to focused client components wrapped by Server Components.
+- **Perceived Performance**: Manage wait times through immediate, continuous visual feedback (<100ms / Doherty Threshold). Never leave the user guessing whether an action was received; use responsive spinners, progress indicators, or skeleton placeholders to make asynchronous latency feel instant.
+- **Loading State Management**: Programmatically track distinct asynchronous lifecycle phases (`idle`, `pending`, `success`, `error`). The interface must dynamically shift between states—locking form inputs during transmission, rendering contextual operation feedback, and preventing duplicate submissions.
+- **Optimistic UI Updates**: Instantly reflect user intent in the interface before the server completes processing. In destructive or navigation actions (e.g. Sign Out, Payment Posting, Bill Rollout), immediately show optimistic progress and lock controls to reassure the user on Frame 1.
+
+
 

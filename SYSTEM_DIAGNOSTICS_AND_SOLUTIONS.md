@@ -13,6 +13,7 @@ This document serves as an engineering audit of faults identified within the **M
 6. [Defect 6: Search Clear Restoration Bug & Anti-AI Code Bloat / YAGNI Governance](#defect-6-search-clear-restoration-bug--anti-ai-code-bloat--yagni-governance)
 7. [Defect 7: In-App SMS Dispatch Mode Control (Live vs Test Simulation) & Settings Workspace](#defect-7-in-app-sms-dispatch-mode-control-live-vs-test-simulation--settings-workspace)
 8. [Defect 8: WCAG 2.1 AA Accessibility, Color Contrast Compliance & React 19 Keystroke Concurrency](#defect-8-wcag-21-aa-accessibility-color-contrast-compliance--react-19-keystroke-concurrency)
+9. [Defect 9: Municipal Portal Auth Hardening, SSR Pre-Auth Guards & Asynchronous Perceived Performance](#defect-9-municipal-portal-auth-hardening-ssr-pre-auth-guards--asynchronous-perceived-performance)
 
 ---
 
@@ -267,3 +268,48 @@ Ad-hoc styling introduced rounded pill badges (`rounded-full bg-green-100 text-g
    - Resolved temporal dead zone / react-hooks immutability warning in `receipts/verify/page.tsx` by declaring `handleVerify` prior to `useEffect`.
    - Converted empty interfaces to type aliases in `Input.tsx` and `Label.tsx` to satisfy `@typescript-eslint/no-empty-object-type`.
 
+---
+
+## Defect 9: Municipal Portal Auth Hardening, SSR Pre-Auth Guards & Asynchronous Perceived Performance
+
+### Symptoms
+1. **Publicly Exposed Administrative Credentials**:
+   The admin authentication screen (`/login`) printed default credentials directly on the card (`Phone: 0000000000 | Password: admin123`), allowing any unauthorized visitor with the URL to access the municipal property registry.
+2. **Session Verification Backdoor**:
+   `verifyAdminSession()` in `actions.ts` contained a dev fallback that automatically fetched and returned the first administrative user in the database whenever `admin_session` cookie was missing, effectively bypassing login guards.
+3. **Frozen Form Submission & Missing Feedback (Doherty Threshold Failure)**:
+   Submitting the login form yielded zero immediate visual feedback. The form inputs remained editable and the button gave no loading indicator for hundreds of milliseconds, leaving users unsure whether the authentication request was acknowledged.
+4. **Unresponsive Sign-Out Action**:
+   Clicking the "Sign Out" button in the admin sidebar froze the interface without a spinner or status indicator until the server-action cookie deletion completed, confusing administrators.
+5. **Lack of Server-Side Rendering (SSR) & Partial Hydration**:
+   The entire `/login` page was marked `'use client'`. Authenticated administrators visiting `/login` suffered from a visible flash of the login form before a client-side `useEffect` or button interaction could redirect them to the dashboard.
+
+### Root Cause Analysis
+1. **Hardcoded Demo Footers**:
+   Legacy demonstration markup in `login/page.tsx` was never stripped before production deployment.
+2. **Permissive Authentication Fallbacks**:
+   `verifyAdminSession()` had development-time auto-login logic left unremoved, compromising enterprise data isolation.
+3. **Absence of UI Loading State Machines**:
+   The client lacked an explicit asynchronous state machine (`idle` | `submitting` | `success` | `error`), failing the Doherty Threshold (<100ms response requirement).
+4. **Synchronous Server Action Invocation**:
+   Sidebar sign-out executed an un-indicated `await adminLogout()` without optimistic state transition or locked interactive elements.
+
+### Architectural Solution
+1. **Server-Side Rendering (SSR) Pre-Auth Guard**:
+   Converted `/login/page.tsx` to an async Server Component. Before serving any HTML, it inspects cookies and runs `verifyAdminSession()`. If an authenticated session exists, it issues an immediate server-side `redirect('/')`, eliminating client-side flash of unauthenticated content.
+2. **Partial Hydration via Isolated Client Island (`AdminLoginForm.tsx`)**:
+   Encapsulated interactive state (password reveal toggle, input values, submit handler) inside `AdminLoginForm.tsx` (`'use client'`). The outer municipal console branding, legal notices, and layout remain static server-rendered markup.
+3. **Perceived Performance & Asynchronous Loading State Management**:
+   - Instant lock (<100ms) disabling inputs and primary action button upon submission.
+   - Dynamic status transitions: `submitting` displays `<Loader2 className="animate-spin" /> Verifying Municipal Credentials...`.
+   - `success` displays `<CheckCircle2 /> Access Granted • Redirecting...` before executing seamless client transition.
+   - Human-readable contextual error alerts adhering to Zero-Pill minimalist typography (left border accent, zero capsule containers).
+4. **Hardened Session Security & Credential Purge**:
+   - Stripped all hardcoded demo credentials from the DOM and codebase.
+   - Sanitized phone input (`cleanPhone = phoneNumber.trim().replace(/\s+/g, '')`).
+   - Sealed `verifyAdminSession()` to strictly return `null` if no valid session cookie exists.
+   - Added `rememberMe` option granting extended 7-day municipal terminal session vs. standard 24-hour expiration.
+5. **Optimistic & Indicated Sign-Out Flow**:
+   Updated the admin sidebar sign-out button with `isLoggingOut` state management, immediately locking the button, showing `<Loader2 className="animate-spin" /> Signing out...`, executing `adminLogout()`, and redirecting cleanly.
+6. **Full Alignment with Architectural Governance (`AGENTS.md`)**:
+   Codified Hydration / Partial Hydration, Perceived Performance, Loading State Management, and Optimistic UI Updates into workspace guidelines.

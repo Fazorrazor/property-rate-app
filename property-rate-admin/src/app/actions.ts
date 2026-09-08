@@ -160,75 +160,44 @@ export async function verifyAdminSession() {
   const session = cookieStore.get('admin_session');
 
   if (!session?.value) {
-    let demoAdmin = await prisma.user.findUnique({ where: { phoneNumber: '0000000000' } });
-    if (!demoAdmin) {
-      try {
-        demoAdmin = await prisma.user.create({
-          data: {
-            phoneNumber: '0000000000',
-            name: 'Municipal Administrator',
-            role: 'ADMIN',
-            passwordHash: 'admin123',
-            isVerified: true,
-          }
-        });
-      } catch (e) {
-        demoAdmin = { id: 'admin_demo_id', phoneNumber: '0000000000', name: 'Municipal Administrator', role: 'ADMIN' } as any;
-      }
-    }
-    return demoAdmin;
+    return null;
   }
   
-  let admin = await prisma.user.findUnique({
+  const admin = await prisma.user.findUnique({
     where: { id: session.value }
   });
 
-  if (!admin) {
-    admin = await prisma.user.findUnique({ where: { phoneNumber: '0000000000' } });
-  }
-
   if (!admin || (admin.role !== 'ADMIN' && admin.role !== 'SUPER_ADMIN')) {
-    return { id: session.value, phoneNumber: '0000000000', name: 'Municipal Administrator', role: 'ADMIN' } as any;
+    return null;
   }
 
   return admin;
 }
 
-export async function adminLogin(phoneNumber: string, passwordHash: string) {
+export async function adminLogin(phoneNumber: string, passwordHash: string, rememberMe: boolean = false) {
   try {
-    let admin = await prisma.user.findUnique({
-      where: { phoneNumber }
+    const cleanPhone = phoneNumber.trim().replace(/\s+/g, '');
+    const admin = await prisma.user.findUnique({
+      where: { phoneNumber: cleanPhone }
     });
 
-    // Auto-seed demo admin for testing purposes
-    if (!admin && phoneNumber === '0000000000' && passwordHash === 'admin123') {
-      admin = await prisma.user.create({
-        data: {
-          phoneNumber: '0000000000',
-          name: 'Demo Admin',
-          role: 'ADMIN',
-          passwordHash: 'admin123',
-          isVerified: true
-        }
-      });
-    }
-
     if (!admin || admin.passwordHash !== passwordHash || (admin.role !== 'ADMIN' && admin.role !== 'SUPER_ADMIN')) {
-      return { success: false, error: 'Invalid credentials or unauthorized role.' };
+      return { success: false, error: 'Invalid municipal phone number or security authorization password.' };
     }
 
     const cookieStore = await cookies();
     cookieStore.set('admin_session', admin.id, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      maxAge: 60 * 60 * 24, // 1 day
-      path: '/'
+      maxAge: rememberMe ? 60 * 60 * 24 * 7 : 60 * 60 * 24, // 7 days or 24 hours
+      path: '/',
+      sameSite: 'lax'
     });
 
     return { success: true };
   } catch (error) {
     console.error('Login error:', error);
-    return { success: false, error: 'Authentication failed.' };
+    return { success: false, error: 'Authentication gateway unavailable. Please try again.' };
   }
 }
 

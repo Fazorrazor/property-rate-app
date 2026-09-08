@@ -180,6 +180,7 @@ export default function AdminDashboardPage() {
   const [municipalityFilter, setMunicipalityFilter] = useState("ALL");
   const [classificationFilter, setClassificationFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "PAID" | "UNPAID">("ALL");
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   // React 19 Deferred Search Queries for <16ms Non-Blocking Keystrokes
   const deferredSearchQuery = useDeferredValue(searchQuery);
@@ -1055,12 +1056,26 @@ export default function AdminDashboardPage() {
           </div>
           <button
             type="button"
+            disabled={isLoggingOut}
             onClick={async () => {
-              await adminLogout();
+              setIsLoggingOut(true);
+              try {
+                await adminLogout();
+              } finally {
+                window.location.href = '/login';
+              }
             }}
-            className="w-full py-1.5 text-xs font-medium text-[#717171] hover:text-[#2C2C2C] hover:bg-[#F1F3F4] rounded-lg transition-colors focus:outline-none text-left px-3 cursor-pointer"
+            aria-label="Sign out of administration portal"
+            className="w-full py-1.5 text-xs font-medium text-[#717171] hover:text-[#2C2C2C] hover:bg-[#F1F3F4] rounded-lg transition-colors focus:outline-none text-left px-3 cursor-pointer flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            Sign Out
+            {isLoggingOut ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-[#612D53]" />
+                <span>Signing out...</span>
+              </>
+            ) : (
+              <span>Sign Out</span>
+            )}
           </button>
         </div>
       </aside>

@@ -1,120 +1,80 @@
-'use client';
+import { redirect } from 'next/navigation';
+import { verifyAdminSession } from '../actions';
+import AdminLoginForm from '@/components/AdminLoginForm';
+import { Shield, Building2, Lock } from 'lucide-react';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { adminLogin } from '../actions';
-import { Lock, Phone } from 'lucide-react';
+export const metadata = {
+  title: 'Municipal Console Authorization | Krowor Municipal Assembly',
+  description: 'Official revenue mobilization and cadastral administration gateway for authorized municipal officers.',
+};
 
-export default function AdminLoginPage() {
-  const router = useRouter();
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [password, setPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError('');
-
-    try {
-      const res = await adminLogin(phoneNumber, password);
-      if (res.success) {
-        router.push('/');
-      } else {
-        setError(res.error || 'Login failed');
-      }
-    } catch (err) {
-      setError('An unexpected error occurred');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+export default async function AdminLoginPage() {
+  // Server-Side Rendering (SSR) Pre-Auth Guard:
+  // If session is already authenticated, redirect to root dashboard immediately without client roundtrips
+  const session = await verifyAdminSession();
+  if (session) {
+    redirect('/');
+  }
 
   return (
-    <div className="min-h-screen bg-[#F6ECF2] flex flex-col justify-center py-12 sm:px-6 lg:px-8 font-sans">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-[#612D53]">
-          Municipal Admin Portal
-        </h2>
-        <p className="mt-2 text-center text-sm text-[#717171]">
-          Sign in to access the property rate registry
-        </p>
-      </div>
-
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow-md border border-[#DADCE0] sm:rounded-xl sm:px-10">
-          <form className="space-y-6" onSubmit={handleSubmit}>
-            {error && (
-              <div className="bg-[#FCE8E6] border border-[#FAD2CF] text-[#C5221F] px-4 py-3 rounded-md text-sm">
-                {error}
-              </div>
-            )}
-            <div>
-              <label htmlFor="phone" className="block text-sm font-medium text-[#2C2C2C]">
-                Phone Number
-              </label>
-              <div className="mt-1 relative rounded-md shadow-sm">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Phone className="h-4 w-4 text-[#717171]" />
-                </div>
-                <input
-                  id="phone"
-                  name="phone"
-                  type="tel"
-                  autoComplete="tel"
-                  required
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-2 border border-[#DADCE0] rounded-md focus:outline-none focus:ring-[#612D53] focus:border-[#612D53] sm:text-sm"
-                  placeholder="e.g. 0244123456"
-                />
-              </div>
+    <main className="min-h-screen bg-[#F6ECF2] flex flex-col justify-between py-10 px-4 sm:px-6 lg:px-8 font-sans">
+      {/* Top Municipal Crest & Identification */}
+      <div className="flex-1 flex flex-col justify-center">
+        <div className="w-full max-w-md mx-auto">
+          {/* Header & Emblem */}
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-14 h-14 bg-[#612D53] text-white shadow-sm mb-4 border border-[#4A2240]">
+              <Building2 className="w-7 h-7" />
             </div>
 
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-[#2C2C2C]">
-                Password
-              </label>
-              <div className="mt-1 relative rounded-md shadow-sm">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-4 w-4 text-[#717171]" />
-                </div>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-2 border border-[#DADCE0] rounded-md focus:outline-none focus:ring-[#612D53] focus:border-[#612D53] sm:text-sm"
-                  placeholder="••••••••"
-                />
-              </div>
+            <div className="space-y-1">
+              <p className="text-[11px] font-bold tracking-widest uppercase text-[#5F6368]">
+                Republic of Ghana
+              </p>
+              <h1 className="text-2xl font-bold tracking-tight text-[#2C2C2C]">
+                Krowor Municipal Assembly
+              </h1>
+              <p className="text-xs font-medium text-[#612D53]">
+                Rate Revenue & Cadastral Administration Console
+              </p>
+            </div>
+          </div>
+
+          {/* Master Authorization Card */}
+          <div className="bg-white border border-[#DADCE0] shadow-sm p-6 sm:p-8">
+            <div className="border-b border-[#F1F3F4] pb-4 mb-6">
+              <h2 className="text-base font-semibold text-[#2C2C2C] flex items-center gap-2">
+                <Shield className="w-4 h-4 text-[#612D53]" />
+                Municipal Officer Authorization
+              </h2>
+              <p className="mt-1 text-xs text-[#5F6368]">
+                Restricted portal. Provide authorized credentials to access municipal registries and fiscal ledgers.
+              </p>
             </div>
 
-            <div>
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="btn-3d-primary w-full h-11 rounded-xl font-semibold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isLoading ? (
-                  <span className="animate-pulse">Signing in...</span>
-                ) : (
-                  'Sign in to Dashboard'
-                )}
-              </button>
-            </div>
-            
-            <div className="text-center text-xs text-[#717171]">
-              <p>Demo Admin Credentials:</p>
-              <p>Phone: <strong>0000000000</strong> | Password: <strong>admin123</strong></p>
-            </div>
-          </form>
+            {/* Partial Hydration: Isolated Client Form */}
+            <AdminLoginForm />
+          </div>
+
+          {/* Legal and Security Governance Notice */}
+          <div className="mt-6 text-center space-y-2">
+            <p className="text-[11px] text-[#717171] flex items-center justify-center gap-1.5">
+              <Lock className="w-3.5 h-3.5 text-[#5F6368]" />
+              256-Bit TLS Municipal Session &bull; Local Governance Act, 2016 (Act 936)
+            </p>
+            <p className="text-[10px] text-[#9AA0A6] max-w-xs mx-auto leading-relaxed">
+              All terminal activities and record inquiries are continuously audited and committed to the municipal security ledger.
+            </p>
+          </div>
         </div>
       </div>
-    </div>
+
+      {/* Footer Branding Bar */}
+      <footer className="w-full max-w-md mx-auto pt-6 text-center border-t border-[#E8EAED]/80 mt-6">
+        <p className="text-[11px] text-[#717171]">
+          KKMA Directorate of Finance & Revenue Mobilization &copy; {new Date().getFullYear()}
+        </p>
+      </footer>
+    </main>
   );
 }
