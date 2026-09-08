@@ -272,9 +272,9 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
 
         {/* SECTION 2: ARKESEL GATEWAY CONFIGURATION */}
         <div className="bg-white border border-[#DADCE0] rounded-xl p-5 shadow-xs space-y-4">
-          <div className="flex items-center justify-between border-b border-[#F1F3F4] pb-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#F1F3F4] pb-3 gap-3">
             <div className="flex items-center gap-2">
-              <Key className="w-4 h-4 text-[#612D53]" />
+              <Key className="w-4 h-4 text-[#612D53] shrink-0" />
               <div>
                 <h2 className="text-sm font-semibold text-[#2C2C2C]">
                   Arkesel Carrier Route Credentials (Ghana)
@@ -286,9 +286,9 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
             </div>
 
             {/* Live Gateway Balance Indicator & Direct Payment Portal Link */}
-            <div className="text-right text-xs space-y-0.5">
+            <div className="text-left sm:text-right text-xs space-y-0.5">
               <span className="text-[#717171] block text-[10px]">Live Account Balance</span>
-              <div className="flex items-center justify-end gap-2">
+              <div className="flex flex-wrap items-center sm:justify-end gap-2">
                 <span className="font-semibold text-[#188038]">
                   {settings?.balanceInfo
                     ? `${settings.balanceInfo.smsBalance} SMS Credits • ${settings.balanceInfo.mainBalance.replace('GHS', 'GH₵')}`

@@ -26,6 +26,8 @@ import {
   EyeOff,
   UploadCloud,
   Settings,
+  Menu,
+  CreditCard,
 } from "lucide-react";
 import {
   getAdminOverview,
@@ -78,6 +80,16 @@ const SmsRolloutSimulator = dynamic(
 
 type NavTab = "REGISTRY" | "RATEPAYERS" | "SMS_CENTER" | "DEFAULTERS" | "TREASURY" | "AUDIT_LOGS" | "SETTINGS";
 
+const NAV_TABS: { key: NavTab; label: string; shortLabel: string; icon: any }[] = [
+  { key: "REGISTRY", label: "Cadastre & Property Roll", shortLabel: "Registry", icon: Building2 },
+  { key: "RATEPAYERS", label: "Ratepayers & Citizen Dossier", shortLabel: "Ratepayers", icon: Users },
+  { key: "SMS_CENTER", label: "SMS Bill Rollout Engine", shortLabel: "SMS Engine", icon: MessageSquare },
+  { key: "DEFAULTERS", label: "Statutory Defaulters", shortLabel: "Defaulters", icon: ShieldAlert },
+  { key: "TREASURY", label: "Treasury Reconciliation", shortLabel: "Treasury", icon: Landmark },
+  { key: "AUDIT_LOGS", label: "System Audit Trail", shortLabel: "Audit Logs", icon: ShieldCheck },
+  { key: "SETTINGS", label: "Settings & SMS Gateway", shortLabel: "Settings", icon: Settings },
+];
+
 export default function AdminDashboardPage() {
   const [data, setData] = useState<AdminDashboardData | null>(null);
   const [propertiesList, setPropertiesList] = useState<AdminProperty[]>([]);
@@ -118,6 +130,9 @@ export default function AdminDashboardPage() {
 
   // Bulk CSV Cadastre Importer State
   const [showCsvImportModal, setShowCsvImportModal] = useState(false);
+
+  // Mobile Drawer Navigation State
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Dedicated Municipal Admin State
   const [currentAdmin, setCurrentAdmin] = useState<{ id: string; username: string; name: string; role: string } | null>(null);
@@ -1015,9 +1030,134 @@ export default function AdminDashboardPage() {
 
   return (
 
-    <div className="h-screen w-screen overflow-hidden bg-[#F6ECF2] text-[#2C2C2C] flex flex-row font-sans">
-      {/* Sidebar Navigation */}
-      <aside className="w-72 bg-white border-r border-[#DADCE0] shadow-sm flex flex-col shrink-0 h-screen z-30 font-sans">
+    <div className="min-h-screen w-full bg-[#F6ECF2] text-[#2C2C2C] flex flex-col lg:flex-row font-sans relative">
+      {/* Mobile Slide-Over Navigation Drawer */}
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="fixed inset-0 bg-black/40 z-40 lg:hidden backdrop-blur-xs"
+            />
+            <motion.aside
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ type: "spring", damping: 28, stiffness: 300 }}
+              className="fixed inset-y-0 left-0 w-4/5 max-w-xs bg-white border-r border-[#DADCE0] shadow-xl z-50 flex flex-col font-sans lg:hidden"
+            >
+              {/* Drawer Header */}
+              <div className="h-13 flex items-center px-4 border-b border-[#DADCE0] justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-base font-bold tracking-tight text-[#612D53]">KKMA Revenue</span>
+                  <span className="text-[10px] text-[#717171] uppercase font-mono font-medium">Console</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="p-2 text-[#717171] hover:text-[#2C2C2C] rounded-lg cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center"
+                  aria-label="Close menu"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Drawer Municipality Selector */}
+              <div className="p-3 border-b border-[#F1F3F4] bg-[#F8F9FA]">
+                <label className="block text-[10px] font-semibold uppercase tracking-wider text-[#717171] mb-1 font-mono">
+                  Administrative Assembly
+                </label>
+                <select
+                  value={municipalityFilter}
+                  onChange={(e) => setMunicipalityFilter(e.target.value)}
+                  aria-label="Select Municipal Assembly"
+                  className="w-full text-xs font-semibold text-[#2C2C2C] bg-white border border-[#DADCE0] rounded-md py-1.5 px-2 focus:outline-none focus:border-[#612D53]"
+                >
+                  <option value="ALL">National Overview (All Assemblies)</option>
+                  <option value="Kpone-Katamanso (KKMA)">Kpone-Katamanso (KKMA)</option>
+                  <option value="Tema Metropolitan (TMA)">Tema Metropolitan (TMA)</option>
+                  <option value="Accra Metropolitan (AMA)">Accra Metropolitan (AMA)</option>
+                  <option value="Ashaiman Municipal (ASHMA)">Ashaiman Municipal (ASHMA)</option>
+                  <option value="Ga East Municipal (GEMA)">Ga East Municipal (GEMA)</option>
+                </select>
+              </div>
+
+              {/* Module Navigation Links */}
+              <nav className="flex flex-col flex-1 px-3 py-3 gap-1 overflow-y-auto" aria-label="Mobile Navigation">
+                <div className="px-3 pt-1 pb-1.5 text-[10px] font-semibold tracking-wider text-[#717171] uppercase font-mono">
+                  Revenue Modules
+                </div>
+                {NAV_TABS.map((tab) => {
+                  const isActive = activeTab === tab.key;
+                  const Icon = tab.icon;
+                  return (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      onClick={() => {
+                        handleTabChange(tab.key);
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className={`relative px-3 py-2.5 text-left text-xs font-medium transition-colors cursor-pointer rounded-lg flex items-center justify-between min-h-[44px] ${
+                        isActive
+                          ? "bg-[#612D53]/8 text-[#612D53] font-semibold"
+                          : "text-[#5F6368] hover:text-[#202124] hover:bg-[#F8F9FA]"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0 pr-1">
+                        <Icon className={`w-4 h-4 shrink-0 ${isActive ? "text-[#612D53]" : "text-[#717171]"}`} />
+                        <span className="truncate">{tab.label}</span>
+                      </div>
+                      {isActive && (
+                        <span className="text-xs font-bold text-[#612D53]">&bull;</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </nav>
+
+              {/* Drawer Footer with Officer & Sign Out */}
+              <div className="p-3 border-t border-[#DADCE0] shrink-0 bg-[#F8F9FA]">
+                <div className="px-3 py-1.5 text-xs mb-1">
+                  <span className="text-[#717171] block text-[10px]">Logged in Administrator</span>
+                  <span className="font-semibold text-[#2C2C2C] truncate block">
+                    {currentAdmin?.username || currentAdmin?.name || "Heinz"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  disabled={isLoggingOut}
+                  onClick={async () => {
+                    setIsLoggingOut(true);
+                    try {
+                      await adminLogout();
+                    } finally {
+                      window.location.href = '/login';
+                    }
+                  }}
+                  aria-label="Sign out of administration portal"
+                  className="w-full py-2 text-xs font-medium text-[#717171] hover:text-[#2C2C2C] hover:bg-[#F1F3F4] rounded-lg transition-colors text-left px-3 cursor-pointer flex items-center gap-2 min-h-[44px]"
+                >
+                  {isLoggingOut ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-[#612D53]" />
+                      <span>Signing out...</span>
+                    </>
+                  ) : (
+                    <span>Sign Out</span>
+                  )}
+                </button>
+              </div>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Desktop Sidebar Navigation */}
+      <aside className="hidden lg:flex w-72 bg-white border-r border-[#DADCE0] shadow-sm flex-col shrink-0 h-screen z-30 font-sans sticky top-0">
         <div className="h-13 flex items-center px-6 border-b border-[#DADCE0] shrink-0 justify-between">
           <div className="flex items-center gap-2">
             <span className="text-base font-bold tracking-tight text-[#612D53] select-none">KKMA Revenue</span>
@@ -1030,15 +1170,7 @@ export default function AdminDashboardPage() {
           <div className="px-3 pt-1 pb-1.5 text-[10px] font-semibold tracking-wider text-[#717171] uppercase font-mono select-none">
             Revenue Modules
           </div>
-          {([
-            { key: "REGISTRY", label: "Cadastre & Property Roll", icon: Building2 },
-            { key: "RATEPAYERS", label: "Ratepayers & Citizen Dossier", icon: Users },
-            { key: "SMS_CENTER", label: "SMS Bill Rollout Engine", icon: MessageSquare },
-            { key: "DEFAULTERS", label: "Statutory Defaulters", icon: ShieldAlert },
-            { key: "TREASURY", label: "Treasury Reconciliation", icon: Landmark },
-            { key: "AUDIT_LOGS", label: "System Audit Trail", icon: ShieldCheck },
-            { key: "SETTINGS", label: "Settings & SMS Gateway", icon: Settings },
-          ] as { key: NavTab; label: string; icon: any }[]).map((tab) => {
+          {NAV_TABS.map((tab) => {
             const isActive = activeTab === tab.key;
             const Icon = tab.icon;
             return (
@@ -1103,9 +1235,46 @@ export default function AdminDashboardPage() {
       </aside>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col h-screen min-w-0 overflow-hidden">
-        {/* Top Header */}
-        <header className="bg-white border-b border-[#DADCE0] shadow-sm shrink-0 h-13 font-sans">
+      <div className="flex-1 flex flex-col min-w-0 min-h-screen lg:h-screen lg:overflow-hidden">
+        {/* Mobile App Header */}
+        <header className="bg-white border-b border-[#DADCE0] shadow-xs px-3 sm:px-4 h-13 flex items-center justify-between shrink-0 lg:hidden font-sans z-20 sticky top-0">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="p-2 -ml-1 text-[#5F6368] hover:text-[#202124] rounded-lg cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center focus:outline-none"
+              aria-label="Open navigation menu"
+            >
+              <Menu className="w-5 h-5 text-[#2C2C2C]" />
+            </button>
+            <div className="flex flex-col">
+              <span className="text-xs font-bold text-[#612D53] tracking-tight">KKMA Revenue</span>
+              <span className="text-[10px] text-[#717171] font-medium leading-none">
+                {NAV_TABS.find(t => t.key === activeTab)?.shortLabel || "Console"}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-semibold text-[#2C2C2C] hidden sm:inline-block">
+              {currentAdmin?.username || "Heinz"}
+            </span>
+            {activeTab === "REGISTRY" && (
+              <button
+                type="button"
+                onClick={() => setShowBatchModal(true)}
+                className="btn-3d-secondary h-8 px-2.5 rounded-md text-[#612D53] font-medium text-[11px] flex items-center gap-1 cursor-pointer focus:outline-none"
+                title="Run Annual Billing Batch"
+              >
+                <RefreshCw className="w-3 h-3 text-[#612D53]" />
+                <span className="hidden sm:inline">Batch Rollout</span>
+              </button>
+            )}
+          </div>
+        </header>
+
+        {/* Desktop Top Header */}
+        <header className="hidden lg:flex bg-white border-b border-[#DADCE0] shadow-sm shrink-0 h-13 font-sans">
           <div className="w-full px-6 h-full flex items-center justify-between gap-4">
             <div>
               <div className="flex items-center gap-2">
@@ -1145,17 +1314,17 @@ export default function AdminDashboardPage() {
         </header>
 
         {/* Main Dashboard Workspace (Viewport Fitted & Full-Bleed for SMS Engine & Settings) */}
-        <main className={`flex-1 min-h-0 w-full flex flex-col overflow-hidden ${
+        <main className={`flex-1 min-h-0 w-full flex flex-col overflow-y-auto pb-16 lg:pb-3 ${
           activeTab === "SMS_CENTER" || activeTab === "SETTINGS"
             ? "p-0 max-w-none"
-            : "px-6 py-3 max-w-7xl mx-auto gap-3"
+            : "px-3 sm:px-6 py-2.5 sm:py-3 max-w-7xl mx-auto gap-2.5 sm:gap-3"
         }`}>
           {/* Top KPI Cards (Zero Pills - High Density Compact Single Row) */}
           {activeTab === "REGISTRY" && (
             <section aria-label="Executive KPIs" className="shrink-0">
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
                 {/* 1. Total Assessed Demand */}
-                <div className="px-4 py-2.5 bg-white border border-[#DADCE0] rounded-xl hover:border-[#BDC1C6] transition-colors flex items-center justify-between shadow-xs">
+                <div className="px-3.5 sm:px-4 py-2 sm:py-2.5 bg-white border border-[#DADCE0] rounded-xl hover:border-[#BDC1C6] transition-colors flex items-center justify-between shadow-xs">
                   <div className="min-w-0 pr-2">
                     <span className="text-[11px] text-[#717171] font-medium block truncate">Total Assessed Demand</span>
                     <span className="text-base xl:text-lg font-bold text-[#2C2C2C] tracking-tight whitespace-nowrap tabular-nums block">{metrics.totalBilledFormatted}</span>
@@ -1167,7 +1336,7 @@ export default function AdminDashboardPage() {
                 </div>
 
                 {/* 2. Revenue Collected */}
-                <div className="px-4 py-2.5 bg-white border border-[#DADCE0] rounded-xl hover:border-[#BDC1C6] transition-colors flex items-center justify-between shadow-xs">
+                <div className="px-3.5 sm:px-4 py-2 sm:py-2.5 bg-white border border-[#DADCE0] rounded-xl hover:border-[#BDC1C6] transition-colors flex items-center justify-between shadow-xs">
                   <div className="min-w-0 pr-2">
                     <span className="text-[11px] text-[#717171] font-medium block truncate">Revenue Collected</span>
                     <span className="text-base xl:text-lg font-bold text-[#188038] tracking-tight whitespace-nowrap tabular-nums block">{metrics.totalCollectedFormatted}</span>
@@ -1179,7 +1348,7 @@ export default function AdminDashboardPage() {
                 </div>
 
                 {/* 3. Cumulative Arrears */}
-                <div className="px-4 py-2.5 bg-white border border-[#DADCE0] rounded-xl hover:border-[#BDC1C6] transition-colors flex items-center justify-between shadow-xs">
+                <div className="px-3.5 sm:px-4 py-2 sm:py-2.5 bg-white border border-[#DADCE0] rounded-xl hover:border-[#BDC1C6] transition-colors flex items-center justify-between shadow-xs">
                   <div className="min-w-0 pr-2">
                     <span className="text-[11px] text-[#717171] font-medium block truncate">Cumulative Arrears</span>
                     <span className="text-base xl:text-lg font-bold text-[#D93025] tracking-tight whitespace-nowrap tabular-nums block">{metrics.totalArrearsFormatted}</span>
@@ -1191,7 +1360,7 @@ export default function AdminDashboardPage() {
                 </div>
 
                 {/* 4. Statutory Defaulters */}
-                <div className="px-4 py-2.5 bg-white border border-[#DADCE0] rounded-xl hover:border-[#BDC1C6] transition-colors flex items-center justify-between shadow-xs">
+                <div className="px-3.5 sm:px-4 py-2 sm:py-2.5 bg-white border border-[#DADCE0] rounded-xl hover:border-[#BDC1C6] transition-colors flex items-center justify-between shadow-xs">
                   <div className="min-w-0 pr-2">
                     <span className="text-[11px] text-[#717171] font-medium block truncate">Statutory Defaulters</span>
                     <span className="text-base xl:text-lg font-bold text-[#2C2C2C] tracking-tight whitespace-nowrap tabular-nums block">{metrics.defaultersCount.toLocaleString()}</span>
@@ -1391,7 +1560,8 @@ export default function AdminDashboardPage() {
                 onScroll={handleTableScroll}
                 className="w-full flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
               >
-                <table className="table-fixed w-full text-left text-xs border-collapse">
+                {/* Desktop Cadastre Table (>= 768px) */}
+                <table className="hidden md:table table-fixed w-full text-left text-xs border-collapse">
                   <thead className="bg-[#F8F9FA] border-b border-[#DADCE0] text-[#717171] font-semibold text-[11px] sticky top-0 z-10 shadow-xs">
                     <tr>
                       <th className="py-2.5 px-3 text-center w-8 bg-[#F8F9FA]">
@@ -1490,6 +1660,138 @@ export default function AdminDashboardPage() {
                     )}
                   </tbody>
                 </table>
+
+                {/* Mobile Cadastre Cards View (< 768px) */}
+                <div className="block md:hidden divide-y divide-[#E8EAED] bg-white">
+                  {filteredProperties.length === 0 ? (
+                    <div className="py-8 text-center text-[#717171] font-normal text-xs px-4">
+                      No property records found matching current criteria.
+                    </div>
+                  ) : (
+                    filteredProperties.map((prop) => {
+                      const isPaid = prop.status === "PAID";
+                      const isSelected = selectedIds.includes(prop.accountNumber);
+
+                      return (
+                        <div
+                          key={`mobile-prop-${prop.id}`}
+                          onClick={() => setSelectedAccount(prop)}
+                          className={`p-3.5 space-y-2.5 transition-colors cursor-pointer ${
+                            selectedAccount?.id === prop.id ? "bg-[#F6ECF2]" : "hover:bg-[#F8F9FA]"
+                          }`}
+                        >
+                          {/* Top Row: Select checkbox, Account #, Status (Zero Pills) */}
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2.5 min-w-0" onClick={(e) => e.stopPropagation()}>
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => toggleSelectRow(prop.accountNumber)}
+                                aria-label={`Select property ${prop.accountNumber}`}
+                                className="rounded border-[#DADCE0] text-[#612D53] focus:ring-0 cursor-pointer w-4 h-4"
+                              />
+                              <span className="font-semibold text-xs text-[#2C2C2C] font-mono truncate">
+                                {prop.accountNumber}
+                              </span>
+                            </div>
+
+                            <span
+                              className={`text-xs font-semibold shrink-0 ${
+                                isPaid
+                                  ? "text-[#188038]"
+                                  : prop.status === "PARTIALLY_PAID"
+                                  ? "text-[#B45309]"
+                                  : "text-[#D93025]"
+                              }`}
+                            >
+                              &bull; {isPaid ? "Paid" : prop.status === "PARTIALLY_PAID" ? "Partial" : "Unpaid"}
+                            </span>
+                          </div>
+
+                          {/* Middle Row: Owner & Cadastre Particulars */}
+                          <div className="text-xs space-y-0.5">
+                            <div className="flex items-center justify-between text-[#2C2C2C] font-medium">
+                              <span className="truncate">{prop.ownerName}</span>
+                              <span className="text-[11px] text-[#717171] font-mono shrink-0 ml-2">{prop.ownerPhone}</span>
+                            </div>
+                            <div className="text-[11px] text-[#717171] flex items-center justify-between gap-2">
+                              <span className="font-mono text-[#5F6368] truncate">{prop.ownerDigitalAddress}</span>
+                              <span className="truncate shrink-0 text-[#717171]">{prop.propertyClassification}</span>
+                            </div>
+                          </div>
+
+                          {/* Financial Breakdown Row */}
+                          <div className="pt-2 border-t border-[#F1F3F4] flex items-center justify-between">
+                            <div className="text-[11px] text-[#717171]">
+                              <span>Valuation: </span>
+                              <span className="font-medium text-[#2C2C2C] tabular-nums">{prop.rateableValueFormatted}</span>
+                              {prop.arrears > 0 && (
+                                <span className="text-[#D93025] ml-1.5 font-medium tabular-nums">
+                                  (Arr: {prop.arrearsFormatted})
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="text-right">
+                              <span className="text-xs text-[#717171] mr-1">Due:</span>
+                              <span className="text-sm font-bold text-[#2C2C2C] tabular-nums">
+                                {prop.totalAmountDueFormatted}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Action Bar (Min 44px Touch Targets) */}
+                          <div className="pt-2 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedAccount(prop)}
+                              className="btn-3d-secondary flex-1 h-11 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 cursor-pointer"
+                            >
+                              <Eye className="w-3.5 h-3.5 text-[#717171]" />
+                              <span>Details</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedAccount(prop);
+                                setShowPaymentModal(true);
+                              }}
+                              className="btn-3d-secondary flex-1 h-11 rounded-lg text-xs font-semibold text-[#188038] border-[#188038]/30 flex items-center justify-center gap-1.5 cursor-pointer"
+                            >
+                              <CreditCard className="w-3.5 h-3.5 text-[#188038]" />
+                              <span>Record Pay</span>
+                            </button>
+
+                            {prop.status !== "PAID" && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSmsAuthTargetAccounts([prop]);
+                                  setSmsAuthPassword("");
+                                  setSmsAuthError(null);
+                                  setShowSmsAuthModal(true);
+                                }}
+                                disabled={isProcessing}
+                                className="btn-3d-primary px-3.5 h-11 rounded-lg text-xs font-medium flex items-center justify-center gap-1 cursor-pointer shrink-0"
+                                title="Send SMS Demand Notice"
+                              >
+                                <Send className="w-3.5 h-3.5" />
+                                <span>SMS</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+
+                  {isLoadingMore && (
+                    <div className="py-3 text-center bg-[#F8F9FA]/40 flex items-center justify-center">
+                      <Loader2 className="w-4 h-4 animate-spin text-[#612D53]" />
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Static Grounded Table Status Bar */}
@@ -1556,7 +1858,8 @@ export default function AdminDashboardPage() {
                 onScroll={handleRatepayerTableScroll}
                 className={`w-full flex-1 min-h-0 overflow-y-auto overflow-x-hidden transition-opacity duration-200 ${isSearchingRatepayers ? "opacity-60" : "opacity-100"}`}
               >
-                <table className="table-fixed w-full text-left text-xs border-collapse">
+                {/* Desktop Ratepayers Table (>= 768px) */}
+                <table className="hidden md:table table-fixed w-full text-left text-xs border-collapse">
                   <thead className="bg-[#F8F9FA] border-b border-[#DADCE0] text-[#717171] font-semibold text-[11px] sticky top-0 z-10 shadow-xs">
                     <tr>
                       <th className="py-2.5 px-3 w-[24%] bg-[#F8F9FA]">Ratepayer Name &amp; Role</th>
@@ -1645,6 +1948,89 @@ export default function AdminDashboardPage() {
                     )}
                   </tbody>
                 </table>
+
+                {/* Mobile Ratepayer Cards (< 768px) */}
+                <div className="block md:hidden divide-y divide-[#E8EAED] bg-white">
+                  {filteredRatepayers.length === 0 ? (
+                    <div className="py-8 text-center text-[#717171] font-normal italic text-xs px-4">
+                      No ratepayer records found matching query.
+                    </div>
+                  ) : (
+                    filteredRatepayers.map((ratepayer) => (
+                      <div
+                        key={`mobile-ratepayer-${ratepayer.id}`}
+                        onClick={() => handleOpenRatepayerDossier(ratepayer.id, ratepayer)}
+                        className="p-3.5 space-y-2.5 hover:bg-[#F8F9FA] transition-colors cursor-pointer"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 pr-2">
+                            <span className="font-semibold text-xs text-[#2C2C2C] block truncate">
+                              {ratepayer.name}
+                            </span>
+                            <span className="text-[11px] text-[#717171] block font-mono mt-0.5">
+                              {ratepayer.phoneNumber}
+                            </span>
+                          </div>
+
+                          <span
+                            className={`text-xs font-semibold shrink-0 ${
+                              ratepayer.status === "SETTLED"
+                                ? "text-[#188038]"
+                                : ratepayer.status === "DEFAULTER"
+                                ? "text-[#D93025]"
+                                : ratepayer.status === "OUTSTANDING"
+                                ? "text-[#B45309]"
+                                : "text-[#717171]"
+                            }`}
+                          >
+                            &bull; {ratepayer.status === "SETTLED"
+                              ? "Settled"
+                              : ratepayer.status === "DEFAULTER"
+                              ? "Defaulter"
+                              : ratepayer.status === "OUTSTANDING"
+                              ? "Balance Due"
+                              : "Unlinked"}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between text-xs text-[#717171] pt-1">
+                          <span>
+                            {ratepayer.propertyCount} {ratepayer.propertyCount === 1 ? "parcel" : "parcels"} &bull; Val: {ratepayer.totalValuationFormatted}
+                          </span>
+                          <span className="font-bold text-xs text-[#2C2C2C] tabular-nums">
+                            Due: {ratepayer.totalDueFormatted}
+                          </span>
+                        </div>
+
+                        {ratepayer.totalArrearsFormatted !== "GH₵ 0.00" && (
+                          <div className="text-[11px] text-[#D93025] font-medium text-right tabular-nums">
+                            Arrears: {ratepayer.totalArrearsFormatted}
+                          </div>
+                        )}
+
+                        <div className="pt-2 flex items-center justify-between" onClick={(e) => e.stopPropagation()}>
+                          <span className="text-[10px] text-[#717171]">
+                            Registered: {ratepayer.createdAtFormatted}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenRatepayerDossier(ratepayer.id, ratepayer)}
+                            className="btn-3d-secondary h-11 px-4 rounded-lg text-xs font-semibold text-[#612D53] flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <span>Open Dossier</span>
+                            <span>&rarr;</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+
+                  {isLoadingMoreRatepayers && (
+                    <div className="py-3 text-center bg-[#F8F9FA]/40 flex items-center justify-center">
+                      <Loader2 className="w-4 h-4 animate-spin text-[#612D53]" />
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Ratepayers Status Bar */}
@@ -1740,7 +2126,8 @@ export default function AdminDashboardPage() {
               </div>
 
               <div className="w-full flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
-                <table className="table-fixed w-full text-left text-xs border-collapse">
+                {/* Desktop Treasury Table (>= 768px) */}
+                <table className="hidden md:table table-fixed w-full text-left text-xs border-collapse">
                   <thead className="bg-[#F8F9FA] border-b border-[#DADCE0] text-[#717171] font-semibold text-[11px] sticky top-0 z-10 shadow-xs">
                     <tr>
                       <th className="py-2.5 px-3 w-[20%] bg-[#F8F9FA] whitespace-nowrap">Receipt Reference</th>
@@ -1785,6 +2172,57 @@ export default function AdminDashboardPage() {
                     )}
                   </tbody>
                 </table>
+
+                {/* Mobile Treasury Cards (< 768px) */}
+                <div className="block md:hidden divide-y divide-[#E8EAED] bg-white">
+                  {filteredTreasuryReceipts.length === 0 ? (
+                    <div className="py-8 text-center text-[#717171] italic font-normal text-xs px-4">
+                      No treasury receipts match your search query.
+                    </div>
+                  ) : (
+                    filteredTreasuryReceipts.map((receipt) => (
+                      <div
+                        key={`mobile-receipt-${receipt.id}`}
+                        className="p-3.5 space-y-2 hover:bg-[#F8F9FA] transition-colors"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-semibold text-xs text-[#2C2C2C] font-mono">
+                            {receipt.receiptNumber}
+                          </span>
+                          <span className="text-xs font-semibold text-[#188038]">
+                            &bull; Reconciled
+                          </span>
+                        </div>
+
+                        <div className="flex items-start justify-between text-xs gap-2">
+                          <div className="min-w-0">
+                            <span className="font-mono font-medium text-[#2C2C2C] block">
+                              {receipt.accountNumber}
+                            </span>
+                            {receipt.ownerName && (
+                              <span className="text-[11px] text-[#717171] block truncate">
+                                {receipt.ownerName}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-right shrink-0">
+                            <span className="text-sm font-bold text-[#188038] tabular-nums block">
+                              {receipt.amountFormatted}
+                            </span>
+                            <span className="text-[10px] text-[#717171] block">
+                              {receipt.paymentMethod}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="text-[10px] text-[#717171] pt-1 border-t border-[#F1F3F4] flex items-center justify-between">
+                          <span>Settlement Date</span>
+                          <span className="font-medium text-[#5F6368]">{receipt.datePaid}</span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
 
               {/* Treasury Status Bar */}
@@ -1894,7 +2332,8 @@ export default function AdminDashboardPage() {
                 ref={auditLogTableContainerRef}
                 className="w-full flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
               >
-                <table className="table-fixed w-full text-left text-xs border-collapse">
+                {/* Desktop Audit Trail Table (>= 768px) */}
+                <table className="hidden md:table table-fixed w-full text-left text-xs border-collapse">
                   <thead className="bg-[#F8F9FA] border-b border-[#DADCE0] text-[#717171] font-semibold text-[11px] sticky top-0 z-10 shadow-xs">
                     <tr>
                       <th className="py-2.5 px-3 w-[14%] bg-[#F8F9FA] whitespace-nowrap">Date &amp; Time</th>
@@ -1954,6 +2393,49 @@ export default function AdminDashboardPage() {
                     )}
                   </tbody>
                 </table>
+
+                {/* Mobile Audit Trail Cards (< 768px) */}
+                <div className="block md:hidden divide-y divide-[#E8EAED] bg-white font-sans">
+                  {filteredAuditLogs.length === 0 ? (
+                    <div className="py-12 text-center text-[#717171] italic text-xs px-4">
+                      {isLoadingAuditLogs ? "Loading system audit events..." : "No audit trail records found matching your filter."}
+                    </div>
+                  ) : (
+                    filteredAuditLogs.map((log) => (
+                      <div
+                        key={`mobile-audit-${log.id}`}
+                        className="p-3.5 space-y-2 hover:bg-[#F8F9FA] transition-colors"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="flex items-center gap-1.5 font-medium text-xs text-[#2C2C2C]">
+                            <span
+                              className="w-2 h-2 rounded-full shrink-0"
+                              style={{ backgroundColor: log.actionBadgeColor }}
+                            />
+                            {log.actionLabel}
+                          </span>
+                          <span className="text-[11px] font-medium text-[#188038]">
+                            &bull; Immutable
+                          </span>
+                        </div>
+
+                        <div className="text-xs text-[#2C2C2C] leading-relaxed break-words">
+                          {log.details}
+                        </div>
+
+                        <div className="pt-1.5 border-t border-[#F1F3F4] flex items-center justify-between text-[11px] text-[#717171]">
+                          <div>
+                            <span className="font-semibold text-[#2C2C2C]">{log.adminName}</span>
+                            <span className="text-[#717171] ml-1">({log.adminRole})</span>
+                          </div>
+                          <span className="font-mono text-[10px]">
+                            {log.createdAtFormatted} {log.timeFormatted}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
 
               {/* Status Bar */}
@@ -2650,6 +3132,85 @@ export default function AdminDashboardPage() {
           loadData();
         }}
       />
+
+      {/* Mobile Bottom Quick Navigation Bar (< 1024px) */}
+      <nav
+        aria-label="Mobile Quick Navigation"
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-[#DADCE0] h-14 flex items-center justify-around px-2 shadow-lg font-sans"
+      >
+        <button
+          type="button"
+          onClick={() => handleTabChange("REGISTRY")}
+          className={`flex-1 flex flex-col items-center justify-center py-1 min-h-[44px] cursor-pointer transition-colors ${
+            activeTab === "REGISTRY"
+              ? "text-[#612D53] font-semibold"
+              : "text-[#717171] hover:text-[#2C2C2C]"
+          }`}
+        >
+          <Building2 className="w-4 h-4" />
+          <span className="text-[10px] mt-0.5 leading-none">Cadastre</span>
+          {activeTab === "REGISTRY" && (
+            <span className="text-[10px] leading-none text-[#612D53] font-bold">&bull;</span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleTabChange("RATEPAYERS")}
+          className={`flex-1 flex flex-col items-center justify-center py-1 min-h-[44px] cursor-pointer transition-colors ${
+            activeTab === "RATEPAYERS"
+              ? "text-[#612D53] font-semibold"
+              : "text-[#717171] hover:text-[#2C2C2C]"
+          }`}
+        >
+          <Users className="w-4 h-4" />
+          <span className="text-[10px] mt-0.5 leading-none">Citizens</span>
+          {activeTab === "RATEPAYERS" && (
+            <span className="text-[10px] leading-none text-[#612D53] font-bold">&bull;</span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleTabChange("DEFAULTERS")}
+          className={`flex-1 flex flex-col items-center justify-center py-1 min-h-[44px] cursor-pointer transition-colors ${
+            activeTab === "DEFAULTERS"
+              ? "text-[#612D53] font-semibold"
+              : "text-[#717171] hover:text-[#2C2C2C]"
+          }`}
+        >
+          <ShieldAlert className="w-4 h-4" />
+          <span className="text-[10px] mt-0.5 leading-none">Defaulters</span>
+          {activeTab === "DEFAULTERS" && (
+            <span className="text-[10px] leading-none text-[#612D53] font-bold">&bull;</span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleTabChange("TREASURY")}
+          className={`flex-1 flex flex-col items-center justify-center py-1 min-h-[44px] cursor-pointer transition-colors ${
+            activeTab === "TREASURY"
+              ? "text-[#612D53] font-semibold"
+              : "text-[#717171] hover:text-[#2C2C2C]"
+          }`}
+        >
+          <Landmark className="w-4 h-4" />
+          <span className="text-[10px] mt-0.5 leading-none">Treasury</span>
+          {activeTab === "TREASURY" && (
+            <span className="text-[10px] leading-none text-[#612D53] font-bold">&bull;</span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setIsMobileMenuOpen(true)}
+          className="flex-1 flex flex-col items-center justify-center py-1 min-h-[44px] cursor-pointer text-[#717171] hover:text-[#2C2C2C] transition-colors"
+        >
+          <Menu className="w-4 h-4" />
+          <span className="text-[10px] mt-0.5 leading-none">Modules</span>
+        </button>
+      </nav>
     </div>
 
   );

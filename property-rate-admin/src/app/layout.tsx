@@ -17,7 +17,7 @@ export default function RootLayout({
         <link rel="preconnect" href="https://jzezuitkenrfkzrkphiz.supabase.co" crossOrigin="anonymous" />
         <link rel="dns-prefetch" href="https://jzezuitkenrfkzrkphiz.supabase.co" />
       </head>
-      <body className="h-screen w-screen overflow-hidden bg-[#F6ECF2] text-[#2C2C2C] antialiased font-sans">
+      <body className="min-h-screen w-full bg-[#F6ECF2] text-[#2C2C2C] antialiased font-sans flex flex-col">
         {children}
       </body>
     </html>

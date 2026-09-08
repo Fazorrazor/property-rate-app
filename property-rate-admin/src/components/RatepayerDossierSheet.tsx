@@ -227,7 +227,7 @@ export function RatepayerDossierSheet({
             </div>
 
             {/* Financial Summary Scorecards (Zero Pills) */}
-            <div className="px-6 py-4 bg-white border-b border-[#DADCE0] grid grid-cols-3 gap-3 text-xs shrink-0">
+            <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-white border-b border-[#DADCE0] grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 text-xs shrink-0">
               {summary ? (
                 <>
                   <div className="p-3 bg-[#F8F9FA] border border-[#DADCE0] rounded-lg">
