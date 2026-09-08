@@ -106,7 +106,7 @@ export default function AdminLoginForm() {
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             className="block w-full pl-9 pr-3 py-2 bg-white border border-[#DADCE0] text-sm text-[#2C2C2C] placeholder:text-[#9AA0A6] focus:outline-none focus:border-[#612D53] focus:ring-1 focus:ring-[#612D53] disabled:bg-[#F8F9FA] disabled:text-[#717171] disabled:cursor-not-allowed transition-colors [&:-webkit-autofill]:shadow-[inset_0_0_0_1000px_white] [&:-webkit-autofill]:text-fill-[#2C2C2C]"
-            placeholder="e.g. Heinz"
+            placeholder="Enter officer username"
           />
         </div>
         <p className="mt-1 text-[10px] text-[#717171]">Enter your registered municipal administration username</p>
