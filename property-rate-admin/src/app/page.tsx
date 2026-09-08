@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useDeferredValue } from "react";
 import {
   RefreshCw,
   Send,
@@ -98,6 +98,7 @@ export default function AdminDashboardPage() {
   const [hasMoreAuditLogs, setHasMoreAuditLogs] = useState(true);
   const [isLoadingAuditLogs, setIsLoadingAuditLogs] = useState(false);
   const [auditLogSearchQuery, setAuditLogSearchQuery] = useState("");
+  const deferredAuditLogSearchQuery = useDeferredValue(auditLogSearchQuery);
   const [auditLogActionFilter, setAuditLogActionFilter] = useState("ALL");
   const auditLogTableContainerRef = useRef<HTMLDivElement>(null);
 
@@ -179,6 +180,11 @@ export default function AdminDashboardPage() {
   const [municipalityFilter, setMunicipalityFilter] = useState("ALL");
   const [classificationFilter, setClassificationFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "PAID" | "UNPAID">("ALL");
+
+  // React 19 Deferred Search Queries for <16ms Non-Blocking Keystrokes
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+  const deferredRatepayerSearchQuery = useDeferredValue(ratepayerSearchQuery);
+  const deferredTreasurySearchQuery = useDeferredValue(treasurySearchQuery);
 
   const activePropertyQueryRef = useRef("");
   const activeRatepayerQueryRef = useRef("");
@@ -432,8 +438,8 @@ export default function AdminDashboardPage() {
       loadData(1, "", municipalityFilter, classificationFilter, activeTab === "DEFAULTERS" ? "DEFAULTER" : statusFilter, false);
       return;
     }
-    setIsSearchingProperties(true);
     const timer = setTimeout(() => {
+      setIsSearchingProperties(true);
       loadData(1, searchQuery, municipalityFilter, classificationFilter, activeTab === "DEFAULTERS" ? "DEFAULTER" : statusFilter, false);
     }, 250);
     return () => clearTimeout(timer);
@@ -492,8 +498,8 @@ export default function AdminDashboardPage() {
       });
       return;
     }
-    setIsSearchingRatepayers(true);
     const timer = setTimeout(async () => {
+      setIsSearchingRatepayers(true);
       try {
         const q = ratepayerSearchQuery;
         const res = await getRatepayersList(q, 1, 100);
@@ -851,8 +857,8 @@ export default function AdminDashboardPage() {
 
   // Google Instant Reactive Search for Cadastre Properties (Synchronous <16ms on every keystroke)
   const filteredProperties = useMemo(() => {
-    if (!searchQuery.trim()) return properties;
-    const tokens = searchQuery.toLowerCase().trim().split(/\s+/).filter(Boolean);
+    if (!deferredSearchQuery.trim()) return properties;
+    const tokens = deferredSearchQuery.toLowerCase().trim().split(/\s+/).filter(Boolean);
     return properties.filter((p) => {
       const acc = (p.accountNumber || "").toLowerCase();
       const val = (p.valuationNo || "").toLowerCase();
@@ -883,12 +889,12 @@ export default function AdminDashboardPage() {
           due.includes(token)
       );
     });
-  }, [properties, searchQuery]);
+  }, [properties, deferredSearchQuery]);
 
   // Google Instant Reactive Search for Ratepayers (Synchronous <16ms on every keystroke)
   const filteredRatepayers = useMemo(() => {
-    if (!ratepayerSearchQuery.trim()) return ratepayers;
-    const tokens = ratepayerSearchQuery.toLowerCase().trim().split(/\s+/).filter(Boolean);
+    if (!deferredRatepayerSearchQuery.trim()) return ratepayers;
+    const tokens = deferredRatepayerSearchQuery.toLowerCase().trim().split(/\s+/).filter(Boolean);
     return ratepayers.filter((r) => {
       const name = (r.name || "").toLowerCase();
       const phone = (r.phoneNumber || "").toLowerCase();
@@ -911,12 +917,12 @@ export default function AdminDashboardPage() {
           date.includes(token)
       );
     });
-  }, [ratepayers, ratepayerSearchQuery]);
+  }, [ratepayers, deferredRatepayerSearchQuery]);
 
   // Google Instant Reactive Search for Audit Trail (Synchronous <16ms on every keystroke)
   const filteredAuditLogs = useMemo(() => {
-    if (!auditLogSearchQuery.trim()) return auditLogs;
-    const tokens = auditLogSearchQuery.toLowerCase().trim().split(/\s+/).filter(Boolean);
+    if (!deferredAuditLogSearchQuery.trim()) return auditLogs;
+    const tokens = deferredAuditLogSearchQuery.toLowerCase().trim().split(/\s+/).filter(Boolean);
     return auditLogs.filter((log) => {
       const act = (log.action || "").toLowerCase();
       const actLbl = (log.actionLabel || "").toLowerCase();
@@ -939,7 +945,7 @@ export default function AdminDashboardPage() {
           time.includes(token)
       );
     });
-  }, [auditLogs, auditLogSearchQuery]);
+  }, [auditLogs, deferredAuditLogSearchQuery]);
 
   const selectedPropertiesList = properties.filter((p) => selectedIds.includes(p.accountNumber));
   const selectedUnpaidList = selectedPropertiesList.filter((p) => p.status !== "PAID" && p.totalAmountDue > 0);
@@ -965,8 +971,8 @@ export default function AdminDashboardPage() {
       ) {
         return false;
       }
-      if (!treasurySearchQuery.trim()) return true;
-      const q = treasurySearchQuery.toLowerCase().trim();
+      if (!deferredTreasurySearchQuery.trim()) return true;
+      const q = deferredTreasurySearchQuery.toLowerCase().trim();
       const tokens = q.split(/\s+/).filter(Boolean);
       return tokens.every(
         (token: string) =>
@@ -980,7 +986,7 @@ export default function AdminDashboardPage() {
           r.settlementType.toLowerCase().includes(token)
       );
     });
-  }, [allTreasuryReceipts, treasurySearchQuery, treasuryMethodFilter]);
+  }, [allTreasuryReceipts, deferredTreasurySearchQuery, treasuryMethodFilter]);
 
   if (isInitialLoading) {
     return <AdminDashboardSkeleton />;
@@ -1069,6 +1075,7 @@ export default function AdminDashboardPage() {
                 <select
                   value={municipalityFilter}
                   onChange={(e) => setMunicipalityFilter(e.target.value)}
+                  aria-label="Select Municipal Assembly"
                   className="text-xs font-semibold text-[#2C2C2C] bg-transparent border-none focus:outline-none cursor-pointer py-1 px-2 rounded-md transition-colors -ml-2"
                 >
                   <option value="ALL">National Overview (All Assemblies)</option>
@@ -1202,6 +1209,7 @@ export default function AdminDashboardPage() {
                       placeholder="Search Account ID, Valuation No, Ratepayer, Phone, GPS (e.g. GK-0010), Landmark, Receipt..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
+                      aria-label="Search cadastre properties"
                       onKeyDown={(e) => {
                         if (e.key === "Escape") handleClearPropertySearch();
                       }}
@@ -1224,6 +1232,7 @@ export default function AdminDashboardPage() {
                     <select
                       value={classificationFilter}
                       onChange={(e) => setClassificationFilter(e.target.value)}
+                      aria-label="Filter by property classification"
                       className="h-8 px-2.5 rounded-lg border border-[#DADCE0] bg-white text-xs text-[#2C2C2C] focus:outline-none focus:border-[#612D53]"
                     >
                       <option value="ALL">All Classifications</option>
@@ -1236,6 +1245,7 @@ export default function AdminDashboardPage() {
                     <select
                       value={statusFilter}
                       onChange={(e) => setStatusFilter(e.target.value as any)}
+                      aria-label="Filter by payment status"
                       className="h-8 px-2.5 rounded-lg border border-[#DADCE0] bg-white text-xs text-[#2C2C2C] focus:outline-none focus:border-[#612D53]"
                     >
                       <option value="ALL">All Statuses</option>
@@ -1346,6 +1356,7 @@ export default function AdminDashboardPage() {
                           type="checkbox"
                           checked={selectedIds.length === filteredProperties.length && filteredProperties.length > 0}
                           onChange={toggleSelectAll}
+                          aria-label="Select all properties on current page"
                           className="rounded border-[#DADCE0] text-[#612D53] focus:ring-0 cursor-pointer"
                         />
                       </th>
@@ -1383,6 +1394,7 @@ export default function AdminDashboardPage() {
                                 type="checkbox"
                                 checked={isSelected}
                                 onChange={() => toggleSelectRow(prop.accountNumber)}
+                                aria-label={`Select property ${prop.accountNumber}`}
                                 className="rounded border-[#DADCE0] text-[#612D53] focus:ring-0 cursor-pointer"
                               />
                             </td>
@@ -1412,7 +1424,7 @@ export default function AdminDashboardPage() {
                                   isPaid
                                     ? "text-[#188038]"
                                     : prop.status === "PARTIALLY_PAID"
-                                    ? "text-[#E37400]"
+                                    ? "text-[#B45309]"
                                     : "text-[#D93025]"
                                 }`}
                               >
@@ -1473,6 +1485,7 @@ export default function AdminDashboardPage() {
                     placeholder="Search Ratepayer Name, Phone, Account ID, GPS Address, Municipality..."
                     value={ratepayerSearchQuery}
                     onChange={(e) => setRatepayerSearchQuery(e.target.value)}
+                    aria-label="Search ratepayers"
                     onKeyDown={(e) => {
                       if (e.key === "Escape") handleClearRatepayerSearch();
                     }}
@@ -1555,7 +1568,7 @@ export default function AdminDashboardPage() {
                                   : ratepayer.status === "DEFAULTER"
                                   ? "text-[#D93025]"
                                   : ratepayer.status === "OUTSTANDING"
-                                  ? "text-[#E37400]"
+                                  ? "text-[#B45309]"
                                   : "text-[#717171] font-normal"
                               }`}
                             >
@@ -1637,6 +1650,7 @@ export default function AdminDashboardPage() {
                       placeholder="Search Receipt / GCR No., Account ID, Ratepayer, Channel, Date..."
                       value={treasurySearchQuery}
                       onChange={(e) => setTreasurySearchQuery(e.target.value)}
+                      aria-label="Search treasury transactions"
                       onKeyDown={(e) => {
                         if (e.key === "Escape") setTreasurySearchQuery("");
                       }}
@@ -1658,6 +1672,7 @@ export default function AdminDashboardPage() {
                     <select
                       value={treasuryMethodFilter}
                       onChange={(e) => setTreasuryMethodFilter(e.target.value)}
+                      aria-label="Filter by payment channel"
                       className="h-8 px-2.5 rounded-lg border border-[#DADCE0] bg-white text-xs text-[#2C2C2C] focus:outline-none focus:border-[#612D53]"
                     >
                       <option value="ALL">All Payment Channels</option>
@@ -1775,6 +1790,7 @@ export default function AdminDashboardPage() {
                       placeholder="Search by action, narrative, administrator, or reference..."
                       value={auditLogSearchQuery}
                       onChange={(e) => setAuditLogSearchQuery(e.target.value)}
+                      aria-label="Search audit trail"
                       onKeyDown={(e) => {
                         if (e.key === "Escape") handleClearAuditLogSearch();
                       }}
@@ -1799,6 +1815,7 @@ export default function AdminDashboardPage() {
                       setAuditLogActionFilter(val);
                       loadAuditLogs(auditLogSearchQuery, val, 1);
                     }}
+                    aria-label="Filter audit logs by action"
                     className="h-8 px-3 bg-white border border-[#DADCE0] rounded-lg text-xs text-[#2C2C2C] focus:outline-none focus:border-[#612D53] cursor-pointer"
                   >
                     <option value="ALL">All Recorded Actions</option>
@@ -1935,7 +1952,7 @@ export default function AdminDashboardPage() {
                         selectedAccount.status === "PAID"
                           ? "text-[#188038]"
                           : selectedAccount.status === "PARTIALLY_PAID"
-                          ? "text-[#E37400]"
+                          ? "text-[#B45309]"
                           : "text-[#D93025]"
                       }`}
                     >
@@ -2144,6 +2161,7 @@ export default function AdminDashboardPage() {
                       step="0.001"
                       value={residentialRate}
                       onChange={(e) => setResidentialRate(e.target.value)}
+                      aria-label="Residential Rate Factor"
                       className="w-full h-9 px-3 rounded-md border border-[#DADCE0] text-xs focus:outline-none focus:border-[#612D53]"
                     />
                   </div>
@@ -2154,6 +2172,7 @@ export default function AdminDashboardPage() {
                       step="0.001"
                       value={commercialRate}
                       onChange={(e) => setCommercialRate(e.target.value)}
+                      aria-label="Commercial Rate Factor"
                       className="w-full h-9 px-3 rounded-md border border-[#DADCE0] text-xs focus:outline-none focus:border-[#612D53]"
                     />
                   </div>
@@ -2163,6 +2182,7 @@ export default function AdminDashboardPage() {
                       type="text"
                       value={dueDate}
                       onChange={(e) => setDueDate(e.target.value)}
+                      aria-label="Statutory Due Date"
                       className="w-full h-9 px-3 rounded-md border border-[#DADCE0] text-xs focus:outline-none focus:border-[#612D53]"
                     />
                   </div>
@@ -2171,6 +2191,7 @@ export default function AdminDashboardPage() {
                     <textarea
                       value={messageTemplate}
                       onChange={(e) => setMessageTemplate(e.target.value)}
+                      aria-label="Dual-Link SMS Notice Template"
                       rows={4}
                       className="w-full p-2.5 rounded-md border border-[#DADCE0] text-xs focus:outline-none focus:border-[#612D53] resize-none"
                     />
@@ -2188,6 +2209,7 @@ export default function AdminDashboardPage() {
                         type={showBatchPassword ? "text" : "password"}
                         value={batchAdminPassword}
                         onChange={(e) => setBatchAdminPassword(e.target.value)}
+                        aria-label="Administrator Authorization Password"
                         placeholder="Enter admin password (e.g. admin123)"
                         className="w-full h-9 px-3 pr-9 rounded-md border border-[#DADCE0] bg-white text-xs text-[#2C2C2C] focus:outline-none focus:border-[#612D53]"
                       />
@@ -2268,6 +2290,7 @@ export default function AdminDashboardPage() {
                   placeholder={selectedAccount.totalAmountDue.toString()}
                   value={manualAmount}
                   onChange={(e) => setManualAmount(e.target.value)}
+                  aria-label="Payment Amount in Ghanaian Cedi"
                   className="w-full h-10 px-3 rounded-lg border border-[#DADCE0] bg-white text-xs font-semibold text-[#2C2C2C] focus:outline-none focus:border-[#612D53]"
                 />
               </div>
@@ -2277,6 +2300,7 @@ export default function AdminDashboardPage() {
                 <select
                   value={manualMethod}
                   onChange={(e) => setManualMethod(e.target.value)}
+                  aria-label="Select Payment Channel"
                   className="w-full h-10 px-3 rounded-lg border border-[#DADCE0] bg-white text-xs text-[#2C2C2C] focus:outline-none focus:border-[#612D53]"
                 >
                   <option>Counter Cash Treasury</option>
@@ -2298,6 +2322,7 @@ export default function AdminDashboardPage() {
                     type={showPaymentPassword ? "text" : "password"}
                     value={paymentAdminPassword}
                     onChange={(e) => setPaymentAdminPassword(e.target.value)}
+                    aria-label="Administrator Authorization Password"
                     placeholder="Enter admin password (e.g. admin123)"
                     className="w-full h-10 px-3 pr-9 rounded-lg border border-[#DADCE0] bg-white text-xs font-semibold text-[#2C2C2C] focus:outline-none focus:border-[#612D53]"
                   />
@@ -2476,6 +2501,7 @@ export default function AdminDashboardPage() {
                       setSmsAuthPassword(e.target.value);
                       if (smsAuthError) setSmsAuthError(null);
                     }}
+                    aria-label="Administrator security authorization password"
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !isProcessing && smsAuthPassword.trim()) {
                         handleExecuteSmsDispatch();

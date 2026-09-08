@@ -871,11 +871,11 @@ export async function getAuditTrailList(
           break;
         case 'BATCH_SMS_DISPATCH':
           actionLabel = 'SMS Batch Dispatch';
-          actionBadgeColor = '#E37400';
+          actionBadgeColor = '#B45309';
           break;
         case 'SINGLE_SMS_DISPATCH':
           actionLabel = 'Direct SMS Notice';
-          actionBadgeColor = '#E37400';
+          actionBadgeColor = '#B45309';
           break;
         case 'EDIT_PROPERTY':
           actionLabel = 'Property Valuation Modified';

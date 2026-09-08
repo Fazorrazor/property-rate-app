@@ -16,12 +16,6 @@ function ReceiptVerifyContent() {
   const [hasSearched, setHasSearched] = useState(Boolean(codeParam));
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (codeParam) {
-      handleVerify(codeParam);
-    }
-  }, [codeParam]);
-
   const handleVerify = async (ref: string) => {
     const trimmed = ref.trim();
     if (!trimmed) {
@@ -48,6 +42,12 @@ function ReceiptVerifyContent() {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (codeParam) {
+      handleVerify(codeParam);
+    }
+  }, [codeParam]);
 
   return (
     <div className="min-h-screen bg-[#F6ECF2] text-[#2C2C2C] flex flex-col font-sans">

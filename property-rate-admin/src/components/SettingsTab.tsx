@@ -170,7 +170,7 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
           <div className="flex items-center gap-2">
             <span
               className={`text-xs font-semibold ${
-                dispatchMode === "LIVE" ? "text-[#188038]" : "text-[#E37400]"
+                dispatchMode === "LIVE" ? "text-[#188038]" : "text-[#B45309]"
               }`}
             >
               {dispatchMode === "LIVE"
@@ -223,7 +223,7 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
                     Test / Simulation Mode (Sandbox)
                   </span>
                 </div>
-                <span className="text-[11px] font-medium text-[#E37400]">
+                <span className="text-[11px] font-medium text-[#B45309]">
                   • Zero Cost
                 </span>
               </div>
@@ -312,6 +312,7 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
                     type={showApiKey ? "text" : "password"}
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
+                    aria-label="Arkesel API Key"
                     placeholder="Enter Arkesel API key..."
                     className="w-full h-9 px-3 pr-10 border border-[#DADCE0] rounded-lg text-xs font-mono text-[#2C2C2C] focus:border-[#612D53] focus:outline-none transition-colors"
                   />
@@ -340,6 +341,7 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
                   maxLength={11}
                   value={senderId}
                   onChange={(e) => setSenderId(e.target.value)}
+                  aria-label="Registered SMS Sender ID"
                   placeholder="e.g. Arnold or KKMA-Rev"
                   className="w-full h-9 px-3 border border-[#DADCE0] rounded-lg text-xs font-mono text-[#2C2C2C] focus:border-[#612D53] focus:outline-none transition-colors"
                 />
@@ -356,6 +358,7 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
                 <select
                   value={provider}
                   onChange={(e) => setProvider(e.target.value as any)}
+                  aria-label="Active Telephony Engine"
                   className="w-full h-9 px-3 border border-[#DADCE0] rounded-lg text-xs text-[#2C2C2C] bg-white focus:border-[#612D53] focus:outline-none cursor-pointer"
                 >
                   <option value="arkesel">Arkesel (Ghana Domestic Gateway)</option>

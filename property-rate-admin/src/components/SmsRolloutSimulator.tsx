@@ -419,6 +419,7 @@ export function SmsRolloutSimulator({
                       type="text"
                       value={accountSearchQuery}
                       onChange={(e) => setAccountSearchQuery(e.target.value)}
+                      aria-label="Search accounts for SMS rollout"
                       onKeyDown={(e) => {
                         if (e.key === "Escape") {
                           setAccountSearchQuery("");
@@ -607,6 +608,7 @@ export function SmsRolloutSimulator({
                           setTargetMunicipality(e.target.value);
                           setPreviewAccountIndex(0);
                         }}
+                        aria-label="Filter rollout by municipality"
                         className="w-full h-7.5 px-2 rounded-md border border-[#DADCE0] bg-white text-[11px] text-[#2C2C2C] focus:outline-none focus:border-[#612D53]"
                       >
                         <option value="ALL">All Assemblies</option>
@@ -624,6 +626,7 @@ export function SmsRolloutSimulator({
                           setTargetClassification(e.target.value);
                           setPreviewAccountIndex(0);
                         }}
+                        aria-label="Filter rollout by property classification"
                         className="w-full h-7.5 px-2 rounded-md border border-[#DADCE0] bg-white text-[11px] text-[#2C2C2C] focus:outline-none focus:border-[#612D53]"
                       >
                         <option value="ALL">All Classifications</option>
@@ -641,6 +644,7 @@ export function SmsRolloutSimulator({
                           setTargetStatus(e.target.value as any);
                           setPreviewAccountIndex(0);
                         }}
+                        aria-label="Filter rollout by assessment status"
                         className="w-full h-7.5 px-2 rounded-md border border-[#DADCE0] bg-white text-[11px] text-[#2C2C2C] focus:outline-none focus:border-[#612D53]"
                       >
                         <option value="UNPAID">Unpaid Balances Only</option>
@@ -711,6 +715,7 @@ export function SmsRolloutSimulator({
                       type="text"
                       value={dueDate}
                       onChange={(e) => setDueDate(e.target.value)}
+                      aria-label="Statutory bill due date"
                       className="w-28 h-7.5 px-2 rounded-md border border-[#DADCE0] bg-white text-[11px] text-[#2C2C2C] focus:outline-none focus:border-[#612D53]"
                       placeholder="30-Jun-2025"
                     />
@@ -771,6 +776,7 @@ export function SmsRolloutSimulator({
                       <select
                         value={previewAccountIndex}
                         onChange={(e) => setPreviewAccountIndex(Number(e.target.value))}
+                        aria-label="Select account to preview in handset"
                         className="w-full text-[10px] font-semibold text-[#8AB4F8] bg-transparent border-none focus:outline-none cursor-pointer truncate"
                       >
                         {eligibleProperties.slice(0, 100).map((p, idx) => (
@@ -958,7 +964,7 @@ export function SmsRolloutSimulator({
                               log.deliveryStatus === "DELIVERED"
                                 ? "text-[#188038]"
                                 : log.deliveryStatus === "PENDING"
-                                ? "text-[#E37400]"
+                                ? "text-[#B45309]"
                                 : "text-[#D93025]"
                             }`}
                           >
@@ -1246,6 +1252,7 @@ export function SmsRolloutSimulator({
                       setAdminPassword(e.target.value);
                       if (authError) setAuthError(null);
                     }}
+                    aria-label="Administrator security authorization password"
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !isAuthorizing && adminPassword.trim()) {
                         handleConfirmAuthorization();

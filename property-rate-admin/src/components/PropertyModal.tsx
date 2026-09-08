@@ -130,6 +130,7 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
                 <select
                   value={formData.municipality}
                   onChange={(e) => setFormData({ ...formData, municipality: e.target.value })}
+                  aria-label="Select Municipality"
                   className="w-full text-xs p-2 border border-[#DADCE0] rounded-md focus:ring-[#612D53] focus:border-[#612D53]"
                 >
                   <option>Kpone-Katamanso (KKMA)</option>
@@ -195,6 +196,7 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
                   <select
                     value={formData.propertyClassification}
                     onChange={(e) => setFormData({ ...formData, propertyClassification: e.target.value })}
+                    aria-label="Select Property Classification"
                     className="w-full text-xs p-2 border border-[#DADCE0] rounded-md focus:ring-[#612D53]"
                   >
                     <option>PRIVATE THIRD CLASS RESIDENTIAL</option>

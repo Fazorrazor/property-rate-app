@@ -152,7 +152,7 @@ export function RatepayerDossierSheet({
                             ? "text-[#137333]"
                             : summary.status === "DEFAULTER"
                             ? "text-[#D93025]"
-                            : "text-[#E37400]"
+                            : "text-[#B45309]"
                         }`}
                       >
                         &bull; {summary.status === "SETTLED" ? "Compliant & Settled" : summary.status === "DEFAULTER" ? "Statutory Defaulter" : "Balance Due"}
@@ -411,7 +411,7 @@ export function RatepayerDossierSheet({
                                     prop.status === "PAID"
                                       ? "text-[#188038]"
                                       : prop.status === "PARTIALLY_PAID"
-                                      ? "text-[#E37400]"
+                                      ? "text-[#B45309]"
                                       : "text-[#D93025]"
                                   }`}
                                 >
