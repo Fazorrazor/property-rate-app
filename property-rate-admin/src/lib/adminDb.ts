@@ -346,70 +346,116 @@ export const adminDb = {
 
   property: {
     async findMany(args?: { where?: any; include?: any; orderBy?: any; take?: number; skip?: number }) {
-      let query = supabase.from('Property').select('id, accountNumber, valuationNo, ownerId, ownerDigitalAddress, propertyClassification, billYear, rateableValue, rateImposed, previousYearBill, amountPaidLastYear, arrears, currentFee, totalAmountDue, status, billDate, settlementDeadline, municipality');
+      const buildBaseQuery = (accountInChunk?: string[]) => {
+        let query = supabase.from('Property').select('id, accountNumber, valuationNo, ownerId, ownerDigitalAddress, propertyClassification, billYear, rateableValue, rateImposed, previousYearBill, amountPaidLastYear, arrears, currentFee, totalAmountDue, status, billDate, settlementDeadline, municipality');
 
-      if (args?.where) {
-        if (args.where.status) {
-          if (typeof args.where.status === 'object' && args.where.status.not) {
-            query = query.neq('status', args.where.status.not);
-          } else {
-            query = query.eq('status', args.where.status);
+        if (args?.where) {
+          if (args.where.status) {
+            if (typeof args.where.status === 'object' && args.where.status.not) {
+              query = query.neq('status', args.where.status.not);
+            } else {
+              query = query.eq('status', args.where.status);
+            }
           }
-        }
-        if (args.where.totalAmountDue) {
-          if (typeof args.where.totalAmountDue === 'object' && args.where.totalAmountDue.gt !== undefined) {
-            query = query.gt('totalAmountDue', args.where.totalAmountDue.gt);
+          if (args.where.totalAmountDue) {
+            if (typeof args.where.totalAmountDue === 'object' && args.where.totalAmountDue.gt !== undefined) {
+              query = query.gt('totalAmountDue', args.where.totalAmountDue.gt);
+            }
           }
-        }
-        if (args.where.arrears) {
-          if (typeof args.where.arrears === 'object' && args.where.arrears.gt !== undefined) {
-            query = query.gt('arrears', args.where.arrears.gt);
+          if (args.where.arrears) {
+            if (typeof args.where.arrears === 'object' && args.where.arrears.gt !== undefined) {
+              query = query.gt('arrears', args.where.arrears.gt);
+            }
           }
-        }
-        if (args.where.propertyClassification) {
-          query = query.eq('propertyClassification', args.where.propertyClassification);
-        }
-        if (args.where.accountNumber) {
-          if (args.where.accountNumber.in) {
-            query = query.in('accountNumber', args.where.accountNumber.in);
-          } else {
-            query = query.eq('accountNumber', args.where.accountNumber);
+          if (args.where.propertyClassification) {
+            query = query.eq('propertyClassification', args.where.propertyClassification);
           }
-        }
-        if (args.where.ownerDigitalAddress) query = query.eq('ownerDigitalAddress', args.where.ownerDigitalAddress);
-        if (args.where.municipality) query = query.eq('municipality', args.where.municipality);
-        if (args.where.search) {
-          const matchedIds = await resolvePropertySearchIds(String(args.where.search));
-          if (matchedIds !== null) {
-            if (matchedIds.length === 0) return [];
-            query = query.in('id', matchedIds);
+          if (accountInChunk) {
+            query = query.in('accountNumber', accountInChunk);
+          } else if (args.where.accountNumber) {
+            if (args.where.accountNumber.in) {
+              query = query.in('accountNumber', args.where.accountNumber.in);
+            } else {
+              query = query.eq('accountNumber', args.where.accountNumber);
+            }
           }
+          if (args.where.ownerDigitalAddress) query = query.eq('ownerDigitalAddress', args.where.ownerDigitalAddress);
+          if (args.where.municipality) query = query.eq('municipality', args.where.municipality);
+        }
+
+        if (args?.orderBy) {
+          const field = Object.keys(args.orderBy)[0];
+          const dir = args.orderBy[field] === 'desc' ? { ascending: false } : { ascending: true };
+          query = query.order(field, dir);
+        }
+
+        return query;
+      };
+
+      let matchedSearchIds: string[] | null = null;
+      if (args?.where?.search) {
+        matchedSearchIds = await resolvePropertySearchIds(String(args.where.search));
+        if (matchedSearchIds !== null && matchedSearchIds.length === 0) return [];
+      }
+
+      let data: any[] = [];
+
+      // Case 1: Large list of explicit account numbers (e.g. batch rollout)
+      if (args?.where?.accountNumber?.in && args.where.accountNumber.in.length > 80) {
+        const accChunks = chunkArray(args.where.accountNumber.in as string[], 80);
+        const chunkResults = await Promise.all(
+          accChunks.map(async (chunk) => {
+            let chunkQuery = buildBaseQuery(chunk);
+            if (matchedSearchIds !== null) chunkQuery = chunkQuery.in('id', matchedSearchIds);
+            const { data: chunkData } = (await chunkQuery) as { data: any[] | null; error: any };
+            return chunkData || [];
+          })
+        );
+        data = chunkResults.flat();
+      } else if (args?.take !== undefined && args.take <= 1000) {
+        // Case 2: Fixed small limit requested
+        let query = buildBaseQuery();
+        if (matchedSearchIds !== null) query = query.in('id', matchedSearchIds);
+        if (args?.take) query = query.limit(args.take);
+        if (args?.skip) query = query.range(args.skip, (args.skip + (args.take || 10)) - 1);
+        const { data: resData } = (await query) as { data: any[] | null; error: any };
+        data = resData || [];
+      } else {
+        // Case 3: Full dataset (or take > 1000) - page across PostgREST 1000-row chunks
+        let offset = args?.skip || 0;
+        const targetTotal = args?.take !== undefined ? args.take : Infinity;
+        while (data.length < targetTotal) {
+          const fetchCount = Math.min(1000, targetTotal - data.length);
+          let pageQuery = buildBaseQuery();
+          if (matchedSearchIds !== null) pageQuery = pageQuery.in('id', matchedSearchIds);
+          pageQuery = pageQuery.range(offset, offset + fetchCount - 1);
+
+          const { data: pageData, error } = (await pageQuery) as { data: any[] | null; error: any };
+          if (error || !pageData || pageData.length === 0) break;
+          data.push(...pageData);
+          if (pageData.length < fetchCount) break;
+          offset += pageData.length;
         }
       }
 
-      if (args?.orderBy) {
-        const field = Object.keys(args.orderBy)[0];
-        const dir = args.orderBy[field] === 'desc' ? { ascending: false } : { ascending: true };
-        query = query.order(field, dir);
-      }
-
-      if (args?.take) query = query.limit(args.take);
-      if (args?.skip) query = query.range(args.skip, (args.skip + (args.take || 10)) - 1);
-
-      const { data, error } = (await query) as { data: any[] | null; error: any };
-      if (error || !data || data.length === 0) return data || [];
+      if (data.length === 0) return [];
 
       const propIds = data.map((p: any) => p.id);
 
-      // 1. Batch fetch PropertyOwner for all properties in a single query
+      // 1. Batch fetch PropertyOwner for all properties safely in chunks
       const ownerIds = Array.from(new Set(data.map((p: any) => p.ownerId).filter(Boolean)));
       if (ownerIds.length > 0) {
-        const { data: allOwners } = await supabase
-          .from('PropertyOwner')
-          .select('ownerId, name, tel, mobileNumber, email, address, streetAddress, corporationPartnership')
-          .in('ownerId', ownerIds);
-        
-        const ownersById = (allOwners || []).reduce((acc: any, o: any) => {
+        const ownerChunks = chunkArray(ownerIds, 80);
+        const ownerResults = await Promise.all(
+          ownerChunks.map((chunk) =>
+            supabase
+              .from('PropertyOwner')
+              .select('ownerId, name, tel, mobileNumber, email, address, streetAddress, corporationPartnership')
+              .in('ownerId', chunk)
+          )
+        );
+        const allOwners = ownerResults.flatMap((r) => r.data || []);
+        const ownersById = allOwners.reduce((acc: any, o: any) => {
           acc[o.ownerId] = o;
           return acc;
         }, {});
@@ -421,14 +467,19 @@ export const adminDb = {
         }
       }
 
-      // 2. Batch fetch receipts for all properties in a single query
-      if (args?.include?.receipts) {
-        const { data: allReceipts } = await supabase
-          .from('Receipt')
-          .select('id, receiptNumber, amount, datePaid, propertyId, gcrNumber, settlementType')
-          .in('propertyId', propIds);
-        
-        const receiptsByPropId = (allReceipts || []).reduce((acc: any, r: any) => {
+      // 2. Batch fetch receipts for all properties safely in chunks
+      if (args?.include?.receipts && propIds.length > 0) {
+        const propChunks = chunkArray(propIds, 80);
+        const receiptResults = await Promise.all(
+          propChunks.map((chunk) =>
+            supabase
+              .from('Receipt')
+              .select('id, receiptNumber, amount, datePaid, propertyId, gcrNumber, settlementType')
+              .in('propertyId', chunk)
+          )
+        );
+        const allReceipts = receiptResults.flatMap((r) => r.data || []);
+        const receiptsByPropId = allReceipts.reduce((acc: any, r: any) => {
           if (!acc[r.propertyId]) acc[r.propertyId] = [];
           acc[r.propertyId].push(r);
           return acc;
@@ -439,29 +490,39 @@ export const adminDb = {
         }
       }
 
-      // 3. Batch fetch linked users for all properties in a single query
-      if (args?.include?.users) {
-        const { data: allLinks } = await supabase
-          .from('_PropertyToUser')
-          .select('A, B')
-          .in('A', propIds);
-        
-        const userIds = Array.from(new Set((allLinks || []).map((l: any) => l.B)));
+      // 3. Batch fetch linked users for all properties safely in chunks
+      if (args?.include?.users && propIds.length > 0) {
+        const propChunks = chunkArray(propIds, 80);
+        const linkResults = await Promise.all(
+          propChunks.map((chunk) =>
+            supabase
+              .from('_PropertyToUser')
+              .select('A, B')
+              .in('A', chunk)
+          )
+        );
+        const allLinks = linkResults.flatMap((r) => r.data || []);
+        const userIds = Array.from(new Set(allLinks.map((l: any) => l.B)));
         let usersById: Record<string, any> = {};
 
         if (userIds.length > 0) {
-          const { data: allUsers } = await supabase
-            .from('User')
-            .select('id, name, phoneNumber, role, isVerified')
-            .in('id', userIds);
-          
-          usersById = (allUsers || []).reduce((acc: any, u: any) => {
+          const userChunks = chunkArray(userIds, 80);
+          const userResults = await Promise.all(
+            userChunks.map((chunk) =>
+              supabase
+                .from('User')
+                .select('id, name, phoneNumber, role, isVerified')
+                .in('id', chunk)
+            )
+          );
+          const allUsers = userResults.flatMap((r) => r.data || []);
+          usersById = allUsers.reduce((acc: any, u: any) => {
             acc[u.id] = u;
             return acc;
           }, {});
         }
 
-        const propToUsers = (allLinks || []).reduce((acc: any, l: any) => {
+        const propToUsers = allLinks.reduce((acc: any, l: any) => {
           if (!acc[l.A]) acc[l.A] = [];
           if (usersById[l.B]) acc[l.A].push(usersById[l.B]);
           return acc;

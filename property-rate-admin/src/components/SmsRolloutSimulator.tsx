@@ -26,7 +26,8 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-import { AdminProperty, SmsRolloutLogItem, getSmsRolloutAudience, saveSmsTemplate, getSmsSettings, DEFAULT_SMS_NOTICE_TEMPLATE } from "@/app/actions";
+import { AdminProperty, SmsRolloutLogItem, getSmsRolloutAudience, saveSmsTemplate, getSmsSettings } from "@/app/actions";
+import { DEFAULT_SMS_NOTICE_TEMPLATE } from "@/lib/sms/types";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface SmsRolloutSimulatorProps {

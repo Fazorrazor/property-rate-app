@@ -5,12 +5,10 @@ import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 import { TwilioProvider } from '@/lib/sms/twilio';
 import { ArkeselProvider } from '@/lib/sms/arkesel';
+import { DEFAULT_SMS_NOTICE_TEMPLATE } from '@/lib/sms/types';
 
 const arkeselService = new ArkeselProvider();
 const twilioServiceInstance = new TwilioProvider();
-
-export const DEFAULT_SMS_NOTICE_TEMPLATE =
-  "Dear {{municipality}} Resident,\n\nDo find below your {{billYear}} Property Rate bill:\n\nValuation ID: {{accountNumber}}\n\nAmount due: GH₵ {{totalAmountDue}}\n\nView your bills: {{billLink}}\n\nPay Via *227*4362# or {{paymentLink}} with your payment reference {{accountNumber}}\n\nFor payment & enquiries kindly call 0256039385/0538702445\nDisregard if already paid. Keep receipt for verification.";
 
 let activeSmsConfig = {
   dispatchMode: (process.env.SMS_DISPATCH_MODE || 'TEST') as 'TEST' | 'LIVE',
