@@ -98,11 +98,29 @@ export default function SettingsPage() {
             Enter the Municipal Account Number of the property you want to add to your profile. You can link up to 3 phone numbers per property.
           </p>
 
-          <form onSubmit={handleLinkProperty} className="space-y-3">
+          <form
+            onSubmit={handleLinkProperty}
+            className="space-y-3"
+            autoComplete="off"
+            data-lpignore="true"
+            data-1p-ignore="true"
+            data-form-type="other"
+          >
+            {/* Anti-autofill Decoy Honeypot */}
+            <input type="text" name="prevent_autofill_acc" tabIndex={-1} aria-hidden="true" style={{ position: 'absolute', top: -9999, left: -9999, opacity: 0, height: 0, width: 0, pointerEvents: 'none' }} />
+
             <div className="space-y-1">
               <label className="text-[11px] font-medium text-on-surface-muted ml-1">Account Number</label>
               <input
                 type="text"
+                name="citizen_link_account_number"
+                autoComplete="off"
+                data-lpignore="true"
+                data-1p-ignore="true"
+                data-form-type="other"
+                autoCorrect="off"
+                autoCapitalize="characters"
+                spellCheck={false}
                 placeholder="e.g. KKDA03188007"
                 value={accountNumber}
                 onChange={(e) => setAccountNumber(e.target.value)}

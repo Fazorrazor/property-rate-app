@@ -1044,11 +1044,11 @@ export default function AdminDashboardPage() {
               className="fixed inset-0 bg-black/40 z-40 lg:hidden backdrop-blur-xs"
             />
             <motion.aside
-              initial={{ x: "-100%" }}
+              initial={{ x: "100%" }}
               animate={{ x: 0 }}
-              exit={{ x: "-100%" }}
+              exit={{ x: "100%" }}
               transition={{ type: "spring", damping: 28, stiffness: 300 }}
-              className="fixed inset-y-0 left-0 w-4/5 max-w-xs bg-white border-r border-[#DADCE0] shadow-xl z-50 flex flex-col font-sans lg:hidden"
+              className="fixed inset-y-0 right-0 w-4/5 max-w-xs bg-white border-l border-[#DADCE0] shadow-xl z-50 flex flex-col font-sans lg:hidden"
             >
               {/* Drawer Header */}
               <div className="h-13 flex items-center px-4 border-b border-[#DADCE0] justify-between shrink-0">
@@ -1238,28 +1238,20 @@ export default function AdminDashboardPage() {
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 min-h-screen lg:h-screen lg:overflow-hidden">
         {/* Mobile App Header */}
-        <header className="bg-white border-b border-[#DADCE0] shadow-xs px-3 sm:px-4 h-13 flex items-center justify-between shrink-0 lg:hidden font-sans z-20 sticky top-0">
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setIsMobileMenuOpen(true)}
-              className="p-2 -ml-1 text-[#5F6368] hover:text-[#202124] rounded-lg cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center focus:outline-none"
-              aria-label="Open navigation menu"
-            >
-              <Menu className="w-5 h-5 text-[#2C2C2C]" />
-            </button>
-            <div className="flex flex-col">
-              <span className="text-xs font-bold text-[#612D53] tracking-tight">KKMA Revenue</span>
-              <span className="text-[10px] text-[#717171] font-medium leading-none">
+        <header className="bg-white border-b border-[#DADCE0] shadow-xs px-3.5 sm:px-4 h-13 flex items-center justify-between shrink-0 lg:hidden font-sans z-20 sticky top-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-7 h-7 rounded-md bg-[#612D53] text-white flex items-center justify-center font-bold text-xs shrink-0">
+              K
+            </div>
+            <div className="flex flex-col min-w-0">
+              <span className="text-xs font-bold text-[#612D53] tracking-tight truncate">KKMA Revenue</span>
+              <span className="text-[10px] text-[#717171] font-medium leading-none truncate">
                 {NAV_TABS.find(t => t.key === activeTab)?.shortLabel || "Console"}
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-semibold text-[#2C2C2C] hidden sm:inline-block">
-              {currentAdmin?.username || "Heinz"}
-            </span>
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {activeTab === "REGISTRY" && (
               <button
                 type="button"
@@ -1271,6 +1263,17 @@ export default function AdminDashboardPage() {
                 <span className="hidden sm:inline">Batch Rollout</span>
               </button>
             )}
+            <span className="text-[11px] font-semibold text-[#2C2C2C] hidden sm:inline-block">
+              {currentAdmin?.username || "Heinz"}
+            </span>
+            <button
+              type="button"
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="p-2 -mr-1.5 text-[#2C2C2C] hover:text-[#612D53] hover:bg-[#F6ECF2] rounded-lg cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center focus:outline-none transition-colors"
+              aria-label="Open navigation menu"
+            >
+              <Menu className="w-5 h-5 text-[#2C2C2C]" />
+            </button>
           </div>
         </header>
 
@@ -1315,7 +1318,7 @@ export default function AdminDashboardPage() {
         </header>
 
         {/* Main Dashboard Workspace (Viewport Fitted & Full-Bleed on Mobile) */}
-        <main className={`flex-1 min-h-0 w-full flex flex-col overflow-y-auto pb-16 lg:pb-3 ${
+        <main className={`flex-1 min-h-0 w-full flex flex-col overflow-y-auto pb-3 ${
           activeTab === "SMS_CENTER" || activeTab === "SETTINGS"
             ? "p-0 max-w-none"
             : "p-0 lg:px-6 lg:py-3 max-w-none lg:max-w-7xl lg:mx-auto gap-0 lg:gap-3 bg-white lg:bg-transparent"
@@ -1414,11 +1417,16 @@ export default function AdminDashboardPage() {
                       <Search className="w-4 h-4 text-[#717171] absolute left-3 pointer-events-none" />
                     )}
                     <input
-                      type="search"
+                      type="text"
+                      inputMode="search"
                       name="cadastre_property_search_filter"
                       autoComplete="off"
+                      autoCorrect="off"
+                      autoCapitalize="off"
+                      spellCheck={false}
                       data-lpignore="true"
                       data-1p-ignore="true"
+                      data-form-type="other"
                       placeholder="Search Account ID, Valuation No, Ratepayer, Phone, GPS (e.g. GK-0010), Landmark, Receipt..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
@@ -1777,11 +1785,16 @@ export default function AdminDashboardPage() {
                     <Search className="w-4 h-4 text-[#717171] absolute left-3 pointer-events-none" />
                   )}
                   <input
-                    type="search"
+                    type="text"
+                    inputMode="search"
                     name="ratepayer_directory_search_filter"
                     autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
                     data-lpignore="true"
                     data-1p-ignore="true"
+                    data-form-type="other"
                     placeholder="Search Ratepayer Name, Phone, Account ID, GPS Address, Municipality..."
                     value={ratepayerSearchQuery}
                     onChange={(e) => setRatepayerSearchQuery(e.target.value)}
@@ -2014,11 +2027,16 @@ export default function AdminDashboardPage() {
                   <div className="relative flex items-center w-full lg:flex-1 lg:max-w-md">
                     <Search className="w-4 h-4 text-[#717171] absolute left-3 pointer-events-none" />
                     <input
-                      type="search"
+                      type="text"
+                      inputMode="search"
                       name="treasury_reconciliation_search_filter"
                       autoComplete="off"
+                      autoCorrect="off"
+                      autoCapitalize="off"
+                      spellCheck={false}
                       data-lpignore="true"
                       data-1p-ignore="true"
+                      data-form-type="other"
                       placeholder="Search Receipt / GCR No., Account ID, Ratepayer, Channel, Date..."
                       value={treasurySearchQuery}
                       onChange={(e) => setTreasurySearchQuery(e.target.value)}
@@ -2199,11 +2217,16 @@ export default function AdminDashboardPage() {
                   <div className="relative flex-1 w-full sm:w-auto max-w-none sm:max-w-md">
                     <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-[#717171]" />
                     <input
-                      type="search"
+                      type="text"
+                      inputMode="search"
                       name="audit_trail_search_filter"
                       autoComplete="off"
+                      autoCorrect="off"
+                      autoCapitalize="off"
+                      spellCheck={false}
                       data-lpignore="true"
                       data-1p-ignore="true"
+                      data-form-type="other"
                       placeholder="Search by action, narrative, administrator, or reference..."
                       value={auditLogSearchQuery}
                       onChange={(e) => setAuditLogSearchQuery(e.target.value)}
@@ -2581,12 +2604,24 @@ export default function AdminDashboardPage() {
       {/* ANNUAL BATCH BILLING MODAL */}
       <AnimatePresence>
         {showBatchModal && (
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-xs font-sans">
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 font-sans">
+            {/* Smooth Fading Backdrop */}
             <motion.div
-              initial={{ opacity: 0, y: 20, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 20, scale: 0.98 }}
-              className="bg-white rounded-t-2xl sm:rounded-2xl border-t sm:border border-[#DADCE0] shadow-2xl p-4 sm:p-6 max-w-md w-full font-sans max-h-[92vh] sm:max-h-[90vh] overflow-y-auto"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => setShowBatchModal(false)}
+              className="fixed inset-0 bg-black/50 backdrop-blur-xs"
+            />
+
+            {/* Bottom-to-Top Sliding Modal Sheet */}
+            <motion.div
+              initial={{ y: "100%", opacity: 0.8 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: "100%", opacity: 0 }}
+              transition={{ type: "spring", damping: 28, stiffness: 300 }}
+              className="relative z-10 bg-white rounded-t-2xl sm:rounded-2xl border-t sm:border border-[#DADCE0] shadow-2xl p-4 sm:p-6 max-w-md w-full font-sans max-h-[92vh] sm:max-h-[90vh] overflow-y-auto"
             >
               <div className="w-10 h-1 bg-[#DADCE0] rounded-full mx-auto mb-3 sm:hidden shrink-0" />
               <form
@@ -2595,8 +2630,14 @@ export default function AdminDashboardPage() {
                   handleRunBatchBilling();
                 }}
                 autoComplete="off"
+                data-lpignore="true"
+                data-1p-ignore="true"
+                data-form-type="other"
                 className="space-y-4"
               >
+                {/* Anti-autofill Decoy Honeypot */}
+                <input type="text" name="prevent_autofill_user" tabIndex={-1} aria-hidden="true" style={{ position: "absolute", top: -9999, left: -9999, opacity: 0, height: 0, width: 0, pointerEvents: "none" }} />
+                <input type="password" name="prevent_autofill_pass" tabIndex={-1} aria-hidden="true" style={{ position: "absolute", top: -9999, left: -9999, opacity: 0, height: 0, width: 0, pointerEvents: "none" }} />
                 <div className="flex items-center justify-between pb-3 border-b border-[#F1F3F4]">
                   <div className="flex items-center gap-2.5">
                     <div className="w-8 h-8 rounded-lg bg-[#F6ECF2] text-[#612D53] flex items-center justify-center">
@@ -2727,14 +2768,33 @@ export default function AdminDashboardPage() {
       {/* RECORD PAYMENT MODAL */}
       <AnimatePresence>
         {showPaymentModal && selectedAccount && (
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-xs font-sans">
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 font-sans">
+            {/* Smooth Fading Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => setShowPaymentModal(false)}
+              className="fixed inset-0 bg-black/50 backdrop-blur-xs"
+            />
+
+            {/* Bottom-to-Top Sliding Modal Sheet */}
             <motion.form
               onSubmit={handleRecordPayment}
-              initial={{ opacity: 0, y: 20, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 20, scale: 0.98 }}
+              autoComplete="off"
+              data-lpignore="true"
+              data-1p-ignore="true"
+              data-form-type="other"
+              initial={{ y: "100%", opacity: 0.8 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: "100%", opacity: 0 }}
+              transition={{ type: "spring", damping: 28, stiffness: 300 }}
               className="relative z-10 bg-white rounded-t-2xl sm:rounded-xl border-t sm:border border-[#DADCE0] shadow-xl p-4 sm:p-5 max-w-md w-full space-y-3.5 text-xs font-sans max-h-[92vh] sm:max-h-[90vh] overflow-y-auto"
             >
+              {/* Anti-autofill Decoy Honeypot */}
+              <input type="text" name="prevent_autofill_user" tabIndex={-1} aria-hidden="true" style={{ position: "absolute", top: -9999, left: -9999, opacity: 0, height: 0, width: 0, pointerEvents: "none" }} />
+              <input type="password" name="prevent_autofill_pass" tabIndex={-1} aria-hidden="true" style={{ position: "absolute", top: -9999, left: -9999, opacity: 0, height: 0, width: 0, pointerEvents: "none" }} />
               <div className="w-10 h-1 bg-[#DADCE0] rounded-full mx-auto mb-2 sm:hidden shrink-0" />
               <div className="flex items-center justify-between border-b border-[#E8EAED] pb-2.5">
                 <h3 className="text-sm font-semibold text-[#2C2C2C]">
@@ -2888,13 +2948,32 @@ export default function AdminDashboardPage() {
       {/* HIGH-SECURITY SMS AUTHORIZATION MODAL (INDIVIDUAL & SELECTIVE TARGETS) */}
       <AnimatePresence>
         {showSmsAuthModal && smsAuthTargetAccounts.length > 0 && (
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-xs font-sans">
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 font-sans">
+            {/* Smooth Fading Backdrop */}
             <motion.div
-              initial={{ opacity: 0, y: 20, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 20, scale: 0.98 }}
-              className="bg-white rounded-t-2xl sm:rounded-2xl border-t sm:border border-[#DADCE0] shadow-2xl p-4 sm:p-6 max-w-lg w-full space-y-4 max-h-[92vh] sm:max-h-[90vh] overflow-y-auto"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => {
+                setShowSmsAuthModal(false);
+                setSmsAuthPassword("");
+                setSmsAuthError(null);
+              }}
+              className="fixed inset-0 bg-black/50 backdrop-blur-xs"
+            />
+
+            {/* Bottom-to-Top Sliding Modal Sheet */}
+            <motion.div
+              initial={{ y: "100%", opacity: 0.8 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: "100%", opacity: 0 }}
+              transition={{ type: "spring", damping: 28, stiffness: 300 }}
+              className="relative z-10 bg-white rounded-t-2xl sm:rounded-2xl border-t sm:border border-[#DADCE0] shadow-2xl p-4 sm:p-6 max-w-lg w-full space-y-4 max-h-[92vh] sm:max-h-[90vh] overflow-y-auto"
             >
+              {/* Anti-autofill Decoy Honeypot */}
+              <input type="text" name="prevent_autofill_user" tabIndex={-1} aria-hidden="true" style={{ position: "absolute", top: -9999, left: -9999, opacity: 0, height: 0, width: 0, pointerEvents: "none" }} />
+              <input type="password" name="prevent_autofill_pass" tabIndex={-1} aria-hidden="true" style={{ position: "absolute", top: -9999, left: -9999, opacity: 0, height: 0, width: 0, pointerEvents: "none" }} />
               <div className="w-10 h-1 bg-[#DADCE0] rounded-full mx-auto mb-2 sm:hidden shrink-0" />
               {/* Header */}
               <div className="flex items-center justify-between pb-3 border-b border-[#F1F3F4]">
@@ -2976,6 +3055,11 @@ export default function AdminDashboardPage() {
                   </div>
                   <input
                     type={showSmsAuthPassword ? "text" : "password"}
+                    name="sms_rollout_security_key"
+                    autoComplete="new-password"
+                    data-lpignore="true"
+                    data-1p-ignore="true"
+                    data-form-type="other"
                     value={smsAuthPassword}
                     onChange={(e) => {
                       setSmsAuthPassword(e.target.value);
@@ -3058,86 +3142,6 @@ export default function AdminDashboardPage() {
           loadData();
         }}
       />
-
-      {/* Mobile Bottom Quick Navigation Bar (< 1024px) */}
-      <nav
-        aria-label="Mobile Quick Navigation"
-        className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-[#DADCE0] h-14 flex items-center justify-around px-2 shadow-lg font-sans"
-      >
-        <button
-          type="button"
-          onClick={() => handleTabChange("REGISTRY")}
-          className={`flex-1 flex flex-col items-center justify-center py-1 min-h-[44px] cursor-pointer transition-colors ${
-            activeTab === "REGISTRY"
-              ? "text-[#612D53] font-semibold"
-              : "text-[#717171] hover:text-[#2C2C2C]"
-          }`}
-        >
-          <Building2 className="w-4 h-4" />
-          <span className="text-[10px] mt-0.5 leading-none">Cadastre</span>
-          {activeTab === "REGISTRY" && (
-            <span className="text-[10px] leading-none text-[#612D53] font-bold">&bull;</span>
-          )}
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handleTabChange("RATEPAYERS")}
-          className={`flex-1 flex flex-col items-center justify-center py-1 min-h-[44px] cursor-pointer transition-colors ${
-            activeTab === "RATEPAYERS"
-              ? "text-[#612D53] font-semibold"
-              : "text-[#717171] hover:text-[#2C2C2C]"
-          }`}
-        >
-          <Users className="w-4 h-4" />
-          <span className="text-[10px] mt-0.5 leading-none">Citizens</span>
-          {activeTab === "RATEPAYERS" && (
-            <span className="text-[10px] leading-none text-[#612D53] font-bold">&bull;</span>
-          )}
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handleTabChange("DEFAULTERS")}
-          className={`flex-1 flex flex-col items-center justify-center py-1 min-h-[44px] cursor-pointer transition-colors ${
-            activeTab === "DEFAULTERS"
-              ? "text-[#612D53] font-semibold"
-              : "text-[#717171] hover:text-[#2C2C2C]"
-          }`}
-        >
-          <ShieldAlert className="w-4 h-4" />
-          <span className="text-[10px] mt-0.5 leading-none">Defaulters</span>
-          {activeTab === "DEFAULTERS" && (
-            <span className="text-[10px] leading-none text-[#612D53] font-bold">&bull;</span>
-          )}
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handleTabChange("TREASURY")}
-          className={`flex-1 flex flex-col items-center justify-center py-1 min-h-[44px] cursor-pointer transition-colors ${
-            activeTab === "TREASURY"
-              ? "text-[#612D53] font-semibold"
-              : "text-[#717171] hover:text-[#2C2C2C]"
-          }`}
-        >
-          <Landmark className="w-4 h-4" />
-          <span className="text-[10px] mt-0.5 leading-none">Treasury</span>
-          {activeTab === "TREASURY" && (
-            <span className="text-[10px] leading-none text-[#612D53] font-bold">&bull;</span>
-          )}
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setIsMobileMenuOpen(true)}
-          className="flex-1 flex flex-col items-center justify-center py-1 min-h-[44px] cursor-pointer text-[#717171] hover:text-[#2C2C2C] transition-colors"
-        >
-          <Menu className="w-4 h-4" />
-          <span className="text-[10px] mt-0.5 leading-none">Modules</span>
-        </button>
-      </nav>
     </div>
-
   );
 }

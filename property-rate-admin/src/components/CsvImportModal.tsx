@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { X, UploadCloud, FileText, AlertTriangle, CheckCircle2, Loader2, Eye, EyeOff } from "lucide-react";
 import { importCadastreCsvBatch } from "@/app/actions";
 
@@ -20,8 +21,6 @@ export function CsvImportModal({ isOpen, onClose, onSuccess }: CsvImportModalPro
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  if (!isOpen) return null;
 
   const parseCsvText = (text: string) => {
     const lines = text.split(/\r\n|\n/).map((l) => l.trim()).filter(Boolean);
@@ -141,9 +140,31 @@ export function CsvImportModal({ isOpen, onClose, onSuccess }: CsvImportModalPro
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-xs font-sans">
-      <div className="bg-white rounded-t-2xl sm:rounded-2xl border-t sm:border border-[#DADCE0] shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[90vh]">
-        <div className="w-10 h-1 bg-[#DADCE0] rounded-full mx-auto my-2 sm:hidden shrink-0" />
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 font-sans">
+          {/* Smooth Fading Backdrop */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={onClose}
+            className="fixed inset-0 bg-black/50 backdrop-blur-xs"
+          />
+
+          {/* Bottom-to-Top Sliding Modal Sheet */}
+          <motion.div
+            initial={{ y: "100%", opacity: 0.8 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: "100%", opacity: 0 }}
+            transition={{ type: "spring", damping: 28, stiffness: 300 }}
+            className="relative z-10 bg-white rounded-t-2xl sm:rounded-2xl border-t sm:border border-[#DADCE0] shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[90vh]"
+          >
+            {/* Anti-autofill Decoy Honeypot */}
+            <input type="text" name="prevent_autofill_user" tabIndex={-1} aria-hidden="true" style={{ position: "absolute", top: -9999, left: -9999, opacity: 0, height: 0, width: 0, pointerEvents: "none" }} />
+            <input type="password" name="prevent_autofill_pass" tabIndex={-1} aria-hidden="true" style={{ position: "absolute", top: -9999, left: -9999, opacity: 0, height: 0, width: 0, pointerEvents: "none" }} />
+            <div className="w-10 h-1 bg-[#DADCE0] rounded-full mx-auto my-2 sm:hidden shrink-0" />
         {/* Header */}
         <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-[#DADCE0] flex items-center justify-between shrink-0 bg-white">
           <div>
@@ -292,6 +313,11 @@ export function CsvImportModal({ isOpen, onClose, onSuccess }: CsvImportModalPro
               <div className="relative">
                 <input
                   type={showPassword ? "text" : "password"}
+                  name="csv_import_admin_security_key"
+                  autoComplete="new-password"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  data-form-type="other"
                   placeholder="Enter administrator password"
                   value={adminPassword}
                   onChange={(e) => setAdminPassword(e.target.value)}
@@ -335,7 +361,9 @@ export function CsvImportModal({ isOpen, onClose, onSuccess }: CsvImportModalPro
             )}
           </button>
         </div>
-      </div>
+      </motion.div>
     </div>
-  );
+  )}
+</AnimatePresence>
+);
 }

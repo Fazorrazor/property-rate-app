@@ -15,6 +15,15 @@
     display: none;
   }
 
+  /* Suppress browser native search cancel and decoration buttons to prevent duplicate clear buttons */
+  input::-webkit-search-cancel-button,
+  input::-webkit-search-decoration,
+  input::-webkit-search-results-button,
+  input::-webkit-search-results-decoration {
+    -webkit-appearance: none;
+    display: none;
+  }
+
   /* Suppress browser native autofill blue/yellow background overlay */
   input:-webkit-autofill,
   input:-webkit-autofill:hover, 

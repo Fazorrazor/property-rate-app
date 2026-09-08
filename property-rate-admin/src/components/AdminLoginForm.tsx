@@ -69,7 +69,18 @@ export default function AdminLoginForm() {
   };
 
   return (
-    <form className="space-y-4" onSubmit={handleSubmit}>
+    <form
+      className="space-y-4"
+      onSubmit={handleSubmit}
+      autoComplete="off"
+      data-lpignore="true"
+      data-1p-ignore="true"
+      data-form-type="other"
+    >
+      {/* Anti-autofill Decoy Honeypots */}
+      <input type="text" name="prevent_autofill_username" tabIndex={-1} aria-hidden="true" style={{ position: 'absolute', top: -9999, left: -9999, opacity: 0, height: 0, width: 0, pointerEvents: 'none' }} />
+      <input type="password" name="prevent_autofill_password" tabIndex={-1} aria-hidden="true" style={{ position: 'absolute', top: -9999, left: -9999, opacity: 0, height: 0, width: 0, pointerEvents: 'none' }} />
+
       {/* Dynamic Error State (Strictly Zero Pills) */}
       {status === 'error' && errorMessage && (
         <div
@@ -97,7 +108,10 @@ export default function AdminLoginForm() {
             id="username"
             name="username"
             type="text"
-            autoComplete="username"
+            autoComplete="off"
+            data-lpignore="true"
+            data-1p-ignore="true"
+            data-form-type="other"
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck="false"
@@ -127,7 +141,10 @@ export default function AdminLoginForm() {
             id="password"
             name="password"
             type={showPassword ? 'text' : 'password'}
-            autoComplete="current-password"
+            autoComplete="new-password"
+            data-lpignore="true"
+            data-1p-ignore="true"
+            data-form-type="other"
             required
             disabled={isPending}
             value={password}

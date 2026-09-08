@@ -90,7 +90,17 @@ export default function LoginPage() {
         </p>
       </motion.header>
 
-      <form onSubmit={handlePhoneSubmit} className={STYLES.formSection}>
+      <form
+        onSubmit={handlePhoneSubmit}
+        className={STYLES.formSection}
+        autoComplete="off"
+        data-lpignore="true"
+        data-1p-ignore="true"
+        data-form-type="other"
+      >
+        {/* Anti-autofill Decoy Honeypot */}
+        <input type="text" name="prevent_autofill_phone" tabIndex={-1} aria-hidden="true" style={{ position: 'absolute', top: -9999, left: -9999, opacity: 0, height: 0, width: 0, pointerEvents: 'none' }} />
+
         <motion.section variants={itemVariants} className={STYLES.inputGroup}>
           <label
             htmlFor="phone-input"
@@ -112,7 +122,15 @@ export default function LoginPage() {
             <div className={STYLES.phoneInputContainer + " flex items-center pr-3"}>
               <input
                 id="phone-input"
+                name="ratepayer_phone_access"
                 type="tel"
+                autoComplete="off"
+                data-lpignore="true"
+                data-1p-ignore="true"
+                data-form-type="other"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
                 autoFocus
                 required
                 placeholder="024 400 0000"
