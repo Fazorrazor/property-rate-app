@@ -115,6 +115,30 @@ function chunkArray<T>(array: T[], size = 60): T[][] {
 }
 
 export const adminDb = {
+  adminUser: {
+    async findUnique(args: { where: { username?: string; id?: string } }) {
+      let query = supabase.from('AdminUser').select('*');
+      if (args.where.username) {
+        query = query.ilike('username', args.where.username.trim());
+      }
+      if (args.where.id) {
+        query = query.eq('id', args.where.id);
+      }
+      const { data, error } = await query.maybeSingle();
+      if (error || !data) return null;
+      return data;
+    },
+
+    async findMany(args?: { where?: any; orderBy?: any }) {
+      let query = supabase.from('AdminUser').select('id, username, name, role, isActive, createdAt, updatedAt');
+      if (args?.where?.role) query = query.eq('role', args.where.role);
+      if (args?.where?.isActive !== undefined) query = query.eq('isActive', args.where.isActive);
+      const { data, error } = await query;
+      if (error || !data) return [];
+      return data;
+    },
+  },
+
   user: {
     async findUnique(args: { where: { phoneNumber?: string; id?: string }; include?: any }) {
       let query = supabase.from('User').select('*');

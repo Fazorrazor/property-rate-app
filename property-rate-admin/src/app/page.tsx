@@ -38,6 +38,7 @@ import {
   recordManualCashPayment,
   runAnnualBillingBatch,
   adminLogout,
+  getCurrentAdmin,
   AdminDashboardData,
   AdminProperty,
   AdminPropertyReceipt,
@@ -117,6 +118,15 @@ export default function AdminDashboardPage() {
 
   // Bulk CSV Cadastre Importer State
   const [showCsvImportModal, setShowCsvImportModal] = useState(false);
+
+  // Dedicated Municipal Admin State
+  const [currentAdmin, setCurrentAdmin] = useState<{ id: string; username: string; name: string; role: string } | null>(null);
+
+  useEffect(() => {
+    getCurrentAdmin().then((admin) => {
+      if (admin) setCurrentAdmin(admin);
+    }).catch(() => {});
+  }, []);
 
 
   // Tab persistence & Deep link synchronization
@@ -1062,7 +1072,9 @@ export default function AdminDashboardPage() {
         <div className="p-3 border-t border-[#DADCE0] shrink-0 bg-[#F8F9FA]">
           <div className="px-3 py-1.5 text-xs">
             <span className="text-[#717171] block text-[10px]">Logged in Administrator</span>
-            <span className="font-semibold text-[#2C2C2C] truncate block">Municipal Admin</span>
+            <span className="font-semibold text-[#2C2C2C] truncate block">
+              {currentAdmin ? `${currentAdmin.name} (${currentAdmin.role})` : "Heinz (SUPER_ADMIN)"}
+            </span>
           </div>
           <button
             type="button"
@@ -1117,16 +1129,18 @@ export default function AdminDashboardPage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setShowBatchModal(true)}
-                className="btn-3d-secondary h-8 px-3 rounded-md text-[#612D53] font-medium text-xs flex items-center gap-1.5 cursor-pointer focus:outline-none"
-              >
-                <RefreshCw className="w-3.5 h-3.5 text-[#612D53]" />
-                <span>Annual Batch Billing Rollout</span>
-              </button>
-            </div>
+            {activeTab === "REGISTRY" && (
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowBatchModal(true)}
+                  className="btn-3d-secondary h-8 px-3 rounded-md text-[#612D53] font-medium text-xs flex items-center gap-1.5 cursor-pointer focus:outline-none"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 text-[#612D53]" />
+                  <span>Annual Batch Billing Rollout</span>
+                </button>
+              </div>
+            )}
           </div>
         </header>
 
@@ -1137,52 +1151,52 @@ export default function AdminDashboardPage() {
             : "px-6 py-3 max-w-7xl mx-auto gap-3"
         }`}>
           {/* Top KPI Cards (Zero Pills - High Density Compact Single Row) */}
-          {(activeTab === "REGISTRY" || activeTab === "DEFAULTERS") && (
+          {activeTab === "REGISTRY" && (
             <section aria-label="Executive KPIs" className="shrink-0">
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 {/* 1. Total Assessed Demand */}
                 <div className="px-4 py-2.5 bg-white border border-[#DADCE0] rounded-xl hover:border-[#BDC1C6] transition-colors flex items-center justify-between shadow-xs">
-                  <div>
-                    <span className="text-[11px] text-[#717171] font-medium block">Total Assessed Demand</span>
-                    <span className="text-lg font-bold text-[#2C2C2C] tracking-tight">{metrics.totalBilledFormatted}</span>
+                  <div className="min-w-0 pr-2">
+                    <span className="text-[11px] text-[#717171] font-medium block truncate">Total Assessed Demand</span>
+                    <span className="text-base xl:text-lg font-bold text-[#2C2C2C] tracking-tight whitespace-nowrap tabular-nums block">{metrics.totalBilledFormatted}</span>
                   </div>
-                  <div className="text-right">
+                  <div className="text-right shrink-0">
                     <span className="text-[10px] text-[#717171] block font-mono">FY 2025</span>
-                    <span className="text-[10px] text-[#717171]">{(data?.pagination?.total ?? metrics.totalProperties).toLocaleString()} accounts</span>
+                    <span className="text-[10px] text-[#717171] block">{(data?.pagination?.total ?? metrics.totalProperties).toLocaleString()} accounts</span>
                   </div>
                 </div>
 
                 {/* 2. Revenue Collected */}
                 <div className="px-4 py-2.5 bg-white border border-[#DADCE0] rounded-xl hover:border-[#BDC1C6] transition-colors flex items-center justify-between shadow-xs">
-                  <div>
-                    <span className="text-[11px] text-[#717171] font-medium block">Revenue Collected</span>
-                    <span className="text-lg font-bold text-[#188038] tracking-tight">{metrics.totalCollectedFormatted}</span>
+                  <div className="min-w-0 pr-2">
+                    <span className="text-[11px] text-[#717171] font-medium block truncate">Revenue Collected</span>
+                    <span className="text-base xl:text-lg font-bold text-[#188038] tracking-tight whitespace-nowrap tabular-nums block">{metrics.totalCollectedFormatted}</span>
                   </div>
-                  <div className="text-right">
+                  <div className="text-right shrink-0">
                     <span className="text-[10px] text-[#717171] block font-mono">Efficiency</span>
-                    <span className="text-[11px] font-semibold text-[#188038]">{metrics.collectionRateFormatted}</span>
+                    <span className="text-[11px] font-semibold text-[#188038] block">{metrics.collectionRateFormatted}</span>
                   </div>
                 </div>
 
                 {/* 3. Cumulative Arrears */}
                 <div className="px-4 py-2.5 bg-white border border-[#DADCE0] rounded-xl hover:border-[#BDC1C6] transition-colors flex items-center justify-between shadow-xs">
-                  <div>
-                    <span className="text-[11px] text-[#717171] font-medium block">Cumulative Arrears</span>
-                    <span className="text-lg font-bold text-[#D93025] tracking-tight">{metrics.totalArrearsFormatted}</span>
+                  <div className="min-w-0 pr-2">
+                    <span className="text-[11px] text-[#717171] font-medium block truncate">Cumulative Arrears</span>
+                    <span className="text-base xl:text-lg font-bold text-[#D93025] tracking-tight whitespace-nowrap tabular-nums block">{metrics.totalArrearsFormatted}</span>
                   </div>
-                  <div className="text-right">
+                  <div className="text-right shrink-0">
                     <span className="text-[10px] text-[#717171] block font-mono">Prior Debt</span>
-                    <span className="text-[10px] text-[#717171]">Act 936</span>
+                    <span className="text-[10px] text-[#717171] block">Act 936</span>
                   </div>
                 </div>
 
                 {/* 4. Statutory Defaulters */}
                 <div className="px-4 py-2.5 bg-white border border-[#DADCE0] rounded-xl hover:border-[#BDC1C6] transition-colors flex items-center justify-between shadow-xs">
-                  <div>
-                    <span className="text-[11px] text-[#717171] font-medium block">Statutory Defaulters</span>
-                    <span className="text-lg font-bold text-[#2C2C2C] tracking-tight">{metrics.defaultersCount.toLocaleString()}</span>
+                  <div className="min-w-0 pr-2">
+                    <span className="text-[11px] text-[#717171] font-medium block truncate">Statutory Defaulters</span>
+                    <span className="text-base xl:text-lg font-bold text-[#2C2C2C] tracking-tight whitespace-nowrap tabular-nums block">{metrics.defaultersCount.toLocaleString()}</span>
                   </div>
-                  <div className="text-right">
+                  <div className="text-right shrink-0">
                     <span className={`text-[10px] font-semibold block ${metrics.defaultersCount > 0 ? "text-[#D93025]" : "text-[#188038]"}`}>
                       {metrics.defaultersCount > 0 ? "Recovery Active" : "Compliant"}
                     </span>

@@ -165,26 +165,60 @@ export async function verifyAdminSession() {
     return null;
   }
   
-  const admin = await prisma.user.findUnique({
+  const admin = await prisma.adminUser.findUnique({
     where: { id: session.value }
   });
 
-  if (!admin || (admin.role !== 'ADMIN' && admin.role !== 'SUPER_ADMIN')) {
+  if (!admin || !admin.isActive || (admin.role !== 'ADMIN' && admin.role !== 'SUPER_ADMIN')) {
     return null;
   }
 
   return admin;
 }
 
-export async function adminLogin(phoneNumber: string, passwordHash: string, rememberMe: boolean = false) {
+export async function getCurrentAdmin() {
+  const admin = await verifyAdminSession();
+  if (!admin) return null;
+  return { id: admin.id, username: admin.username, name: admin.name, role: admin.role };
+}
+
+export async function adminLogin(username: string, passwordHash: string, rememberMe: boolean = false) {
   try {
-    const cleanPhone = phoneNumber.trim().replace(/\s+/g, '');
-    const admin = await prisma.user.findUnique({
-      where: { phoneNumber: cleanPhone }
+    const cleanUsername = (username || '').trim();
+    const cleanPassword = (passwordHash || '').trim();
+
+    // Strict Input Validation
+    if (!cleanUsername) {
+      return { success: false, error: 'Officer username is required.' };
+    }
+
+    // Explicit rejection of telephone numbers (must use username only)
+    if (/^(\+?233|0)\d{8,10}$/.test(cleanUsername) || /^\d{10,}$/.test(cleanUsername)) {
+      return { 
+        success: false, 
+        error: 'Telephone numbers are not accepted for municipal console login. Please use your official username.' 
+      };
+    }
+
+    // Alphanumeric, dot, underscore, or hyphen validation
+    if (!/^[a-zA-Z0-9_.-]{3,50}$/.test(cleanUsername)) {
+      return { 
+        success: false, 
+        error: 'Username must be between 3 and 50 characters and contain only letters, numbers, hyphens, or underscores.' 
+      };
+    }
+
+    if (!cleanPassword || cleanPassword.length < 6) {
+      return { success: false, error: 'Authorization password must be at least 6 characters.' };
+    }
+
+    // Query back-office AdminUser table (isolated from citizen account holders)
+    const admin = await prisma.adminUser.findUnique({
+      where: { username: cleanUsername }
     });
 
-    if (!admin || admin.passwordHash !== passwordHash || (admin.role !== 'ADMIN' && admin.role !== 'SUPER_ADMIN')) {
-      return { success: false, error: 'Invalid municipal phone number or security authorization password.' };
+    if (!admin || admin.passwordHash !== cleanPassword || !admin.isActive || (admin.role !== 'ADMIN' && admin.role !== 'SUPER_ADMIN')) {
+      return { success: false, error: 'Invalid municipal username or security authorization password.' };
     }
 
     const cookieStore = await cookies();
@@ -196,7 +230,7 @@ export async function adminLogin(phoneNumber: string, passwordHash: string, reme
       sameSite: 'lax'
     });
 
-    return { success: true };
+    return { success: true, user: { id: admin.id, username: admin.username, name: admin.name, role: admin.role } };
   } catch (error) {
     console.error('Login error:', error);
     return { success: false, error: 'Authentication gateway unavailable. Please try again.' };

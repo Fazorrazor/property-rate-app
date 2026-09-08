@@ -2,10 +2,10 @@
 
 import React, { useState } from 'react';
 import { adminLogin } from '../app/actions';
-import { Lock, Phone, Eye, EyeOff, Loader2, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { Lock, User, Eye, EyeOff, Loader2, CheckCircle2, ShieldAlert } from 'lucide-react';
 
 export default function AdminLoginForm() {
-  const [phoneNumber, setPhoneNumber] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -18,12 +18,40 @@ export default function AdminLoginForm() {
     e.preventDefault();
     if (isPending) return;
 
+    const cleanUsername = username.trim();
+    const cleanPassword = password.trim();
+
+    // Client-side Input Validation
+    if (!cleanUsername) {
+      setStatus('error');
+      setErrorMessage('Please enter your municipal officer username.');
+      return;
+    }
+
+    if (/^(\+?233|0)\d{8,10}$/.test(cleanUsername) || /^\d{10,}$/.test(cleanUsername)) {
+      setStatus('error');
+      setErrorMessage('Telephone numbers are not accepted. Please sign in using your official administration username.');
+      return;
+    }
+
+    if (!/^[a-zA-Z0-9_.-]{3,50}$/.test(cleanUsername)) {
+      setStatus('error');
+      setErrorMessage('Username must contain only letters, numbers, hyphens, or underscores (3 to 50 characters).');
+      return;
+    }
+
+    if (!cleanPassword) {
+      setStatus('error');
+      setErrorMessage('Please enter your authorization password.');
+      return;
+    }
+
     // Instant Doherty Threshold feedback (<100ms)
     setStatus('submitting');
     setErrorMessage('');
 
     try {
-      const res = await adminLogin(phoneNumber, password, rememberMe);
+      const res = await adminLogin(cleanUsername, cleanPassword, rememberMe);
       if (res.success) {
         setStatus('success');
         // Optimistic transition into the console
@@ -32,7 +60,7 @@ export default function AdminLoginForm() {
         }, 400);
       } else {
         setStatus('error');
-        setErrorMessage(res.error || 'Invalid municipal phone number or security authorization password.');
+        setErrorMessage(res.error || 'Invalid municipal officer username or authorization password.');
       }
     } catch (err) {
       setStatus('error');
@@ -56,29 +84,32 @@ export default function AdminLoginForm() {
         </div>
       )}
 
-      {/* Phone Number Field */}
+      {/* Officer Username Field */}
       <div>
-        <label htmlFor="phone" className="block text-[11px] font-semibold uppercase tracking-wider text-[#5F6368] mb-1">
-          Staff Phone Number
+        <label htmlFor="username" className="block text-[11px] font-semibold uppercase tracking-wider text-[#5F6368] mb-1">
+          Officer Username
         </label>
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Phone className="h-4 w-4 text-[#717171]" />
+            <User className="h-4 w-4 text-[#717171]" />
           </div>
           <input
-            id="phone"
-            name="phone"
-            type="tel"
-            autoComplete="tel"
+            id="username"
+            name="username"
+            type="text"
+            autoComplete="username"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck="false"
             required
             disabled={isPending}
-            value={phoneNumber}
-            onChange={(e) => setPhoneNumber(e.target.value)}
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
             className="block w-full pl-9 pr-3 py-2 bg-white border border-[#DADCE0] text-sm text-[#2C2C2C] placeholder:text-[#9AA0A6] focus:outline-none focus:border-[#612D53] focus:ring-1 focus:ring-[#612D53] disabled:bg-[#F8F9FA] disabled:text-[#717171] disabled:cursor-not-allowed transition-colors [&:-webkit-autofill]:shadow-[inset_0_0_0_1000px_white] [&:-webkit-autofill]:text-fill-[#2C2C2C]"
-            placeholder="e.g. 0244123456 or +233..."
+            placeholder="e.g. Heinz"
           />
         </div>
-        <p className="mt-1 text-[10px] text-[#717171]">Enter your registered municipal administration phone contact</p>
+        <p className="mt-1 text-[10px] text-[#717171]">Enter your registered municipal administration username</p>
       </div>
 
       {/* Password Field */}
@@ -141,7 +172,7 @@ export default function AdminLoginForm() {
           {status === 'submitting' ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin text-white" />
-              <span>Verifying Municipal Credentials...</span>
+              <span>Verifying Officer Credentials...</span>
             </>
           ) : status === 'success' ? (
             <>

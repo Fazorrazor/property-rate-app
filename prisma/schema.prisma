@@ -33,7 +33,6 @@ model User {
   transactions  Transaction[]
   notifications Notification[]
   sessions      Session[]
-  auditLogs     AuditLog[]
 }
 
 model Notification {
@@ -67,7 +66,6 @@ model AuditLog {
   entityId   String?
   details    String
   adminId    String
-  admin      User     @relation(fields: [adminId], references: [id])
   createdAt  DateTime @default(now())
 }
 
@@ -88,6 +86,17 @@ model Transaction {
   property           Property    @relation(fields: [propertyId], references: [id])
   receipt            Receipt?
   feePayment         FeePayment?
+}
+
+model AdminUser {
+  id           String   @id @default(uuid())
+  username     String   @unique
+  name         String
+  passwordHash String
+  role         String   @default("ADMIN") // ADMIN, SUPER_ADMIN
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 // ==========================================

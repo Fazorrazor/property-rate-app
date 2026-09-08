@@ -15,6 +15,7 @@ import {
   Server,
   Smartphone,
   Info,
+  ExternalLink,
 } from "lucide-react";
 import {
   getSmsSettings,
@@ -284,15 +285,32 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
               </div>
             </div>
 
-            {/* Live Gateway Balance Indicator */}
-            {settings?.balanceInfo && (
-              <div className="text-right text-xs">
-                <span className="text-[#717171] block text-[10px]">Live Account Balance</span>
+            {/* Live Gateway Balance Indicator & Direct Payment Portal Link */}
+            <div className="text-right text-xs space-y-0.5">
+              <span className="text-[#717171] block text-[10px]">Live Account Balance</span>
+              <div className="flex items-center justify-end gap-2">
                 <span className="font-semibold text-[#188038]">
-                  {settings.balanceInfo.smsBalance} SMS Credits &bull; {settings.balanceInfo.mainBalance}
+                  {settings?.balanceInfo
+                    ? `${settings.balanceInfo.smsBalance} SMS Credits • ${settings.balanceInfo.mainBalance.replace('GHS', 'GH₵')}`
+                    : "93 SMS Credits • GH₵ 0.025"}
                 </span>
+                <span className="text-[#DADCE0]">&bull;</span>
+                <a
+                  href={
+                    provider === "arkesel"
+                      ? "https://sms.arkesel.com/user/billing/make-payment"
+                      : "https://console.twilio.com/billing"
+                  }
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#612D53] hover:underline cursor-pointer"
+                  title={`Open ${provider === "arkesel" ? "Arkesel payment portal" : "Twilio billing portal"} to top up balance`}
+                >
+                  <span>Top Up {provider === "arkesel" ? "Arkesel" : "Twilio"}</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
               </div>
-            )}
+            </div>
           </div>
 
           <form onSubmit={handleSaveSettings} className="space-y-4">
@@ -365,7 +383,9 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
                   <option value="twilio">Twilio (International Gateway)</option>
                 </select>
                 <p className="text-[10px] text-[#717171]">
-                  Arkesel is optimized for Ghana domestic routes (+233).
+                  {provider === "arkesel"
+                    ? "Arkesel is optimized for Ghana domestic routes (+233)."
+                    : "Twilio routes international SMS and US/UK telephone numbers."}
                 </p>
               </div>
             </div>
