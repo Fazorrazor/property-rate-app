@@ -14,6 +14,7 @@ function VerifyCheckoutContent() {
   
   const [status, setStatus] = useState<"VERIFYING" | "SUCCESS" | "FAILED">("VERIFYING");
   const [errorMsg, setErrorMsg] = useState("");
+  const [receiptData, setReceiptData] = useState<{ receiptNumber?: string; amount?: number } | null>(null);
 
   useEffect(() => {
     if (!reference) {
@@ -32,11 +33,8 @@ function VerifyCheckoutContent() {
         if (!isMounted) return;
 
         if (res.success && res.status === 'SUCCESS' && res.receipt) {
+          setReceiptData(res.receipt);
           setStatus("SUCCESS");
-          // Redirect to receipt view or dashboard after 3 seconds
-          setTimeout(() => {
-            router.push("/receipts");
-          }, 3000);
         } else if (res.success && res.status === 'PENDING') {
           if (attempts < 5) {
             setTimeout(() => checkVerification(attempts + 1), 2000);
@@ -61,18 +59,14 @@ function VerifyCheckoutContent() {
     return () => {
       isMounted = false;
     };
-  }, [reference, router]);
+  }, [reference]);
 
   return (
     <main className="min-h-screen bg-surface-subtle text-on-surface flex flex-col justify-center items-center max-w-md mx-auto w-full p-6 font-sans text-center">
       
       {status === "VERIFYING" && (
-        <div className="space-y-4 flex flex-col items-center">
+        <div className="flex flex-col items-center justify-center p-12">
           <HeinzLoader size="large" />
-          <h1 className="text-sm font-semibold text-on-surface uppercase tracking-wider mt-4">Verifying Payment...</h1>
-          <p className="text-xs text-on-surface-muted max-w-[250px]">
-            Please wait while we securely confirm your transaction with the treasury...
-          </p>
         </div>
       )}
 
@@ -80,18 +74,44 @@ function VerifyCheckoutContent() {
         <motion.div
           initial={{ opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="space-y-4 flex flex-col items-center"
+          className="space-y-4 flex flex-col items-center w-full"
         >
           <div className="w-16 h-16 bg-[#E6F4EA] rounded-full flex items-center justify-center mx-auto shadow-sm ring-4 ring-[#E6F4EA]/50">
             <CheckCircle2 className="w-8 h-8 text-[#188038]" />
           </div>
-          <h1 className="text-base font-semibold text-on-surface">Payment Successful!</h1>
-          <p className="text-xs text-on-surface-muted max-w-[250px]">
-            Your municipal rate assessment has been settled. Redirecting to your official receipt...
+          <h1 className="text-base font-semibold text-on-surface">Payment Confirmed!</h1>
+          <p className="text-xs text-on-surface-muted max-w-[280px]">
+            Your municipal rate assessment has been reconciled with KKMA Treasury.
           </p>
-          <div className="pt-2 text-[10px] text-on-surface-muted flex items-center gap-1">
-            <ShieldCheck className="w-3 h-3" />
-            <span>KKMA Treasury Encrypted</span>
+
+          {receiptData && (
+            <div className="p-3.5 bg-surface border border-border-light rounded-xl text-left w-full text-xs space-y-2 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="text-on-surface-muted">Official Receipt</span>
+                <span className="font-mono font-semibold text-foreground">{receiptData.receiptNumber}</span>
+              </div>
+              {receiptData.amount && (
+                <div className="flex items-center justify-between">
+                  <span className="text-on-surface-muted">Amount</span>
+                  <span className="font-semibold text-foreground">GH₵ {receiptData.amount.toFixed(2)}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="w-full space-y-2 pt-2">
+            <button
+              onClick={() => window.print()}
+              className="w-full h-11 rounded-xl bg-[#4B1426] hover:bg-[#3E101F] text-white font-medium text-xs flex items-center justify-center transition-colors cursor-pointer shadow-xs"
+            >
+              Print / Save Receipt
+            </button>
+            <button
+              onClick={() => window.close()}
+              className="w-full h-10 rounded-xl bg-surface border border-border-light text-foreground text-xs font-medium flex items-center justify-center transition-colors cursor-pointer"
+            >
+              Close Window
+            </button>
           </div>
         </motion.div>
       )}
@@ -110,10 +130,10 @@ function VerifyCheckoutContent() {
             {errorMsg}
           </p>
           <button
-            onClick={() => router.push("/dashboard")}
-            className="mt-4 px-5 py-2.5 rounded-xl bg-[#4B1426] hover:bg-[#558467] text-white font-medium text-xs transition-colors shadow-sm"
+            onClick={() => window.history.back()}
+            className="mt-4 px-5 py-2.5 rounded-xl bg-[#4B1426] hover:bg-[#3E101F] text-white font-medium text-xs transition-colors shadow-sm"
           >
-            Return to Dashboard
+            Back to Payment
           </button>
         </motion.div>
       )}
@@ -126,9 +146,8 @@ export default function VerifyCheckoutPage() {
   return (
     <Suspense
       fallback={
-        <main className="min-h-screen bg-surface-subtle text-on-surface flex flex-col justify-center items-center max-w-md mx-auto w-full p-6 font-sans text-center">
+        <main className="min-h-screen bg-surface-subtle flex flex-col justify-center items-center max-w-md mx-auto w-full p-6">
           <HeinzLoader size="large" />
-          <h1 className="text-sm font-semibold text-on-surface uppercase tracking-wider mt-4">Loading Verification...</h1>
         </main>
       }
     >

@@ -162,9 +162,8 @@ export function RatepayerDossierSheet({
                     )}
 
                     {isLoading && (
-                      <span className="text-[11px] text-[#717171] flex items-center gap-1 ml-1.5">
-                        <Loader2 className="w-3 h-3 animate-spin text-[#612D53]" />
-                        <span className="hidden sm:inline">Syncing...</span>
+                      <span className="flex items-center ml-1.5">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-[#612D53]" />
                       </span>
                     )}
                   </div>

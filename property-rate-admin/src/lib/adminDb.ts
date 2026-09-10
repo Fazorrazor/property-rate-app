@@ -860,6 +860,36 @@ export const adminDb = {
     },
   },
 
+  session: {
+    async findFirst(args: { where: { userId?: string } }) {
+      try {
+        let query = supabase.from('Session').select('*');
+        if (args.where?.userId) query = query.eq('userId', args.where.userId);
+        const { data, error } = await query.order('createdAt', { ascending: false }).limit(1).maybeSingle();
+        if (error || !data) return null;
+        return data;
+      } catch (e) {
+        return null;
+      }
+    },
+    async create(args: { data: any }) {
+      const id = args.data.id || `sess_${Math.random().toString(36).substring(2, 12)}`;
+      const row = {
+        ...args.data,
+        id,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      try {
+        const { data, error } = await supabase.from('Session').insert([row]).select().single();
+        if (error) return row;
+        return data;
+      } catch (e) {
+        return row;
+      }
+    },
+  },
+
   async $transaction(promisesOrFn: any) {
     if (typeof promisesOrFn === 'function') {
       return await promisesOrFn(adminDb);

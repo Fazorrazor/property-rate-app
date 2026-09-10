@@ -231,16 +231,16 @@ export function SmsRolloutSimulator({
     if (!previewProp) {
       return {
         message: "Select an active property account to preview the dual-link SMS rollout notice.",
-        billLink: "http://localhost:3000/properties?accountNumber=DEMO",
-        paymentLink: "http://localhost:3000/properties?accountNumber=DEMO&action=pay",
+        billLink: `${(process.env.NEXT_PUBLIC_APP_URL || "https://property-rate-app.vercel.app").replace(/\/$/, "")}/properties?accountNumber=DEMO`,
+        paymentLink: `${(process.env.NEXT_PUBLIC_APP_URL || "https://property-rate-app.vercel.app").replace(/\/$/, "")}/checkout?propertyId=DEMO`,
         recipientPhone: "+233 24 000 0000",
         recipientName: "Municipal Citizen",
       };
     }
 
-    const host = typeof window !== "undefined" ? window.location.origin.replace(":3001", ":3000") : "http://localhost:3000";
+    const host = (process.env.NEXT_PUBLIC_APP_URL || "https://property-rate-app.vercel.app").replace(/\/$/, "");
     const billLink = `${host}/properties?accountNumber=${encodeURIComponent(previewProp.accountNumber)}`;
-    const paymentLink = `${host}/properties?accountNumber=${encodeURIComponent(previewProp.accountNumber)}&action=pay`;
+    const paymentLink = `${host}/checkout?propertyId=${encodeURIComponent(previewProp.accountNumber)}`;
 
     const cleanMunicipality = (previewProp.municipality || "Kpone-Katamanso (KKMA)").replace(/\s*\([^)]*\)/, '').trim() || "Municipal";
     const billYear = previewProp.billYear || 2026;
@@ -338,9 +338,9 @@ export function SmsRolloutSimulator({
       arrearsFormatted: "GH₵ 0.00",
       currentFeeFormatted: "GH₵ 437.50",
     };
-    const host = typeof window !== "undefined" ? window.location.origin.replace(":3001", ":3000") : "http://localhost:3000";
+    const host = (process.env.NEXT_PUBLIC_APP_URL || "https://property-rate-app.vercel.app").replace(/\/$/, "");
     const billLink = `${host}/properties?accountNumber=${encodeURIComponent(prop.accountNumber)}`;
-    const paymentLink = `${host}/properties?accountNumber=${encodeURIComponent(prop.accountNumber)}&action=pay`;
+    const paymentLink = `${host}/checkout?propertyId=${encodeURIComponent(prop.accountNumber)}`;
     const cleanMunicipality = (prop.municipality || "Kpone-Katamanso (KKMA)").replace(/\s*\([^)]*\)/, '').trim() || "Municipal";
     const billYear = prop.billYear || 2026;
 

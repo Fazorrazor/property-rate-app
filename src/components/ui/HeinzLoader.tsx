@@ -1,7 +1,5 @@
 "use client";
 
-import { motion } from "framer-motion";
-
 interface HeinzLoaderProps {
   size?: "small" | "large";
 }
@@ -10,21 +8,12 @@ export function HeinzLoader({ size = "large" }: HeinzLoaderProps) {
   const isSmall = size === "small";
   
   return (
-    <motion.div
-      className={`font-bold tracking-tight text-[#612D53] select-none flex items-center justify-center ${
-        isSmall ? "text-base" : "text-3xl"
+    <div
+      className={`border-t-transparent rounded-full animate-spin border-[#612D53] ${
+        isSmall ? "w-5 h-5 border-2" : "w-8 h-8 border-[3px]"
       }`}
-      animate={{
-        opacity: [0.4, 1, 0.4],
-        scale: [0.98, 1, 0.98],
-      }}
-      transition={{
-        duration: 2,
-        repeat: Infinity,
-        ease: "easeInOut",
-      }}
-    >
-      Heinz
-    </motion.div>
+      role="status"
+      aria-label="Loading"
+    />
   );
 }

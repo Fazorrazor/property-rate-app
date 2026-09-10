@@ -238,6 +238,7 @@ export async function verifyOtpAndLogin(otp: string, explicitPhone?: string) {
 
     cookieStore.delete('pending_auth_phone');
     cookieStore.delete('pending_auth_otp');
+    cookieStore.delete('portal_access_only');
 
     revalidatePath('/dashboard');
     revalidatePath('/properties');
@@ -482,7 +483,7 @@ export async function getCheckoutData(propertyId: string, settlementType: Settle
       title = 'All Municipal Property Rates';
       subtitle = `${unpaidProps.length} Account Head${unpaidProps.length === 1 ? '' : 's'} assessed under KKMA`;
     } else {
-      const prop = user.properties.find((p) => p.id === propertyId);
+      const prop = user.properties.find((p) => p.id === propertyId || p.accountNumber === propertyId);
       if (!prop) return null;
 
       fiscalYear = prop.billYear;

@@ -55,11 +55,12 @@ export class ArkeselProvider implements ISMSProvider {
   /**
    * Builds the dual deep links for viewing the digital bill and accessing in-app payment.
    */
-  public buildBillLinks(accountNumber: string, baseUrl?: string): { billLinkUrl: string; paymentLinkUrl: string } {
-    const host = (baseUrl || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '');
+  public buildBillLinks(accountNumber: string, baseUrl?: string, token?: string): { billLinkUrl: string; paymentLinkUrl: string } {
+    const host = (baseUrl || process.env.NEXT_PUBLIC_APP_URL || 'https://property-rate-app.vercel.app').replace(/\/$/, '');
+    const tokenQuery = token ? `&token=${encodeURIComponent(token)}` : '';
     return {
-      billLinkUrl: `${host}/properties?accountNumber=${encodeURIComponent(accountNumber)}`,
-      paymentLinkUrl: `${host}/properties?accountNumber=${encodeURIComponent(accountNumber)}&action=pay`,
+      billLinkUrl: `${host}/properties?accountNumber=${encodeURIComponent(accountNumber)}${tokenQuery}`,
+      paymentLinkUrl: `${host}/checkout?propertyId=${encodeURIComponent(accountNumber)}${tokenQuery}`,
     };
   }
 
@@ -76,6 +77,7 @@ export class ArkeselProvider implements ISMSProvider {
       currentFee,
       dueDate = '30-Jun-2025',
       baseUrl,
+      token,
       customTemplate,
       municipality = 'Kpone-Katamanso (KKMA)',
       billYear = new Date().getFullYear(),
@@ -83,7 +85,7 @@ export class ArkeselProvider implements ISMSProvider {
       ussdCode = '*227*4362#',
     } = params;
 
-    const { billLinkUrl, paymentLinkUrl } = this.buildBillLinks(accountNumber, baseUrl);
+    const { billLinkUrl, paymentLinkUrl } = this.buildBillLinks(accountNumber, baseUrl, token);
 
     const cleanMunicipality = municipality.replace(/\s*\([^)]*\)/, '').trim() || municipality;
     const formattedAmount = totalAmountDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });

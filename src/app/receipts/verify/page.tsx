@@ -231,8 +231,8 @@ export default function ReceiptVerifyPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-[#F6ECF2] flex items-center justify-center text-xs text-[#717171]">
-          Loading verification portal...
+        <div className="min-h-screen bg-[#F6ECF2] flex items-center justify-center">
+          <div className="w-8 h-8 border-[3px] border-[#612D53] border-t-transparent rounded-full animate-spin" />
         </div>
       }
     >

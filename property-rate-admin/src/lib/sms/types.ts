@@ -17,6 +17,7 @@ export interface BillRolloutSMSParams {
   currentFee: number;
   dueDate?: string;
   baseUrl?: string;
+  token?: string;
   customTemplate?: string;
   municipality?: string;
   billYear?: number | string;

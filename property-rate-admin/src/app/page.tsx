@@ -71,9 +71,8 @@ const SmsRolloutSimulator = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="flex-1 flex items-center justify-center p-12 text-xs text-[#717171]">
-        <Loader2 className="w-5 h-5 animate-spin text-[#612D53] mr-2" />
-        <span>Loading SMS Communication Center...</span>
+      <div className="flex-1 flex items-center justify-center p-12">
+        <Loader2 className="w-6 h-6 animate-spin text-[#612D53]" />
       </div>
     ),
   }
@@ -2420,8 +2419,14 @@ export default function AdminDashboardPage() {
                   <tbody className="divide-y divide-[#E8EAED] bg-white font-sans">
                     {filteredAuditLogs.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="py-12 text-center text-[#717171] italic">
-                          {isLoadingAuditLogs ? "Loading system audit events..." : "No audit trail records found matching your filter."}
+                        <td colSpan={6} className="py-12 text-center text-[#717171]">
+                          {isLoadingAuditLogs ? (
+                            <div className="flex justify-center items-center py-4">
+                              <Loader2 className="w-5 h-5 animate-spin text-[#612D53]" />
+                            </div>
+                          ) : (
+                            <span className="italic">No audit trail records found matching your filter.</span>
+                          )}
                         </td>
                       </tr>
                     ) : (
@@ -2470,8 +2475,14 @@ export default function AdminDashboardPage() {
                 {/* Mobile Audit Trail Cards (< 768px) */}
                 <div className="block md:hidden divide-y divide-[#E8EAED] bg-white font-sans">
                   {filteredAuditLogs.length === 0 ? (
-                    <div className="py-12 text-center text-[#717171] italic text-xs px-4">
-                      {isLoadingAuditLogs ? "Loading system audit events..." : "No audit trail records found matching your filter."}
+                    <div className="py-12 text-center text-[#717171] text-xs px-4">
+                      {isLoadingAuditLogs ? (
+                        <div className="flex justify-center items-center py-4">
+                          <Loader2 className="w-5 h-5 animate-spin text-[#612D53]" />
+                        </div>
+                      ) : (
+                        <span className="italic">No audit trail records found matching your filter.</span>
+                      )}
                     </div>
                   ) : (
                     filteredAuditLogs.map((log) => (

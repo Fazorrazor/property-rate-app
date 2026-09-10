@@ -78,6 +78,7 @@ function CheckoutContent() {
   const [activeReference, setActiveReference] = useState<string | null>(null);
   const [pollingAttempts, setPollingAttempts] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCompleted, setIsCompleted] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
 
   const showToast = (message: string, type: "success" | "error" | "info" = "error") => {
@@ -172,10 +173,6 @@ function CheckoutContent() {
   const handleBack = () => {
     if (step === "DETAILS") {
       setStep("CHANNELS");
-    } else if (step === "CONFIRMATION" || step === "FAILED") {
-      router.push("/dashboard");
-    } else {
-      router.push("/properties");
     }
   };
 
@@ -234,16 +231,51 @@ function CheckoutContent() {
   if (!checkoutData || checkoutData.totalAmount <= 0) {
     return (
       <main className="min-h-screen bg-background p-6 max-w-md mx-auto flex flex-col justify-center items-center text-center space-y-3 font-sans">
-        <div className="w-12 h-12 rounded-2xl bg-background text-foreground flex items-center justify-center">
+        <div className="w-12 h-12 rounded-2xl bg-[#E6F4EA] text-[#188038] flex items-center justify-center">
           <CheckCircle2 className="w-6 h-6" />
         </div>
         <h2 className="text-base font-semibold text-foreground">No Outstanding Balance</h2>
         <p className="text-xs text-on-surface-muted">This municipal assessment has already been settled in full.</p>
         <button
-          onClick={() => router.push("/properties")}
-          className="px-4 py-2 rounded-lg bg-[#4B1426] text-white font-medium text-xs hover:bg-[#558467] transition-colors cursor-pointer"
+          onClick={() => window.close()}
+          className="px-5 py-2.5 rounded-xl bg-[#4B1426] text-white font-medium text-xs hover:bg-[#3E101F] transition-colors cursor-pointer shadow-xs"
         >
-          Return to Properties
+          Close Window
+        </button>
+      </main>
+    );
+  }
+
+  if (isCompleted) {
+    return (
+      <main className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center max-w-md mx-auto w-full p-6 text-center space-y-4 font-sans">
+        <div className="w-16 h-16 bg-[#E6F4EA] rounded-full flex items-center justify-center mx-auto shadow-sm ring-4 ring-[#E6F4EA]/50">
+          <CheckCircle2 className="w-8 h-8 text-[#188038]" />
+        </div>
+        <div className="space-y-1">
+          <h2 className="text-base font-semibold text-foreground">
+            Rate Settlement Complete
+          </h2>
+          <p className="text-xs text-on-surface-muted leading-relaxed max-w-xs">
+            Your payment has been successfully credited to Kpone-Katamanso Municipal Assembly. You may now close this window.
+          </p>
+        </div>
+        <div className="p-3.5 bg-surface border border-border-light rounded-xl text-left w-full text-xs space-y-2 shadow-2xs">
+          <div className="flex items-center justify-between">
+            <span className="text-on-surface-muted">Payment Reference</span>
+            <span className="font-mono font-semibold text-foreground">{receiptResult?.receiptNumber || checkoutData?.title}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-on-surface-muted">Settlement Status</span>
+            <span className="text-[#188038] font-medium">&bull; Reconciled</span>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => window.close()}
+          className="w-full h-11 rounded-xl bg-[#4B1426] hover:bg-[#3E101F] text-white font-medium text-xs flex items-center justify-center transition-colors cursor-pointer shadow-xs"
+        >
+          Close Window
         </button>
       </main>
     );
@@ -254,14 +286,18 @@ function CheckoutContent() {
       {/* Top Header */}
       {step !== "PROCESSING" && (
         <header className="flex items-center justify-between py-2 border-b border-border-light mb-4">
-          <button
-            type="button"
-            onClick={handleBack}
-            className="w-9 h-9 rounded-xl bg-surface border border-border-light flex items-center justify-center text-on-surface-muted hover:bg-background transition-colors cursor-pointer"
-            aria-label="Go Back"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
+          {step === "DETAILS" ? (
+            <button
+              type="button"
+              onClick={handleBack}
+              className="w-9 h-9 rounded-xl bg-surface border border-border-light flex items-center justify-center text-on-surface-muted hover:bg-background transition-colors cursor-pointer"
+              aria-label="Go Back"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+          ) : (
+            <div className="w-9 h-9" />
+          )}
 
           <div className="text-center">
             <h1 className="text-xs font-semibold text-foreground uppercase tracking-wider">
@@ -701,15 +737,9 @@ function CheckoutContent() {
           <div className="pt-4 space-y-2 w-full">
             <button
               onClick={() => setStep("CHANNELS")}
-              className="w-full h-11 rounded-xl bg-[#4B1426] hover:bg-[#558467] text-white font-medium text-xs flex items-center justify-center transition-colors cursor-pointer shadow-xs"
+              className="w-full h-11 rounded-xl bg-[#4B1426] hover:bg-[#3E101F] text-white font-medium text-xs flex items-center justify-center transition-colors cursor-pointer shadow-xs"
             >
               Retry Payment
-            </button>
-            <button
-              onClick={() => router.push("/dashboard")}
-              className="w-full h-11 rounded-xl bg-surface border border-border-light text-on-surface-muted font-medium text-xs flex items-center justify-center transition-colors hover:bg-background cursor-pointer"
-            >
-              Return to Dashboard
             </button>
           </div>
         </motion.div>
@@ -789,19 +819,20 @@ function CheckoutContent() {
           <div className="space-y-2 pt-2">
             <button
               type="button"
-              onClick={() => router.push("/receipts")}
-              className="w-full h-11 rounded-xl bg-[#4B1426] hover:bg-[#558467] text-white font-medium text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-xs"
+              onClick={() => window.print()}
+              className="w-full h-11 rounded-xl bg-[#4B1426] hover:bg-[#3E101F] text-white font-medium text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-xs"
             >
               <ReceiptIcon className="w-4 h-4" />
-              <span>View Official Receipt</span>
+              <span>Print / Download Official Receipt</span>
             </button>
 
             <button
               type="button"
-              onClick={() => router.push("/properties")}
-              className="w-full py-2.5 text-center text-xs font-medium text-on-surface-muted hover:text-foreground cursor-pointer"
+              onClick={() => setIsCompleted(true)}
+              className="w-full h-10 rounded-xl bg-surface border border-border-light text-foreground hover:bg-background text-xs font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
             >
-              Back to Properties
+              <CheckCircle2 className="w-3.5 h-3.5 text-[#188038]" />
+              <span>Done (Finish Settlement)</span>
             </button>
           </div>
         </motion.div>

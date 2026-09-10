@@ -2,8 +2,51 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 export function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-  const authSession = request.cookies.get('auth_session')?.value;
+  const { pathname, searchParams } = request.nextUrl;
+  const tokenParam = searchParams.get('token');
+  const isPortalAccessOnly = request.cookies.get('portal_access_only')?.value === 'true' || Boolean(tokenParam);
+  const authSession = request.cookies.get('auth_session')?.value || tokenParam;
+
+  // Handle Tokenized Direct Access (Instant Citizen Login via SMS deep link)
+  if (tokenParam) {
+    const requestHeaders = new Headers(request.headers);
+    const existingCookie = requestHeaders.get('cookie') || '';
+    requestHeaders.set('cookie', `${existingCookie ? existingCookie + '; ' : ''}auth_session=${tokenParam}; portal_access_only=true`);
+
+    const response = NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    });
+
+    response.cookies.set('auth_session', tokenParam, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 365,
+      path: '/',
+    });
+
+    response.cookies.set('portal_access_only', 'true', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 30,
+      path: '/',
+    });
+
+    return response;
+  }
+
+  const isInternalAppPath =
+    pathname.startsWith('/dashboard') ||
+    pathname.startsWith('/profile') ||
+    pathname.startsWith('/receipts');
+
+  // Enforce portal containment: SMS token users cannot browse internal app areas
+  if (isPortalAccessOnly && isInternalAppPath) {
+    return NextResponse.redirect(new URL('/checkout', request.url));
+  }
 
   const isProtectedPath =
     pathname.startsWith('/dashboard') ||
@@ -19,6 +62,9 @@ export function middleware(request: NextRequest) {
 
   // Root redirect
   if (pathname === '/') {
+    if (isPortalAccessOnly) {
+      return NextResponse.redirect(new URL('/checkout', request.url));
+    }
     if (authSession) {
       return NextResponse.redirect(new URL('/dashboard', request.url));
     } else {

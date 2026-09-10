@@ -1,6 +1,7 @@
 'use server';
 
 import { prisma } from '@/lib/db';
+import { supabase } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 import { TwilioProvider } from '@/lib/sms/twilio';
@@ -11,7 +12,7 @@ const arkeselService = new ArkeselProvider();
 const twilioServiceInstance = new TwilioProvider();
 
 let activeSmsConfig = {
-  dispatchMode: (process.env.SMS_DISPATCH_MODE || 'TEST') as 'TEST' | 'LIVE',
+  dispatchMode: (process.env.SMS_DISPATCH_MODE || 'LIVE') as 'TEST' | 'LIVE',
   provider: (process.env.SMS_PROVIDER || 'arkesel').toLowerCase() as 'arkesel' | 'twilio',
   arkeselApiKey: process.env.ARKESEL_API_KEY || 'YUlJRXNnTUdJaUdndHRNd2Zubms',
   arkeselSenderId: process.env.ARKESEL_SENDER_ID || 'Arnold',
@@ -1135,6 +1136,24 @@ export async function batchDispatchSms(
 
       if (ownerPhone) {
         count++;
+
+        // Retrieve or generate persistent session token for one-click citizen access
+        let userToken: string | undefined = undefined;
+        if (primaryUser?.id) {
+          const userSession = await (prisma as any).session?.findFirst({
+            where: { userId: primaryUser.id },
+          });
+          if (userSession?.token) {
+            userToken = userSession.token;
+          } else {
+            const newToken = `tok_${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`;
+            const createdSession = await (prisma as any).session?.create({
+              data: { token: newToken, userId: primaryUser.id },
+            });
+            userToken = createdSession?.token || newToken;
+          }
+        }
+
         const formatted = twilioService.formatBillRolloutMessage({
           accountNumber: p.accountNumber,
           ownerName: ownerName,
@@ -1144,6 +1163,7 @@ export async function batchDispatchSms(
           currentFee: p.currentFee,
           dueDate: '30-Jun-2025',
           baseUrl,
+          token: userToken,
           customTemplate,
           municipality: p.municipality || 'Kpone-Katamanso (KKMA)',
           billYear: p.billYear || 2026,
@@ -1244,6 +1264,25 @@ export interface SmsSettingsData {
 
 export async function getSmsSettings(): Promise<SmsSettingsData> {
   await verifyAdminSession();
+
+  try {
+    const { data: latestLog } = await supabase
+      .from('AuditLog')
+      .select('*')
+      .eq('action', 'SYSTEM_SETTINGS_UPDATE')
+      .order('createdAt', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (latestLog?.details) {
+      if (latestLog.details.includes('Mode=LIVE')) {
+        activeSmsConfig.dispatchMode = 'LIVE';
+      } else if (latestLog.details.includes('Mode=TEST')) {
+        activeSmsConfig.dispatchMode = 'TEST';
+      }
+    }
+  } catch (e) {}
+
   let balanceInfo = null;
 
   if (activeSmsConfig.provider === 'arkesel' && activeSmsConfig.arkeselApiKey) {

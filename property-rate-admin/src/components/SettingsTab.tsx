@@ -55,10 +55,15 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
   const fetchSettings = async () => {
     setIsLoading(true);
     try {
+      const cachedMode = typeof window !== "undefined" ? (localStorage.getItem("kkma_sms_dispatch_mode") as "TEST" | "LIVE" | null) : null;
+      if (cachedMode) {
+        setDispatchMode(cachedMode);
+      }
       const data = await getSmsSettings();
       if (data) {
         setSettings(data);
-        setDispatchMode(data.dispatchMode);
+        const effectiveMode = cachedMode || data.dispatchMode;
+        setDispatchMode(effectiveMode);
         setApiKey(data.arkeselApiKey || "YUlJRXNnTUdJaUdndHRNd2Zubms");
         setSenderId(data.arkeselSenderId || "Arnold");
         setProvider(data.provider || "arkesel");
@@ -75,17 +80,31 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
     fetchSettings();
   }, []);
 
-  const handleModeChange = (newMode: "TEST" | "LIVE") => {
+  const handleModeChange = async (newMode: "TEST" | "LIVE") => {
     if (newMode === "LIVE" && dispatchMode !== "LIVE") {
       setShowLiveConfirmModal(true);
     } else {
       setDispatchMode(newMode);
+      try {
+        if (typeof window !== "undefined") localStorage.setItem("kkma_sms_dispatch_mode", newMode);
+        await updateSmsSettings({ dispatchMode: newMode });
+        onNotify?.(`Switched to ${newMode === "LIVE" ? "LIVE GATEWAY" : "TEST / SIMULATION"} mode.`, "info");
+      } catch (err) {
+        console.error("Failed to auto-save dispatch mode:", err);
+      }
     }
   };
 
-  const confirmLiveMode = () => {
+  const confirmLiveMode = async () => {
     setDispatchMode("LIVE");
     setShowLiveConfirmModal(false);
+    try {
+      if (typeof window !== "undefined") localStorage.setItem("kkma_sms_dispatch_mode", "LIVE");
+      await updateSmsSettings({ dispatchMode: "LIVE" });
+      onNotify?.("Live Gateway Mode activated and saved.", "success");
+    } catch (err) {
+      console.error("Failed to auto-save LIVE mode:", err);
+    }
   };
 
   const handleTestConnection = async () => {
@@ -131,6 +150,7 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
         arkeselSenderId: senderId.trim(),
       });
       if (res.success) {
+        if (typeof window !== "undefined") localStorage.setItem("kkma_sms_dispatch_mode", dispatchMode);
         onNotify?.(
           `Settings saved. Active mode: ${dispatchMode === "LIVE" ? "LIVE GATEWAY" : "TEST / SIMULATION"}.`,
           "success"
@@ -147,9 +167,8 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
 
   if (isLoading) {
     return (
-      <div className="flex-1 flex items-center justify-center p-12 text-xs text-[#717171]">
-        <Loader2 className="w-5 h-5 animate-spin text-[#612D53] mr-2" />
-        <span>Loading Municipal System &amp; SMS Settings...</span>
+      <div className="flex-1 flex items-center justify-center p-12">
+        <Loader2 className="w-6 h-6 animate-spin text-[#612D53]" />
       </div>
     );
   }
