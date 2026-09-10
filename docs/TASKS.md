@@ -31,3 +31,6 @@
 - [ ] Conduct accessibility audits (Screen readers, high contrast).
 - [ ] Implement robust error handling and network retry queues.
 - [ ] Finalize App Store and Google Play configurations.
+
+## DevOps & Build Optimization Backlog
+- [ ] **Next.js Build Caching**: Configure persistent build caching (`.next/cache`) in CI/CD pipeline / Vercel to accelerate rebuild times and resolve `⚠ No build cache found. Please configure build caching for faster rebuilds` (Ref: https://nextjs.org/docs/messages/no-cache).
