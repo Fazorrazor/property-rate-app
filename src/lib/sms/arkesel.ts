@@ -76,7 +76,7 @@ export class ArkeselProvider implements ISMSProvider {
     const formattedArrears = arrears.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const formattedCurrentFee = currentFee.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-    const defaultMsg = `Dear ${cleanMunicipality} Resident,\n\nDo find below your ${billYear} Property Rate bill:\n\nValuation ID: ${accountNumber}\n\nAmount due: GH₵ ${formattedAmount}\n\nView your bills: ${billLinkUrl}\n\nPay Via ${ussdCode} or ${paymentLinkUrl} with your payment reference ${accountNumber}\n\nFor payment & enquiries kindly call ${supportPhone}\nDisregard if already paid. Keep receipt for verification.`;
+    const defaultMsg = `Dear ${cleanMunicipality} Resident,\n\nDo find below your ${billYear} Property Rate bill:\n\nValuation ID: ${accountNumber}\n\nAmount due: GHS ${formattedAmount}\n\nView your bills: ${billLinkUrl}\n\nPay online: ${paymentLinkUrl}\n\nFor payment & enquiries kindly call ${supportPhone}\nDisregard if already paid. Keep receipt for verification.`;
 
     let messageText: string;
 

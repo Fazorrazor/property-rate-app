@@ -567,12 +567,23 @@ export async function initializePayment(data: {
     }
 
     const reference = `TX-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-    const propertyIds = data.propertyId === 'ALL' 
-      ? user.properties.filter((p: any) => p.status !== 'PAID').map((p: any) => p.id).join(',') 
-      : data.propertyId;
-    const primaryPropertyId = data.propertyId === 'ALL' 
-      ? user.properties.filter((p: any) => p.status !== 'PAID')[0]?.id 
-      : data.propertyId;
+    let primaryPropertyId = '';
+    let propertyIds = '';
+
+    if (data.propertyId === 'ALL') {
+      const unpaidProps = user.properties.filter((p: any) => p.status !== 'PAID');
+      primaryPropertyId = unpaidProps[0]?.id;
+      propertyIds = unpaidProps.map((p: any) => p.id).join(',');
+    } else {
+      let matchedProp: any = user.properties.find((p: any) => p.id === data.propertyId || p.accountNumber === data.propertyId);
+      if (!matchedProp) {
+        matchedProp = await prisma.property.findUnique({
+          where: data.propertyId.startsWith('prop_') ? { id: data.propertyId } : { accountNumber: data.propertyId }
+        });
+      }
+      primaryPropertyId = matchedProp?.id || data.propertyId;
+      propertyIds = primaryPropertyId;
+    }
 
     if (!primaryPropertyId) return { success: false, error: 'No properties to settle.' };
 
@@ -639,10 +650,17 @@ export async function chargeMobileMoneyAction(params: {
     if (params.propertyId === 'ALL') {
       propertyIds = user.properties.filter(p => p.status !== 'PAID').map(p => p.id);
     } else {
-      propertyIds = [params.propertyId];
+      let matchedProp: any = user.properties.find((p: any) => p.id === params.propertyId || p.accountNumber === params.propertyId);
+      if (!matchedProp) {
+        matchedProp = await prisma.property.findUnique({
+          where: params.propertyId.startsWith('prop_') ? { id: params.propertyId } : { accountNumber: params.propertyId }
+        });
+      }
+      const resolvedId = matchedProp?.id || params.propertyId;
+      propertyIds = [resolvedId];
     }
 
-    if (propertyIds.length === 0) {
+    if (propertyIds.length === 0 || !propertyIds[0]) {
       return { success: false, error: 'No unpaid properties found.' };
     }
 
@@ -699,9 +717,9 @@ export async function chargeMobileMoneyAction(params: {
       reference: response.reference,
       displayText: response.displayText
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Mobile Money charge error:', error);
-    return { success: false, error: 'Payment service unavailable.' };
+    return { success: false, error: error?.message || 'Payment service unavailable.' };
   }
 }
 
@@ -724,7 +742,13 @@ export async function processPayment(data: {
         .filter((p) => p.status !== 'PAID')
         .map((p) => p.id);
     } else {
-      targetPropertyIds = [data.propertyId];
+      let matchedProp: any = user.properties.find((p) => p.id === data.propertyId || p.accountNumber === data.propertyId);
+      if (!matchedProp) {
+        matchedProp = await prisma.property.findUnique({
+          where: data.propertyId.startsWith('prop_') ? { id: data.propertyId } : { accountNumber: data.propertyId }
+        });
+      }
+      targetPropertyIds = [matchedProp?.id || data.propertyId];
     }
 
     if (targetPropertyIds.length === 0) {
@@ -735,7 +759,12 @@ export async function processPayment(data: {
     let generatedReceiptId = '';
 
     for (const propId of targetPropertyIds) {
-      const prop = user.properties.find((p) => p.id === propId);
+      let prop: any = user.properties.find((p: any) => p.id === propId || p.accountNumber === propId);
+      if (!prop) {
+        prop = await prisma.property.findUnique({
+          where: propId.startsWith('prop_') ? { id: propId } : { accountNumber: propId }
+        });
+      }
       if (!prop) continue;
 
       let paymentAmount = data.amount;

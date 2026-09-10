@@ -264,7 +264,7 @@ export default function AdminDashboardPage() {
   const [batchAdminPassword, setBatchAdminPassword] = useState("");
   const [showBatchPassword, setShowBatchPassword] = useState(false);
   const [messageTemplate, setMessageTemplate] = useState(
-    "Dear {{municipality}} Resident,\n\nDo find below your {{billYear}} Property Rate bill:\n\nValuation ID: {{accountNumber}}\n\nAmount due: GH₵ {{totalAmountDue}}\n\nView your bills: {{billLink}}\n\nPay Via *227*4362# or {{paymentLink}} with your payment reference {{accountNumber}}\n\nFor payment & enquiries kindly call 0256039385/0538702445\nDisregard if already paid. Keep receipt for verification."
+    "Dear {{municipality}} Resident,\n\nDo find below your {{billYear}} Property Rate bill:\n\nValuation ID: {{accountNumber}}\n\nAmount due: GHS {{totalAmountDue}}\n\nView your bills: {{billLink}}\n\nPay online: {{paymentLink}}\n\nFor payment & enquiries kindly call 0256039385/0538702445\nDisregard if already paid. Keep receipt for verification."
   );
 
   // Hydrate persistent template from localStorage cache
@@ -272,7 +272,17 @@ export default function AdminDashboardPage() {
     try {
       const cached = localStorage.getItem("kkma_sms_message_template");
       if (cached && cached.trim()) {
-        setMessageTemplate(cached);
+        if (cached.includes("*227*4362#") || cached.includes("GH₵") || cached.includes("Pay Via")) {
+          const sanitized = cached
+            .replace(/Pay Via \*227\*4362# or ({{paymentLink}}|\S+) with your payment reference {{accountNumber}}/g, 'Pay online: {{paymentLink}}')
+            .replace(/Pay Via \*227\*4362# or {{paymentLink}}/g, 'Pay online: {{paymentLink}}')
+            .replace(/\*227\*4362# or /g, '')
+            .replace(/GH₵/g, 'GHS');
+          localStorage.setItem("kkma_sms_message_template", sanitized);
+          setMessageTemplate(sanitized);
+        } else {
+          setMessageTemplate(cached);
+        }
       }
     } catch {}
   }, []);

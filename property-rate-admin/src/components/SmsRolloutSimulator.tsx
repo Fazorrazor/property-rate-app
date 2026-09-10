@@ -103,6 +103,17 @@ export function SmsRolloutSimulator({
     try {
       const cached = localStorage.getItem("kkma_sms_message_template");
       if (cached && cached.trim()) {
+        if (cached.includes("*227*4362#") || cached.includes("GH₵") || cached.includes("Pay Via")) {
+          const sanitized = cached
+            .replace(/Pay Via \*227\*4362# or ({{paymentLink}}|\S+) with your payment reference {{accountNumber}}/g, 'Pay online: {{paymentLink}}')
+            .replace(/Pay Via \*227\*4362# or {{paymentLink}}/g, 'Pay online: {{paymentLink}}')
+            .replace(/\*227\*4362# or /g, '')
+            .replace(/GH₵/g, 'GHS');
+          localStorage.setItem("kkma_sms_message_template", sanitized);
+          setMessageTemplate(sanitized);
+          setDraftTemplate(sanitized);
+          return;
+        }
         setMessageTemplate(cached);
         setDraftTemplate(cached);
         return;
@@ -112,10 +123,18 @@ export function SmsRolloutSimulator({
     getSmsSettings()
       .then((settings) => {
         if (settings?.messageTemplate) {
-          setMessageTemplate(settings.messageTemplate);
-          setDraftTemplate(settings.messageTemplate);
+          let tpl = settings.messageTemplate;
+          if (tpl.includes("*227*4362#") || tpl.includes("GH₵") || tpl.includes("Pay Via")) {
+            tpl = tpl
+              .replace(/Pay Via \*227\*4362# or ({{paymentLink}}|\S+) with your payment reference {{accountNumber}}/g, 'Pay online: {{paymentLink}}')
+              .replace(/Pay Via \*227\*4362# or {{paymentLink}}/g, 'Pay online: {{paymentLink}}')
+              .replace(/\*227\*4362# or /g, '')
+              .replace(/GH₵/g, 'GHS');
+          }
+          setMessageTemplate(tpl);
+          setDraftTemplate(tpl);
           try {
-            localStorage.setItem("kkma_sms_message_template", settings.messageTemplate);
+            localStorage.setItem("kkma_sms_message_template", tpl);
           } catch {}
         }
       })
