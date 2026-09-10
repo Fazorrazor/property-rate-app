@@ -140,9 +140,30 @@ export default function AdminDashboardPage() {
   const [currentAdmin, setCurrentAdmin] = useState<{ id: string; username: string; name: string; role: string } | null>(null);
 
   useEffect(() => {
-    getCurrentAdmin().then((admin) => {
-      if (admin) setCurrentAdmin(admin);
-    }).catch(() => {});
+    const verifySession = async () => {
+      try {
+        const admin = await getCurrentAdmin();
+        if (admin) {
+          setCurrentAdmin(admin);
+        } else {
+          window.location.href = "/login?superseded=true";
+        }
+      } catch {
+        window.location.href = "/login?superseded=true";
+      }
+    };
+
+    verifySession();
+
+    // Proactive single-session check: detect if another device logged into this admin account
+    const handleFocus = () => verifySession();
+    window.addEventListener("focus", handleFocus);
+    const interval = setInterval(verifySession, 30000);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      clearInterval(interval);
+    };
   }, []);
 
 
@@ -731,13 +752,15 @@ export default function AdminDashboardPage() {
       });
   };
 
-  const handleBatchDispatchSms = async (accountNumbers?: string[], customTpl?: string, adminPassword?: string) => {
+  const handleBatchDispatchSms = async (accountNumbers?: string[], customTpl?: string, adminPassword?: string, mode?: "TEST" | "LIVE") => {
     const targets = accountNumbers || selectedIds;
     if (!targets || targets.length === 0) return { success: false, error: "No target accounts selected." };
 
+    const clientMode = mode || (typeof window !== "undefined" ? (localStorage.getItem("kkma_sms_dispatch_mode") as any) : undefined);
+
     setIsProcessing(true);
     try {
-      const res = await batchDispatchSms(targets, adminPassword, customTpl);
+      const res = await batchDispatchSms(targets, adminPassword, customTpl, undefined, clientMode);
       if (res.success) {
         showToast(`Successfully dispatched dual-link SMS Demand Notices to ${res.dispatchedCount} accounts.`, "success");
         setSelectedIds([]);
@@ -769,10 +792,11 @@ export default function AdminDashboardPage() {
       return;
     }
 
+    const clientMode = typeof window !== "undefined" ? (localStorage.getItem("kkma_sms_dispatch_mode") as any) : undefined;
     setIsProcessing(true);
     setSmsAuthError(null);
     try {
-      const res = await batchDispatchSms(targetAccountNumbers, smsAuthPassword);
+      const res = await batchDispatchSms(targetAccountNumbers, smsAuthPassword, undefined, undefined, clientMode);
       if (res.success) {
         showToast(
           `Successfully dispatched dual-link SMS Demand Notices to ${res.dispatchedCount} accounts.`,

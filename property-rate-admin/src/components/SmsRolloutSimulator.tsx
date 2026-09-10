@@ -33,7 +33,7 @@ import { motion, AnimatePresence } from "framer-motion";
 interface SmsRolloutSimulatorProps {
   properties: AdminProperty[];
   smsLogs: SmsRolloutLogItem[];
-  onTriggerBatchRollout: (accountNumbers: string[], template: string, password?: string) => Promise<{ success: boolean; error?: string } | void>;
+  onTriggerBatchRollout: (accountNumbers: string[], template: string, password?: string, mode?: "TEST" | "LIVE") => Promise<{ success: boolean; error?: string } | void>;
   isProcessing: boolean;
   selectedProperties?: AdminProperty[];
   onClearSelectedProperties?: () => void;
@@ -374,7 +374,8 @@ export function SmsRolloutSimulator({
 
     try {
       const targetAccounts = unpaidTargets.map((p) => p.accountNumber);
-      const res = await onTriggerBatchRollout(targetAccounts, messageTemplate, adminPassword);
+      const clientMode = typeof window !== "undefined" ? (localStorage.getItem("kkma_sms_dispatch_mode") as any) : undefined;
+      const res = await onTriggerBatchRollout(targetAccounts, messageTemplate, adminPassword, clientMode);
       if (res && !res.success) {
         setAuthError(res.error || "Password verification failed.");
       } else {

@@ -12,6 +12,16 @@ export default function AdminLoginForm() {
   const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
 
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('superseded') === 'true') {
+        setStatus('error');
+        setErrorMessage('Your session was closed because this administrator account signed in from another device.');
+      }
+    }
+  }, []);
+
   const isPending = status === 'submitting' || status === 'success';
 
   const handleSubmit = async (e: React.FormEvent) => {

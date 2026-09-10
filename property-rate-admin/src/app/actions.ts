@@ -166,12 +166,42 @@ export async function verifyAdminSession() {
     return null;
   }
   
+  const [adminId, sessionToken] = session.value.split(':');
+
   const admin = await prisma.adminUser.findUnique({
-    where: { id: session.value }
+    where: { id: adminId }
   });
 
   if (!admin || !admin.isActive || (admin.role !== 'ADMIN' && admin.role !== 'SUPER_ADMIN')) {
+    cookieStore.delete('admin_session');
     return null;
+  }
+
+  // Single-device active session verification
+  if (sessionToken) {
+    try {
+      const latestSession = await prisma.auditLog.findFirst({
+        where: {
+          adminId: admin.id,
+          action: { in: ['ADMIN_SESSION_ACTIVE', 'ADMIN_SESSION_REVOKED'] },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (latestSession) {
+        if (latestSession.action === 'ADMIN_SESSION_REVOKED') {
+          cookieStore.delete('admin_session');
+          return null;
+        }
+        if (latestSession.action === 'ADMIN_SESSION_ACTIVE' && latestSession.details !== sessionToken) {
+          // Superseded by a newer login from another device
+          cookieStore.delete('admin_session');
+          return null;
+        }
+      }
+    } catch (e) {
+      // transient query error non-fatal
+    }
   }
 
   return admin;
@@ -222,8 +252,25 @@ export async function adminLogin(username: string, passwordHash: string, remembe
       return { success: false, error: 'Invalid municipal username or security authorization password.' };
     }
 
+    const sessionToken = `adm_${Math.random().toString(36).substring(2, 12)}_${Date.now()}`;
+
+    // Record this active session to invalidate all prior sessions on other devices
+    try {
+      await prisma.auditLog.create({
+        data: {
+          action: 'ADMIN_SESSION_ACTIVE',
+          entityType: 'AdminSession',
+          entityId: admin.id,
+          details: sessionToken,
+          adminId: admin.id,
+        },
+      });
+    } catch (auditErr) {
+      console.warn('Could not record ADMIN_SESSION_ACTIVE audit log:', auditErr);
+    }
+
     const cookieStore = await cookies();
-    cookieStore.set('admin_session', admin.id, {
+    cookieStore.set('admin_session', `${admin.id}:${sessionToken}`, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       maxAge: rememberMe ? 60 * 60 * 24 * 7 : 60 * 60 * 24, // 7 days or 24 hours
@@ -240,6 +287,21 @@ export async function adminLogin(username: string, passwordHash: string, remembe
 
 export async function adminLogout() {
   const cookieStore = await cookies();
+  const session = cookieStore.get('admin_session');
+  if (session?.value) {
+    const adminId = session.value.split(':')[0];
+    try {
+      await prisma.auditLog.create({
+        data: {
+          action: 'ADMIN_SESSION_REVOKED',
+          entityType: 'AdminSession',
+          entityId: adminId,
+          details: 'Logged out explicitly',
+          adminId: adminId,
+        },
+      });
+    } catch (e) {}
+  }
   cookieStore.delete('admin_session');
   revalidatePath('/');
 }
@@ -1127,7 +1189,27 @@ export async function batchDispatchSms(
 
     let count = 0;
     const notificationsToCreate = [];
-    const effectiveMode = overrideMode || activeSmsConfig.dispatchMode;
+
+    // Authoritative dispatch mode resolution with persistent DB fallback
+    let currentMode = overrideMode;
+    if (!currentMode) {
+      try {
+        const latestSettingLog = await prisma.auditLog.findFirst({
+          where: { action: 'SYSTEM_SETTINGS_UPDATE' },
+          orderBy: { createdAt: 'desc' },
+        });
+        if (latestSettingLog?.details) {
+          if (latestSettingLog.details.includes('Mode=TEST')) {
+            currentMode = 'TEST';
+          } else if (latestSettingLog.details.includes('Mode=LIVE')) {
+            currentMode = 'LIVE';
+          }
+        }
+      } catch (err) {
+        console.warn('Could not query AuditLog for SMS settings mode:', err);
+      }
+    }
+    const effectiveMode = currentMode || activeSmsConfig.dispatchMode || 'TEST';
 
     for (const p of properties) {
       const primaryUser = p.users?.[0];
