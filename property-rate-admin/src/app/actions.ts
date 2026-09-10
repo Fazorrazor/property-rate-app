@@ -1228,7 +1228,7 @@ export async function batchDispatchSms(
           if (userSession?.token) {
             userToken = userSession.token;
           } else {
-            const newToken = `tok_${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`;
+            const newToken = `tok_${Math.random().toString(36).substring(2, 10)}`;
             const createdSession = await (prisma as any).session?.create({
               data: { token: newToken, userId: primaryUser.id },
             });

@@ -74,7 +74,7 @@ function PropertiesContent() {
     async function load() {
       try {
         const [dashRes, notifRes] = await Promise.all([
-          getDashboardData(),
+          getDashboardData(deepLinkAccount || undefined),
           getUserNotifications(),
         ]);
 

@@ -48,12 +48,13 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/checkout', request.url));
   }
 
+  const hasDirectDeepLink = Boolean(tokenParam || searchParams.get('accountNumber') || searchParams.get('propertyId'));
+
   const isProtectedPath =
     pathname.startsWith('/dashboard') ||
-    pathname.startsWith('/properties') ||
+    (pathname.startsWith('/properties') && !hasDirectDeepLink) ||
     pathname.startsWith('/receipts') ||
-    pathname.startsWith('/profile') ||
-    pathname.startsWith('/checkout');
+    pathname.startsWith('/profile');
 
   const isAuthPath =
     pathname.startsWith('/auth/welcome') ||

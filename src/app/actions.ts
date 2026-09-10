@@ -317,9 +317,18 @@ export async function logoutUser() {
 // TAXPAYER DASHBOARD & IN-APP BILL RESOLVER
 // ----------------------------------------------------
 
-export async function getDashboardData(): Promise<DashboardData | null> {
+export async function getDashboardData(accountNumberOverride?: string): Promise<DashboardData | null> {
   try {
-    const user = await getAuthenticatedSession();
+    let user = await getAuthenticatedSession();
+    if (!user && accountNumberOverride) {
+      const prop = await prisma.property.findUnique({
+        where: accountNumberOverride.startsWith('prop_') ? { id: accountNumberOverride } : { accountNumber: accountNumberOverride },
+        include: { users: { include: { properties: true } } }
+      });
+      if (prop?.users?.[0]) {
+        user = prop.users[0] as any;
+      }
+    }
     if (!user) return null;
 
     let totalValuation = 0;
@@ -470,39 +479,46 @@ export type SettlementType = 'TOTAL' | 'ARREARS' | 'CURRENT_FEE' | 'PARTIAL';
 export async function getCheckoutData(propertyId: string, settlementType: SettlementType = 'TOTAL', customAmount?: number) {
   try {
     const user = await getAuthenticatedSession();
-    if (!user) return null;
 
     let totalAmount = 0;
     let title = '';
     let subtitle = '';
     let fiscalYear = 2025;
+    let targetProp: any = null;
 
     if (propertyId === 'ALL') {
+      if (!user) return null;
       const unpaidProps = user.properties.filter((p) => p.status !== 'PAID');
       totalAmount = unpaidProps.reduce((sum, p) => sum + p.totalAmountDue, 0);
       title = 'All Municipal Property Rates';
       subtitle = `${unpaidProps.length} Account Head${unpaidProps.length === 1 ? '' : 's'} assessed under KKMA`;
     } else {
-      const prop = user.properties.find((p) => p.id === propertyId || p.accountNumber === propertyId);
-      if (!prop) return null;
+      targetProp = user?.properties?.find((p) => p.id === propertyId || p.accountNumber === propertyId);
+      if (!targetProp) {
+        targetProp = await prisma.property.findUnique({
+          where: propertyId.startsWith('prop_') ? { id: propertyId } : { accountNumber: propertyId },
+          include: { users: true }
+        });
+      }
+      if (!targetProp) return null;
 
-      fiscalYear = prop.billYear;
+      fiscalYear = targetProp.billYear || 2026;
       if (settlementType === 'ARREARS') {
-        totalAmount = prop.arrears;
-        title = `Arrears Clearance: ${prop.accountNumber}`;
-        subtitle = `Carried arrears debt for ${prop.ownerDigitalAddress}`;
+        totalAmount = targetProp.arrears;
+        title = `Arrears Clearance: ${targetProp.accountNumber}`;
+        subtitle = `Carried arrears debt for ${targetProp.ownerDigitalAddress}`;
       } else if (settlementType === 'CURRENT_FEE') {
-        totalAmount = prop.currentFee;
-        title = `2025 Rate Assessment: ${prop.accountNumber}`;
-        subtitle = `Current municipal rate fee for ${prop.ownerDigitalAddress}`;
+        totalAmount = targetProp.currentFee;
+        title = `${fiscalYear} Rate Assessment: ${targetProp.accountNumber}`;
+        subtitle = `Current municipal rate fee for ${targetProp.ownerDigitalAddress}`;
       } else if (settlementType === 'PARTIAL' && customAmount) {
         totalAmount = customAmount;
-        title = `Partial Payment: ${prop.accountNumber}`;
-        subtitle = `Custom installment towards ${prop.ownerDigitalAddress}`;
+        title = `Partial Payment: ${targetProp.accountNumber}`;
+        subtitle = `Custom installment towards ${targetProp.ownerDigitalAddress}`;
       } else {
-        totalAmount = prop.totalAmountDue;
-        title = `Full Rate Settlement: ${prop.accountNumber}`;
-        subtitle = `Full outstanding rate assessment (${prop.propertyClassification})`;
+        totalAmount = targetProp.totalAmountDue;
+        title = `Full Rate Settlement: ${targetProp.accountNumber}`;
+        subtitle = `Full outstanding rate assessment (${targetProp.propertyClassification})`;
       }
     }
 
@@ -513,6 +529,12 @@ export async function getCheckoutData(propertyId: string, settlementType: Settle
     const totalPayable = Math.ceil(rawTotal);
     const processingFee = Number((totalPayable - subtotal).toFixed(2));
 
+    const resolvedUser = user || {
+      id: targetProp?.users?.[0]?.id || 'usr_direct',
+      name: targetProp?.users?.[0]?.name || 'Municipal Ratepayer',
+      phoneNumber: targetProp?.users?.[0]?.phoneNumber || '0240000000',
+    };
+
     return {
       title,
       subtitle,
@@ -521,7 +543,7 @@ export async function getCheckoutData(propertyId: string, settlementType: Settle
         settlementType === 'ARREARS'
           ? 'Settling Carried Arrears'
           : settlementType === 'CURRENT_FEE'
-          ? 'Settling 2025 Fee'
+          ? `Settling ${fiscalYear} Fee`
           : settlementType === 'PARTIAL'
           ? 'Custom Installment Payment'
           : 'Settling Full Balance',
@@ -533,9 +555,9 @@ export async function getCheckoutData(propertyId: string, settlementType: Settle
       totalAmount: totalPayable,
       totalAmountFormatted: `GH₵ ${totalPayable.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       user: {
-        id: user.id,
-        name: user.name,
-        phoneNumber: user.phoneNumber,
+        id: resolvedUser.id,
+        name: resolvedUser.name,
+        phoneNumber: resolvedUser.phoneNumber,
       },
     };
   } catch (error) {
@@ -550,8 +572,19 @@ export async function initializePayment(data: {
   amount: number;
 }) {
   try {
-    const user = await getAuthenticatedSession();
-    if (!user) return { success: false, error: 'User session not found' };
+    let user = await getAuthenticatedSession();
+    if (!user && data.propertyId !== 'ALL') {
+      const prop = await prisma.property.findUnique({
+        where: data.propertyId.startsWith('prop_') ? { id: data.propertyId } : { accountNumber: data.propertyId },
+        include: { users: true }
+      });
+      if (prop?.users?.[0]) {
+        user = prop.users[0] as any;
+      } else if (prop) {
+        user = (await prisma.user.findFirst()) as any;
+      }
+    }
+    if (!user) return { success: false, error: 'User session or property record not found' };
 
     // Fraud/Risk layer: velocity check
     const recentPending = await prisma.transaction.count({
@@ -643,8 +676,19 @@ export async function chargeMobileMoneyAction(params: {
   network: NetworkProvider;
 }) {
   try {
-    const user = await getAuthenticatedSession();
-    if (!user) return { success: false, error: 'Authentication required' };
+    let user = await getAuthenticatedSession();
+    if (!user && params.propertyId !== 'ALL') {
+      const prop = await prisma.property.findUnique({
+        where: params.propertyId.startsWith('prop_') ? { id: params.propertyId } : { accountNumber: params.propertyId },
+        include: { users: true }
+      });
+      if (prop?.users?.[0]) {
+        user = prop.users[0] as any;
+      } else if (prop) {
+        user = (await prisma.user.findFirst()) as any;
+      }
+    }
+    if (!user) return { success: false, error: 'User session or property record not found' };
 
     let propertyIds: string[] = [];
     if (params.propertyId === 'ALL') {
@@ -731,8 +775,19 @@ export async function processPayment(data: {
   paymentPhoneNumber?: string;
 }) {
   try {
-    const user = await getAuthenticatedSession();
-    if (!user) return { success: false, error: 'User session not found' };
+    let user = await getAuthenticatedSession();
+    if (!user && data.propertyId && data.propertyId !== 'ALL') {
+      const prop = await prisma.property.findUnique({
+        where: data.propertyId.startsWith('prop_') ? { id: data.propertyId } : { accountNumber: data.propertyId },
+        include: { users: true }
+      });
+      if (prop?.users?.[0]) {
+        user = prop.users[0] as any;
+      } else if (prop) {
+        user = (await prisma.user.findFirst()) as any;
+      }
+    }
+    if (!user) return { success: false, error: 'User session or property record not found' };
 
     const settlementType = data.settlementType || 'TOTAL';
     let targetPropertyIds: string[] = [];
