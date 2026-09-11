@@ -481,6 +481,7 @@ export async function getCheckoutData(propertyId: string, settlementType: Settle
     const user = await getAuthenticatedSession();
 
     let totalAmount = 0;
+    let actualBill = 0;
     let title = '';
     let subtitle = '';
     let fiscalYear = 2025;
@@ -489,7 +490,8 @@ export async function getCheckoutData(propertyId: string, settlementType: Settle
     if (propertyId === 'ALL') {
       if (!user) return null;
       const unpaidProps = user.properties.filter((p) => p.status !== 'PAID');
-      totalAmount = unpaidProps.reduce((sum, p) => sum + p.totalAmountDue, 0);
+      actualBill = unpaidProps.reduce((sum, p) => sum + p.totalAmountDue, 0);
+      totalAmount = actualBill;
       title = 'All Municipal Property Rates';
       subtitle = `${unpaidProps.length} Account Head${unpaidProps.length === 1 ? '' : 's'} assessed under KKMA`;
     } else {
@@ -503,16 +505,23 @@ export async function getCheckoutData(propertyId: string, settlementType: Settle
       if (!targetProp) return null;
 
       fiscalYear = targetProp.billYear || 2026;
+      actualBill = targetProp.totalAmountDue;
+
       if (settlementType === 'ARREARS') {
+        actualBill = targetProp.arrears;
         totalAmount = targetProp.arrears;
         title = `Arrears Clearance: ${targetProp.accountNumber}`;
         subtitle = `Carried arrears debt for ${targetProp.ownerDigitalAddress}`;
       } else if (settlementType === 'CURRENT_FEE') {
+        actualBill = targetProp.currentFee;
         totalAmount = targetProp.currentFee;
         title = `${fiscalYear} Rate Assessment: ${targetProp.accountNumber}`;
         subtitle = `Current municipal rate fee for ${targetProp.ownerDigitalAddress}`;
       } else if (settlementType === 'PARTIAL' && customAmount) {
-        totalAmount = customAmount;
+        const minAllowed = Number((actualBill * 0.20).toFixed(2));
+        const maxAllowed = actualBill;
+        const clampedAmount = Math.min(Math.max(customAmount, minAllowed), maxAllowed);
+        totalAmount = clampedAmount;
         title = `Partial Payment: ${targetProp.accountNumber}`;
         subtitle = `Custom installment towards ${targetProp.ownerDigitalAddress}`;
       } else {
@@ -522,6 +531,8 @@ export async function getCheckoutData(propertyId: string, settlementType: Settle
       }
     }
 
+    const minPartialAmount = Number((actualBill * 0.20).toFixed(2));
+    const maxPartialAmount = actualBill;
     const subtotal = totalAmount;
     // Pass a 2% fee to the customer so that the treasury receives exactly the subtotal
     // Round UP to the nearest whole Cedi to avoid decimal payments
@@ -548,6 +559,10 @@ export async function getCheckoutData(propertyId: string, settlementType: Settle
           ? 'Custom Installment Payment'
           : 'Settling Full Balance',
       fiscalYear,
+      actualAmountDue: actualBill,
+      actualAmountDueFormatted: `GH₵ ${actualBill.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      minPartialAmount,
+      maxPartialAmount,
       subtotal,
       subtotalFormatted: `GH₵ ${subtotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       processingFee,
@@ -602,13 +617,14 @@ export async function initializePayment(data: {
     const reference = `TX-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     let primaryPropertyId = '';
     let propertyIds = '';
+    let matchedProp: any = null;
 
     if (data.propertyId === 'ALL') {
       const unpaidProps = user.properties.filter((p: any) => p.status !== 'PAID');
       primaryPropertyId = unpaidProps[0]?.id;
       propertyIds = unpaidProps.map((p: any) => p.id).join(',');
     } else {
-      let matchedProp: any = user.properties.find((p: any) => p.id === data.propertyId || p.accountNumber === data.propertyId);
+      matchedProp = user.properties.find((p: any) => p.id === data.propertyId || p.accountNumber === data.propertyId);
       if (!matchedProp) {
         matchedProp = await prisma.property.findUnique({
           where: data.propertyId.startsWith('prop_') ? { id: data.propertyId } : { accountNumber: data.propertyId }
@@ -621,6 +637,23 @@ export async function initializePayment(data: {
     if (!primaryPropertyId) return { success: false, error: 'No properties to settle.' };
 
     const { amount, settlementType } = data;
+
+    if (settlementType === 'PARTIAL') {
+      const fullBill = matchedProp
+        ? matchedProp.totalAmountDue
+        : (user.properties ? user.properties.filter((p: any) => p.status !== 'PAID').reduce((sum: number, p: any) => sum + p.totalAmountDue, 0) : 0);
+
+      if (fullBill > 0) {
+        const minAllowed = Number((fullBill * 0.20).toFixed(2));
+        const maxAllowed = fullBill;
+        if (amount < minAllowed - 0.01) {
+          return { success: false, error: `Partial payment cannot be less than 20% (GH₵ ${minAllowed.toFixed(2)}) of the bill.` };
+        }
+        if (amount > maxAllowed + 0.01) {
+          return { success: false, error: `Partial payment cannot exceed the total bill of GH₵ ${maxAllowed.toFixed(2)}.` };
+        }
+      }
+    }
 
     const transaction = await prisma.transaction.create({
       data: {
@@ -691,10 +724,12 @@ export async function chargeMobileMoneyAction(params: {
     if (!user) return { success: false, error: 'User session or property record not found' };
 
     let propertyIds: string[] = [];
+    let matchedProp: any = null;
+
     if (params.propertyId === 'ALL') {
       propertyIds = user.properties.filter(p => p.status !== 'PAID').map(p => p.id);
     } else {
-      let matchedProp: any = user.properties.find((p: any) => p.id === params.propertyId || p.accountNumber === params.propertyId);
+      matchedProp = user.properties.find((p: any) => p.id === params.propertyId || p.accountNumber === params.propertyId);
       if (!matchedProp) {
         matchedProp = await prisma.property.findUnique({
           where: params.propertyId.startsWith('prop_') ? { id: params.propertyId } : { accountNumber: params.propertyId }
@@ -706,6 +741,29 @@ export async function chargeMobileMoneyAction(params: {
 
     if (propertyIds.length === 0 || !propertyIds[0]) {
       return { success: false, error: 'No unpaid properties found.' };
+    }
+
+    if (params.settlementType === 'PARTIAL') {
+      const fullBill = matchedProp
+        ? matchedProp.totalAmountDue
+        : (user.properties ? user.properties.filter((p: any) => p.status !== 'PAID').reduce((sum: number, p: any) => sum + p.totalAmountDue, 0) : 0);
+
+      if (fullBill > 0) {
+        const minAllowed = Number((fullBill * 0.20).toFixed(2));
+        const maxAllowed = fullBill;
+        if (params.subtotal < minAllowed - 0.01) {
+          return {
+            success: false,
+            error: `Partial payment cannot be less than 20% (GH₵ ${minAllowed.toFixed(2)}) of the total bill.`
+          };
+        }
+        if (params.subtotal > maxAllowed + 0.01) {
+          return {
+            success: false,
+            error: `Partial payment cannot exceed the total bill of GH₵ ${maxAllowed.toFixed(2)}.`
+          };
+        }
+      }
     }
 
     const uniqueSuffix = Math.floor(1000 + Math.random() * 9000);

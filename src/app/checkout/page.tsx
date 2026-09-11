@@ -36,6 +36,10 @@ interface CheckoutState {
   settlementType?: SettlementType;
   settlementLabel?: string;
   fiscalYear: number;
+  actualAmountDue?: number;
+  actualAmountDueFormatted?: string;
+  minPartialAmount?: number;
+  maxPartialAmount?: number;
   subtotal: number;
   subtotalFormatted: string;
   processingFee: number;
@@ -59,6 +63,7 @@ function CheckoutContent() {
 
   const [paymentMode, setPaymentMode] = useState<"FULL" | "PARTIAL">(customAmount ? "PARTIAL" : "FULL");
   const [customSubtotal, setCustomSubtotal] = useState<string>(customAmount ? String(customAmount) : "");
+  const [tempAmount, setTempAmount] = useState<string>("");
   const [isEditingAmount, setIsEditingAmount] = useState(false);
   const [step, setStep] = useState<Step>("CHANNELS");
   const [channel, setChannel] = useState<Channel>("MOMO");
@@ -85,13 +90,49 @@ function CheckoutContent() {
     setToast({ message, type });
   };
 
-  const activeSubtotal = paymentMode === "FULL" ? (checkoutData?.subtotal || 0) : (parseFloat(customSubtotal) || 0);
+  const actualBill = checkoutData?.actualAmountDue ?? checkoutData?.subtotal ?? 0;
+  const minPartialAmount = checkoutData?.minPartialAmount ?? Number((actualBill * 0.2).toFixed(2));
+  const maxPartialAmount = checkoutData?.maxPartialAmount ?? actualBill;
+
+  const activeSubtotal = paymentMode === "FULL" ? (checkoutData?.subtotal || 0) : (parseFloat(customSubtotal) || checkoutData?.subtotal || 0);
   const activeTotalAmount = Math.ceil(activeSubtotal / 0.98);
   const activeProcessingFee = Number((activeTotalAmount - activeSubtotal).toFixed(2));
 
   const activeSubtotalFormatted = `GH₵ ${activeSubtotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const activeProcessingFeeFormatted = `GH₵ ${activeProcessingFee.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const activeTotalAmountFormatted = `GH₵ ${activeTotalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  const parsedTemp = parseFloat(tempAmount);
+  let tempValidationError: string | null = null;
+  if (!tempAmount.trim() || isNaN(parsedTemp)) {
+    tempValidationError = "Please enter an amount";
+  } else if (parsedTemp < minPartialAmount) {
+    tempValidationError = `Minimum payment is 20% (GH₵ ${minPartialAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`;
+  } else if (parsedTemp > maxPartialAmount) {
+    tempValidationError = `Amount cannot exceed total bill of GH₵ ${maxPartialAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+  const isTempValid = !tempValidationError && parsedTemp >= minPartialAmount && parsedTemp <= maxPartialAmount;
+
+  const openEditAmountModal = () => {
+    const currentVal = paymentMode === "PARTIAL" && customSubtotal ? customSubtotal : actualBill.toString();
+    setTempAmount(currentVal);
+    setIsEditingAmount(true);
+  };
+
+  const handleApplyCustom = () => {
+    if (!isTempValid) return;
+    const num = parseFloat(tempAmount);
+    setCustomSubtotal(num.toString());
+    setPaymentMode(num >= maxPartialAmount ? "FULL" : "PARTIAL");
+    setIsEditingAmount(false);
+  };
+
+  const handleResetToFull = () => {
+    setPaymentMode("FULL");
+    setCustomSubtotal("");
+    setTempAmount("");
+    setIsEditingAmount(false);
+  };
 
   useEffect(() => {
     if (toast) {
@@ -106,6 +147,10 @@ function CheckoutContent() {
         const data = await getCheckoutData(propertyId, settlementTypeParam, customAmount);
         if (data) {
           setCheckoutData(data);
+          if (customAmount && data.minPartialAmount && data.maxPartialAmount) {
+            const clamped = Math.min(Math.max(customAmount, data.minPartialAmount), data.maxPartialAmount);
+            setCustomSubtotal(clamped.toString());
+          }
           if (data.user.name) setPayerName(data.user.name);
           if (data.user.phoneNumber) {
             setPhoneNumber(data.user.phoneNumber);
@@ -177,11 +222,24 @@ function CheckoutContent() {
   };
 
   const handleProceedToDetails = () => {
+    if (paymentMode === "PARTIAL") {
+      if (activeSubtotal < minPartialAmount || activeSubtotal > maxPartialAmount) {
+        showToast(`Partial payment must be between GH₵ ${minPartialAmount.toFixed(2)} and GH₵ ${maxPartialAmount.toFixed(2)}`, "error");
+        return;
+      }
+    }
     setStep("DETAILS");
   };
 
   const executePayment = async (totalAmount: number, subtotal: number, processingFee: number) => {
     if (!checkoutData || isSubmitting) return;
+
+    if (paymentMode === "PARTIAL") {
+      if (subtotal < minPartialAmount || subtotal > maxPartialAmount) {
+        showToast(`Partial payment must be between GH₵ ${minPartialAmount.toFixed(2)} and GH₵ ${maxPartialAmount.toFixed(2)}`, "error");
+        return;
+      }
+    }
     setIsSubmitting(true);
     
     try {
@@ -344,18 +402,29 @@ function CheckoutContent() {
 
               <div className="pt-3 border-t border-border-light flex flex-col gap-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-on-surface-muted">Total Due</span>
+                  <div>
+                    <span className="text-xs text-on-surface-muted block">
+                      {paymentMode === "PARTIAL" ? "Custom Installment" : "Total Due"}
+                    </span>
+                    {paymentMode === "PARTIAL" && (
+                      <span className="text-[11px] text-on-surface-muted block">
+                        of {checkoutData.actualAmountDueFormatted || checkoutData.subtotalFormatted} full bill
+                      </span>
+                    )}
+                  </div>
                   <span className="text-xl font-bold text-foreground">
                     {activeSubtotalFormatted}
                   </span>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setIsEditingAmount(true)}
+                  onClick={openEditAmountModal}
                   className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-surface-subtle hover:bg-[#F2F2F2] border border-border-light text-on-surface-muted hover:text-foreground transition-colors cursor-pointer shadow-xs"
                 >
                   <Edit2 className="w-3.5 h-3.5" />
-                  <span className="text-xs font-medium">Edit Amount</span>
+                  <span className="text-xs font-medium">
+                    {paymentMode === "PARTIAL" ? "Change Custom Amount" : "Edit Amount"}
+                  </span>
                 </button>
               </div>
             </div>
@@ -896,38 +965,55 @@ function CheckoutContent() {
                 </button>
               </div>
               <div className="space-y-1.5 pt-1">
-                <label className="text-xs font-medium text-on-surface-muted">Custom Amount (GH₵)</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-on-surface-muted">Custom Amount (GH₵)</label>
+                  <span className="text-[11px] text-on-surface-muted">
+                    Min 20%: GH₵ {minPartialAmount.toFixed(2)}
+                  </span>
+                </div>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-foreground">GH₵</span>
                   <input
                     type="number"
+                    step="0.01"
                     autoFocus
-                    value={customSubtotal}
-                    onChange={(e) => {
-                      setCustomSubtotal(e.target.value);
-                      setPaymentMode("PARTIAL");
-                    }}
-                    placeholder={checkoutData.subtotal.toString()}
-                    className="w-full h-11 pl-12 pr-4 rounded-xl bg-background border border-[#4B1426]/30 text-sm font-semibold text-foreground focus:outline-none focus:border-[#4B1426] shadow-2xs"
+                    value={tempAmount}
+                    onChange={(e) => setTempAmount(e.target.value)}
+                    placeholder={actualBill.toString()}
+                    className={`w-full h-11 pl-12 pr-4 rounded-xl bg-background border text-sm font-semibold text-foreground focus:outline-none transition-colors shadow-2xs ${
+                      tempValidationError
+                        ? "border-red-500 focus:border-red-500"
+                        : "border-[#4B1426]/30 focus:border-[#4B1426]"
+                    }`}
                   />
                 </div>
+                {tempValidationError ? (
+                  <p className="text-[11px] text-red-600 font-medium pt-0.5">
+                    {tempValidationError}
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-on-surface-muted pt-0.5">
+                    Allowed range: GH₵ {minPartialAmount.toFixed(2)} (20%) – GH₵ {maxPartialAmount.toFixed(2)} (Full bill)
+                  </p>
+                )}
               </div>
               <div className="pt-3 flex gap-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    setPaymentMode("FULL");
-                    setCustomSubtotal("");
-                    setIsEditingAmount(false);
-                  }}
+                  onClick={handleResetToFull}
                   className="flex-1 h-10 rounded-xl bg-surface border border-border-light text-foreground font-medium text-xs hover:bg-background transition-colors cursor-pointer shadow-xs"
                 >
                   Reset to Full
                 </button>
                 <button
                   type="button"
-                  onClick={() => setIsEditingAmount(false)}
-                  className="flex-1 h-10 rounded-xl bg-[#2C2C2C] text-white font-medium text-xs hover:bg-[#1F1F1F] transition-colors cursor-pointer shadow-xs"
+                  disabled={!isTempValid}
+                  onClick={handleApplyCustom}
+                  className={`flex-1 h-10 rounded-xl font-medium text-xs transition-colors shadow-xs ${
+                    isTempValid
+                      ? "bg-[#2C2C2C] text-white hover:bg-[#1F1F1F] cursor-pointer"
+                      : "bg-[#2C2C2C]/40 text-white/50 cursor-not-allowed"
+                  }`}
                 >
                   Apply Custom
                 </button>
