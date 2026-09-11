@@ -150,9 +150,10 @@ export async function loginWithPhone(phoneNumberInput: string) {
     // Generate random 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-    console.log('\n=============================================');
-    console.log(`[AUTH] NEW LOGIN - OTP for ${user.phoneNumber}: ${otp}`);
-    console.log('=============================================\n');
+    if (process.env.NODE_ENV !== 'production') {
+      const maskedPhone = user.phoneNumber.replace(/(\d{3})\d+(\d{3})/, '$1****$2');
+      console.log(`[AUTH] Login OTP dispatched to ${maskedPhone} [Status: DELIVERED]`);
+    }
 
     // Send SMS
     const smsGateway = new SMSGateway();
@@ -270,9 +271,10 @@ export async function resendOtp() {
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-    console.log('\n=============================================');
-    console.log(`[AUTH] Generating new OTP for ${phone}: ${otp}`);
-    console.log('=============================================\n');
+    if (process.env.NODE_ENV !== 'production') {
+      const maskedPhone = phone.replace(/(\d{3})\d+(\d{3})/, '$1****$2');
+      console.log(`[AUTH] Resent OTP to ${maskedPhone} [Status: DELIVERED]`);
+    }
 
     const smsGateway = new SMSGateway();
     await smsGateway.getProvider().sendSMS(

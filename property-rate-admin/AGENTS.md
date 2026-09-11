@@ -24,8 +24,8 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ## SMS BILL ROLLOUT & TRANSACTIONAL MESSAGING ARCHITECTURE
 - **Dual Direct Links Standard**: Every bill rollout SMS notice and demand notice must contain two explicit deep links:
-  1. **Link 1 (View Assessment)**: `http://localhost:3000/properties?accountNumber={accountNumber}` to open and inspect the digital bill.
-  2. **Link 2 (Instant Checkout)**: `http://localhost:3000/properties?accountNumber={accountNumber}&action=pay` to trigger direct in-app payment checkout.
+  1. **Link 1 (View Assessment)**: `http://localhost:3000/dashboard?accountNumber={accountNumber}` to open and inspect the digital bill.
+  2. **Link 2 (Instant Checkout)**: `http://localhost:3000/checkout?propertyId={accountNumber}` to trigger direct in-app payment checkout.
 - **Provider & Credentials**: Twilio is the primary provider (with E.164 phone number formatting for Ghana `+233` and US). When live credentials are absent or under development, use safe simulation mode and in-app logs. **Never run live test dispatches to real phone numbers without explicit user instruction.**
 
 ## ENTERPRISE ADMIN PORTAL & RATEPAYER DOSSIERS
@@ -97,6 +97,30 @@ All implementations across both the Citizen App and the Admin Portal must adhere
 7. **Full-Stack Resilience & Ergonomics (Software Architecture Quality Attributes / Resilient Systems)**:
    - **Resilience**: The system bends without breaking through graceful degradation (safe SMS simulation/live modes, fallback providers, and isolated error boundaries).
    - **Ergonomics**: Codebases must remain clean, predictable, and maintainable. Strictly governed by our Anti-AI Code Bloat / YAGNI rule (solve problems directly at the site of failure with zero hallucinated wrappers or speculative boilerplate).
+
+## SECURE SYSTEM LOGGING & OBSERVABILITY ARCHITECTURE (MANDATORY STANDARD)
+
+1. **Zero Secret Leakage Rule (Strictly Enforced)**:
+   - Under NO circumstances log plaintext passwords, wallet PINs, OTP codes, payment credentials, session secrets, or full private authorization tokens to terminal stdout or external log collectors.
+   - Any log output touching authentication or payment requests must sanitize or mask sensitive fields (e.g., `******`) before logging.
+
+2. **Database & ORM Query Sanitation**:
+   - Keep raw SQL / Prisma query parameter logging disabled in production environments.
+   - Never allow database insert/update logs containing user credentials to dump to console.
+
+3. **Metadata-First Observability**:
+   - Logs must capture operational context (Timestamp, HTTP Method, Endpoint/Action, Response Status Code, Latency in ms, and non-sensitive identifiers like `userId` or sanitized `accountNumber`), NEVER confidential payloads.
+   - Avoid raw string concatenation of unsanitized user input to prevent Log Injection / CRLF attacks; use structured formats.
+
+4. **Request Correlation & Traceability**:
+   - High-value distributed workflows (checkout -> gateway charge -> webhook confirmation -> receipt archival) must carry and output a consistent `reference` / `traceId` across all log messages for instant end-to-end debugging.
+
+5. **Separation of Ephemeral Logs vs. Immutable Audit Trails**:
+   - Application console logs are ephemeral, rotated, and strictly for debugging.
+   - Critical governance actions (valuation updates, billing rollout dispatches, manual ledger adjustments) must be committed to the database `AuditLog` table with actor ID, IP address, and timestamp.
+
+6. **Security Anomaly & Brute-Force Monitoring**:
+   - Repeated authentication failures (e.g., velocity limit of 3–5 failures in a short window) must trigger rate-limiting security guards rather than silently dumping failed attempts to log disks.
 
 
 
