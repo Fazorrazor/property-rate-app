@@ -1,5 +1,3 @@
-import { BottomNavBar } from "@/components/ui/BottomNavBar";
-
 export default function MainLayout({
   children,
 }: {
@@ -8,7 +6,6 @@ export default function MainLayout({
   return (
     <>
       {children}
-      <BottomNavBar />
     </>
   );
 }

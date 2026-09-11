@@ -38,20 +38,20 @@ export function middleware(request: NextRequest) {
     return response;
   }
 
+  const hasDirectDeepLink = Boolean(tokenParam || searchParams.get('accountNumber') || searchParams.get('propertyId'));
+
   const isInternalAppPath =
-    pathname.startsWith('/dashboard') ||
+    (pathname.startsWith('/dashboard') && !hasDirectDeepLink) ||
     pathname.startsWith('/profile') ||
     pathname.startsWith('/receipts');
 
-  // Enforce portal containment: SMS token users cannot browse internal app areas
+  // Enforce portal containment: SMS token users cannot browse unassigned internal app areas
   if (isPortalAccessOnly && isInternalAppPath) {
     return NextResponse.redirect(new URL('/checkout', request.url));
   }
 
-  const hasDirectDeepLink = Boolean(tokenParam || searchParams.get('accountNumber') || searchParams.get('propertyId'));
-
   const isProtectedPath =
-    pathname.startsWith('/dashboard') ||
+    (pathname.startsWith('/dashboard') && !hasDirectDeepLink) ||
     (pathname.startsWith('/properties') && !hasDirectDeepLink) ||
     pathname.startsWith('/receipts') ||
     pathname.startsWith('/profile');
@@ -63,6 +63,11 @@ export function middleware(request: NextRequest) {
 
   // Root redirect
   if (pathname === '/') {
+    if (hasDirectDeepLink) {
+      const targetUrl = new URL('/dashboard', request.url);
+      searchParams.forEach((value, key) => targetUrl.searchParams.set(key, value));
+      return NextResponse.redirect(targetUrl);
+    }
     if (isPortalAccessOnly) {
       return NextResponse.redirect(new URL('/checkout', request.url));
     }

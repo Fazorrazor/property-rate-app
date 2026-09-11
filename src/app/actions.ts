@@ -327,6 +327,14 @@ export async function getDashboardData(accountNumberOverride?: string): Promise<
       });
       if (prop?.users?.[0]) {
         user = prop.users[0] as any;
+      } else if (prop) {
+        user = {
+          id: 'usr_direct',
+          name: 'Municipal Ratepayer',
+          phoneNumber: '0240000000',
+          isVerified: true,
+          properties: [prop]
+        } as any;
       }
     }
     if (!user) return null;
@@ -388,6 +396,10 @@ export async function getDashboardData(accountNumberOverride?: string): Promise<
 
     // Non-settled / due properties on top, settled properties at the bottom
     formattedProperties.sort((a, b) => {
+      if (accountNumberOverride) {
+        if (a.accountNumber === accountNumberOverride || a.id === accountNumberOverride) return -1;
+        if (b.accountNumber === accountNumberOverride || b.id === accountNumberOverride) return 1;
+      }
       const aPaid = a.status === 'PAID';
       const bPaid = b.status === 'PAID';
       if (aPaid && !bPaid) return 1;

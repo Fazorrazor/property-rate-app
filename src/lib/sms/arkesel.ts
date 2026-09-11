@@ -46,7 +46,7 @@ export class ArkeselProvider implements ISMSProvider {
     }
     const tokenQuery = token ? `&token=${encodeURIComponent(token)}` : '';
     return {
-      billLinkUrl: `${host}/properties?accountNumber=${encodeURIComponent(accountNumber)}${tokenQuery}`,
+      billLinkUrl: `${host}/dashboard?accountNumber=${encodeURIComponent(accountNumber)}${tokenQuery}`,
       paymentLinkUrl: `${host}/checkout?propertyId=${encodeURIComponent(accountNumber)}${tokenQuery}`,
     };
   }

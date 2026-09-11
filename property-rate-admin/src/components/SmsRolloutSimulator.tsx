@@ -250,7 +250,7 @@ export function SmsRolloutSimulator({
     if (!previewProp) {
       return {
         message: "Select an active property account to preview the dual-link SMS rollout notice.",
-        billLink: `${(process.env.NEXT_PUBLIC_APP_URL || "https://property-rate-app.vercel.app").replace(/\/$/, "")}/properties?accountNumber=DEMO`,
+        billLink: `${(process.env.NEXT_PUBLIC_APP_URL || "https://property-rate-app.vercel.app").replace(/\/$/, "")}/dashboard?accountNumber=DEMO`,
         paymentLink: `${(process.env.NEXT_PUBLIC_APP_URL || "https://property-rate-app.vercel.app").replace(/\/$/, "")}/checkout?propertyId=DEMO`,
         recipientPhone: "+233 24 000 0000",
         recipientName: "Municipal Citizen",
@@ -261,7 +261,7 @@ export function SmsRolloutSimulator({
     if (host.includes("-projects.vercel.app") || host.includes("kzz98dclv")) {
       host = "https://property-rate-app.vercel.app";
     }
-    const billLink = `${host}/properties?accountNumber=${encodeURIComponent(previewProp.accountNumber)}`;
+    const billLink = `${host}/dashboard?accountNumber=${encodeURIComponent(previewProp.accountNumber)}`;
     const paymentLink = `${host}/checkout?propertyId=${encodeURIComponent(previewProp.accountNumber)}`;
 
     const cleanMunicipality = (previewProp.municipality || "Kpone-Katamanso (KKMA)").replace(/\s*\([^)]*\)/, '').trim() || "Municipal";
@@ -364,7 +364,7 @@ export function SmsRolloutSimulator({
     if (host.includes("-projects.vercel.app") || host.includes("kzz98dclv")) {
       host = "https://property-rate-app.vercel.app";
     }
-    const billLink = `${host}/properties?accountNumber=${encodeURIComponent(prop.accountNumber)}`;
+    const billLink = `${host}/dashboard?accountNumber=${encodeURIComponent(prop.accountNumber)}`;
     const paymentLink = `${host}/checkout?propertyId=${encodeURIComponent(prop.accountNumber)}`;
     const cleanMunicipality = (prop.municipality || "Kpone-Katamanso (KKMA)").replace(/\s*\([^)]*\)/, '').trim() || "Municipal";
     const billYear = prop.billYear || 2026;
@@ -1197,7 +1197,7 @@ export function SmsRolloutSimulator({
                     <div className="pt-2 border-t border-[#E8EAED] flex flex-wrap gap-2 text-[10px]">
                       <span className="text-[#137333] font-medium flex items-center gap-1">
                         <CheckCircle2 className="w-3 h-3 text-[#137333]" />
-                        <span>Link 1 (Assessment Inspection): {modalRenderedPreview.includes("/properties?accountNumber=") ? "Active" : "Missing"}</span>
+                        <span>Link 1 (Assessment Inspection): {(modalRenderedPreview.includes("/dashboard?accountNumber=") || modalRenderedPreview.includes("/properties?accountNumber=")) ? "Active" : "Missing"}</span>
                       </span>
                       <span className="text-[#DADCE0]">&bull;</span>
                       <span className="text-[#137333] font-medium flex items-center gap-1">
