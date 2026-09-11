@@ -380,7 +380,7 @@ function CheckoutContent() {
           initial={{ opacity: 0, x: -8 }}
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: 8 }}
-          className="space-y-4 flex-1 flex flex-col justify-between"
+          className="space-y-4 flex flex-col"
         >
           <div className="space-y-4">
             {/* Invoice Summary Card */}
@@ -559,7 +559,7 @@ function CheckoutContent() {
           initial={{ opacity: 0, x: 8 }}
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -8 }}
-          className="space-y-4 flex-1 flex flex-col justify-between"
+          className="space-y-4 flex flex-col"
         >
           <div className="space-y-4">
             <div>
@@ -821,7 +821,7 @@ function CheckoutContent() {
           initial={{ opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.3 }}
-          className="space-y-4 flex-1 flex flex-col justify-between pt-2 pb-2"
+          className="space-y-4 flex flex-col pt-2 pb-2"
         >
           <div className="space-y-4 text-center">
             <motion.div
