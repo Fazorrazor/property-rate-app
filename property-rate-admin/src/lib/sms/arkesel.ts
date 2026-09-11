@@ -56,7 +56,10 @@ export class ArkeselProvider implements ISMSProvider {
    * Builds the dual deep links for viewing the digital bill and accessing in-app payment.
    */
   public buildBillLinks(accountNumber: string, baseUrl?: string, token?: string): { billLinkUrl: string; paymentLinkUrl: string } {
-    const host = (baseUrl || process.env.NEXT_PUBLIC_APP_URL || 'https://property-rate-app.vercel.app').replace(/\/$/, '');
+    let host = (baseUrl || process.env.NEXT_PUBLIC_APP_URL || 'https://property-rate-app.vercel.app').replace(/\/$/, '');
+    if (host.includes('-projects.vercel.app') || host.includes('kzz98dclv')) {
+      host = 'https://property-rate-app.vercel.app';
+    }
     const tokenQuery = token ? `&token=${encodeURIComponent(token)}` : '';
     return {
       billLinkUrl: `${host}/properties?accountNumber=${encodeURIComponent(accountNumber)}${tokenQuery}`,

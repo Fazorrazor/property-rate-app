@@ -257,7 +257,10 @@ export function SmsRolloutSimulator({
       };
     }
 
-    const host = (process.env.NEXT_PUBLIC_APP_URL || "https://property-rate-app.vercel.app").replace(/\/$/, "");
+    let host = (process.env.NEXT_PUBLIC_APP_URL || "https://property-rate-app.vercel.app").replace(/\/$/, "");
+    if (host.includes("-projects.vercel.app") || host.includes("kzz98dclv")) {
+      host = "https://property-rate-app.vercel.app";
+    }
     const billLink = `${host}/properties?accountNumber=${encodeURIComponent(previewProp.accountNumber)}`;
     const paymentLink = `${host}/checkout?propertyId=${encodeURIComponent(previewProp.accountNumber)}`;
 
@@ -357,7 +360,10 @@ export function SmsRolloutSimulator({
       arrearsFormatted: "GH₵ 0.00",
       currentFeeFormatted: "GH₵ 437.50",
     };
-    const host = (process.env.NEXT_PUBLIC_APP_URL || "https://property-rate-app.vercel.app").replace(/\/$/, "");
+    let host = (process.env.NEXT_PUBLIC_APP_URL || "https://property-rate-app.vercel.app").replace(/\/$/, "");
+    if (host.includes("-projects.vercel.app") || host.includes("kzz98dclv")) {
+      host = "https://property-rate-app.vercel.app";
+    }
     const billLink = `${host}/properties?accountNumber=${encodeURIComponent(prop.accountNumber)}`;
     const paymentLink = `${host}/checkout?propertyId=${encodeURIComponent(prop.accountNumber)}`;
     const cleanMunicipality = (prop.municipality || "Kpone-Katamanso (KKMA)").replace(/\s*\([^)]*\)/, '').trim() || "Municipal";
