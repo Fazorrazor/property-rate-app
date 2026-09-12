@@ -27,7 +27,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { AdminProperty, SmsRolloutLogItem, getSmsRolloutAudience, saveSmsTemplate, getSmsSettings } from "@/app/actions";
-import { DEFAULT_SMS_NOTICE_TEMPLATE } from "@/lib/sms/types";
+import { DEFAULT_SMS_NOTICE_TEMPLATE, DEFAULT_RECEIPT_NOTICE_TEMPLATE } from "@/lib/sms/types";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface SmsRolloutSimulatorProps {
@@ -74,7 +74,7 @@ export function SmsRolloutSimulator({
   }, [selectedProperties]);
 
   // Campaign Filter States
-  const [targetMunicipality, setTargetMunicipality] = useState("ALL");
+  const [targetMunicipality, setTargetMunicipality] = useState("Kpone-Katamanso (KKMA)");
   const [targetClassification, setTargetClassification] = useState("ALL");
   const [targetStatus, setTargetStatus] = useState<"ALL" | "UNPAID" | "DEFAULTER">("UNPAID");
 
@@ -91,20 +91,23 @@ export function SmsRolloutSimulator({
 
   // Template State & Focus Modal
   const defaultTemplate = DEFAULT_SMS_NOTICE_TEMPLATE;
+  const defaultReceiptTemplate = DEFAULT_RECEIPT_NOTICE_TEMPLATE;
 
+  const [activeTemplateType, setActiveTemplateType] = useState<"BILLING" | "RECEIPT">("BILLING");
   const [messageTemplate, setMessageTemplate] = useState(defaultTemplate);
+  const [receiptTemplate, setReceiptTemplate] = useState(defaultReceiptTemplate);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [draftTemplate, setDraftTemplate] = useState(defaultTemplate);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
   const modalTextareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Hydrate persistent template from localStorage cache or server configuration
+  // Hydrate persistent templates from localStorage cache or server configuration
   useEffect(() => {
     try {
-      const cached = localStorage.getItem("kkma_sms_message_template");
-      if (cached && cached.trim()) {
-        if (cached.includes("*227*4362#") || cached.includes("GH₵") || cached.includes("Pay Via") || cached.includes("View your bills:")) {
-          const sanitized = cached
+      const cachedBilling = localStorage.getItem("kkma_sms_message_template");
+      if (cachedBilling && cachedBilling.trim()) {
+        if (cachedBilling.includes("*227*4362#") || cachedBilling.includes("GH₵") || cachedBilling.includes("Pay Via") || cachedBilling.includes("View your bills:")) {
+          const sanitized = cachedBilling
             .replace(/Pay Via \*227\*4362# or ({{paymentLink}}|\S+) with your payment reference {{accountNumber}}/g, 'Pay online: {{paymentLink}}')
             .replace(/Pay Via \*227\*4362# or {{paymentLink}}/g, 'Pay online: {{paymentLink}}')
             .replace(/\*227\*4362# or /g, '')
@@ -113,12 +116,14 @@ export function SmsRolloutSimulator({
             .replace(/View your bills: [^\n]+\n\n/g, '');
           localStorage.setItem("kkma_sms_message_template", sanitized);
           setMessageTemplate(sanitized);
-          setDraftTemplate(sanitized);
-          return;
+        } else {
+          setMessageTemplate(cachedBilling);
         }
-        setMessageTemplate(cached);
-        setDraftTemplate(cached);
-        return;
+      }
+
+      const cachedReceipt = localStorage.getItem("kkma_sms_receipt_template");
+      if (cachedReceipt && cachedReceipt.trim()) {
+        setReceiptTemplate(cachedReceipt);
       }
     } catch {}
 
@@ -136,16 +141,21 @@ export function SmsRolloutSimulator({
               .replace(/View your bills: [^\n]+\n\n/g, '');
           }
           setMessageTemplate(tpl);
-          setDraftTemplate(tpl);
           try {
             localStorage.setItem("kkma_sms_message_template", tpl);
+          } catch {}
+        }
+        if (settings?.receiptTemplate) {
+          setReceiptTemplate(settings.receiptTemplate);
+          try {
+            localStorage.setItem("kkma_sms_receipt_template", settings.receiptTemplate);
           } catch {}
         }
       })
       .catch(() => {});
   }, []);
 
-  const dynamicTokens = [
+  const billingTokens = [
     { tag: "{{municipality}}", label: "Municipality" },
     { tag: "{{billYear}}", label: "Bill Year" },
     { tag: "{{accountNumber}}", label: "Valuation ID / Account No." },
@@ -157,6 +167,19 @@ export function SmsRolloutSimulator({
     { tag: "{{billLink}}", label: "Bill View Link (Optional)" },
     { tag: "{{dueDate}}", label: "Due Date" },
   ];
+
+  const receiptTokens = [
+    { tag: "{{receiptNumber}}", label: "GCR Receipt No." },
+    { tag: "{{amount}}", label: "Amount Paid" },
+    { tag: "{{accountNumber}}", label: "Valuation ID / Account No." },
+    { tag: "{{ownerName}}", label: "Ratepayer Name" },
+    { tag: "{{paymentMethod}}", label: "Payment Channel" },
+    { tag: "{{datePaid}}", label: "Payment Date" },
+    { tag: "{{receiptLink}}", label: "Receipt & Scanned Copy Link" },
+  ];
+
+  const dynamicTokens = activeTemplateType === "BILLING" ? billingTokens : receiptTokens;
+  const currentTemplate = activeTemplateType === "BILLING" ? messageTemplate : receiptTemplate;
 
   const [dueDate, setDueDate] = useState("30-Jun-2025");
   const [previewAccountIndex, setPreviewAccountIndex] = useState(0);
@@ -249,65 +272,100 @@ export function SmsRolloutSimulator({
 
   const previewProp = eligibleProperties[previewAccountIndex] || eligibleProperties[0] || properties[0] || null;
 
-  // Render preview message with dual links
+  // Render preview message with dual links or direct receipt link
   const previewData = useMemo(() => {
+    let host = (process.env.NEXT_PUBLIC_APP_URL || "https://property-rate-app.vercel.app").replace(/\/$/, "");
+    if (host.includes("-projects.vercel.app") || host.includes("kzz98dclv")) {
+      host = "https://property-rate-app.vercel.app";
+    }
+
     if (!previewProp) {
       return {
-        message: "Select an active property account to preview the SMS rollout notice.",
-        billLink: `${(process.env.NEXT_PUBLIC_APP_URL || "https://property-rate-app.vercel.app").replace(/\/$/, "")}/dashboard?accountNumber=DEMO`,
-        paymentLink: `${(process.env.NEXT_PUBLIC_APP_URL || "https://property-rate-app.vercel.app").replace(/\/$/, "")}/checkout?propertyId=DEMO`,
+        message: activeTemplateType === "BILLING"
+          ? "Select an active property account to preview the SMS rollout notice."
+          : "Select an active property account to preview the payment receipt notice.",
+        billLink: `${host}/dashboard?accountNumber=DEMO`,
+        paymentLink: `${host}/checkout?propertyId=DEMO`,
+        receiptLink: `${host}/receipts/verify?code=GCR-KKMA-2026-0001`,
         recipientPhone: "+233 24 000 0000",
         recipientName: "Municipal Citizen",
       };
     }
 
-    let host = (process.env.NEXT_PUBLIC_APP_URL || "https://property-rate-app.vercel.app").replace(/\/$/, "");
-    if (host.includes("-projects.vercel.app") || host.includes("kzz98dclv")) {
-      host = "https://property-rate-app.vercel.app";
-    }
     const billLink = `${host}/dashboard?accountNumber=${encodeURIComponent(previewProp.accountNumber)}`;
     const paymentLink = `${host}/checkout?propertyId=${encodeURIComponent(previewProp.accountNumber)}`;
+    const sampleReceiptNo = `GCR-KKMA-2026-${(previewProp.accountNumber || "0000").slice(-4)}`;
+    const receiptLink = `${host}/receipts/verify?code=${encodeURIComponent(sampleReceiptNo)}`;
 
     const cleanMunicipality = (previewProp.municipality || "Kpone-Katamanso (KKMA)").replace(/\s*\([^)]*\)/, '').trim() || "Municipal";
     const billYear = previewProp.billYear || 2026;
+    const sampleAmount = (previewProp.totalAmountDueFormatted || "437.50").replace("GH₵ ", "");
 
-    const rendered = messageTemplate
-      .replace(/{{municipality}}/g, cleanMunicipality)
-      .replace(/{{billYear}}/g, String(billYear))
-      .replace(/{{accountNumber}}/g, previewProp.accountNumber)
-      .replace(/{{ownerName}}/g, previewProp.ownerName)
-      .replace(/{{totalAmountDue}}/g, previewProp.totalAmountDueFormatted.replace("GH₵ ", ""))
-      .replace(/{{arrears}}/g, previewProp.arrearsFormatted.replace("GH₵ ", ""))
-      .replace(/{{currentFee}}/g, previewProp.currentFeeFormatted.replace("GH₵ ", ""))
-      .replace(/{{dueDate}}/g, dueDate)
-      .replace(/{{billLink}}/g, billLink)
-      .replace(/{{paymentLink}}/g, paymentLink);
+    let rendered = "";
+    if (activeTemplateType === "BILLING") {
+      rendered = messageTemplate
+        .replace(/{{municipality}}/g, cleanMunicipality)
+        .replace(/{{billYear}}/g, String(billYear))
+        .replace(/{{accountNumber}}/g, previewProp.accountNumber)
+        .replace(/{{ownerName}}/g, previewProp.ownerName)
+        .replace(/{{totalAmountDue}}/g, previewProp.totalAmountDueFormatted.replace("GH₵ ", ""))
+        .replace(/{{arrears}}/g, previewProp.arrearsFormatted.replace("GH₵ ", ""))
+        .replace(/{{currentFee}}/g, previewProp.currentFeeFormatted.replace("GH₵ ", ""))
+        .replace(/{{dueDate}}/g, dueDate)
+        .replace(/{{billLink}}/g, billLink)
+        .replace(/{{paymentLink}}/g, paymentLink);
+    } else {
+      rendered = receiptTemplate
+        .replace(/{{receiptNumber}}/g, sampleReceiptNo)
+        .replace(/{{amount}}/g, sampleAmount)
+        .replace(/{{accountNumber}}/g, previewProp.accountNumber)
+        .replace(/{{ownerName}}/g, previewProp.ownerName)
+        .replace(/{{paymentMethod}}/g, "Paystack MoMo")
+        .replace(/{{datePaid}}/g, new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }))
+        .replace(/{{receiptLink}}/g, receiptLink);
+    }
 
     return {
       message: rendered,
       billLink,
       paymentLink,
+      receiptLink,
       recipientPhone: previewProp.ownerPhone,
       recipientName: previewProp.ownerName,
     };
-  }, [previewProp, messageTemplate, dueDate]);
+  }, [previewProp, messageTemplate, receiptTemplate, activeTemplateType, dueDate]);
 
-  const handleOpenTemplateModal = () => {
-    setDraftTemplate(messageTemplate);
+  const handleOpenTemplateModal = (type?: "BILLING" | "RECEIPT") => {
+    const targetType = type || activeTemplateType;
+    if (type) setActiveTemplateType(type);
+    setDraftTemplate(targetType === "BILLING" ? messageTemplate : receiptTemplate);
     setShowTemplateModal(true);
+  };
+
+  const handleSwitchModalTab = (type: "BILLING" | "RECEIPT") => {
+    setActiveTemplateType(type);
+    setDraftTemplate(type === "BILLING" ? messageTemplate : receiptTemplate);
   };
 
   const handleSaveTemplateModal = async () => {
     setIsSavingTemplate(true);
     try {
-      const templateToSave = draftTemplate.trim() || defaultTemplate;
-      setMessageTemplate(templateToSave);
-      try {
-        localStorage.setItem("kkma_sms_message_template", templateToSave);
-      } catch {}
+      const fallback = activeTemplateType === "BILLING" ? defaultTemplate : defaultReceiptTemplate;
+      const templateToSave = draftTemplate.trim() || fallback;
+      if (activeTemplateType === "BILLING") {
+        setMessageTemplate(templateToSave);
+        try {
+          localStorage.setItem("kkma_sms_message_template", templateToSave);
+        } catch {}
+      } else {
+        setReceiptTemplate(templateToSave);
+        try {
+          localStorage.setItem("kkma_sms_receipt_template", templateToSave);
+        } catch {}
+      }
 
-      await saveSmsTemplate(templateToSave);
-      onNotify?.("SMS notice template saved successfully and audit logged.", "success");
+      await saveSmsTemplate(templateToSave, activeTemplateType);
+      onNotify?.(`${activeTemplateType === "BILLING" ? "Billing notice" : "Payment receipt notice"} template saved successfully and audit logged.`, "success");
       setShowTemplateModal(false);
     } catch (err) {
       console.error("Failed to save template to server:", err);
@@ -319,19 +377,35 @@ export function SmsRolloutSimulator({
   };
 
   const handleResetDefaultTemplate = async () => {
-    setDraftTemplate(defaultTemplate);
-    setMessageTemplate(defaultTemplate);
-    try {
-      localStorage.removeItem("kkma_sms_message_template");
-    } catch {}
-    try {
-      await saveSmsTemplate(defaultTemplate);
-    } catch {}
-    onNotify?.("SMS template reset to statutory standard.", "info");
+    if (activeTemplateType === "BILLING") {
+      setDraftTemplate(defaultTemplate);
+      setMessageTemplate(defaultTemplate);
+      try {
+        localStorage.removeItem("kkma_sms_message_template");
+      } catch {}
+      try {
+        await saveSmsTemplate(defaultTemplate, "BILLING");
+      } catch {}
+      onNotify?.("Billing SMS template reset to statutory standard.", "info");
+    } else {
+      setDraftTemplate(defaultReceiptTemplate);
+      setReceiptTemplate(defaultReceiptTemplate);
+      try {
+        localStorage.removeItem("kkma_sms_receipt_template");
+      } catch {}
+      try {
+        await saveSmsTemplate(defaultReceiptTemplate, "RECEIPT");
+      } catch {}
+      onNotify?.("Payment receipt SMS template reset to official standard.", "info");
+    }
   };
 
   const insertVariableTag = (tag: string) => {
-    setMessageTemplate((prev) => prev + " " + tag);
+    if (activeTemplateType === "BILLING") {
+      setMessageTemplate((prev) => prev + " " + tag);
+    } else {
+      setReceiptTemplate((prev) => prev + " " + tag);
+    }
   };
 
   const insertVariableTagInDraft = (tag: string) => {
@@ -370,21 +444,36 @@ export function SmsRolloutSimulator({
     }
     const billLink = `${host}/dashboard?accountNumber=${encodeURIComponent(prop.accountNumber)}`;
     const paymentLink = `${host}/checkout?propertyId=${encodeURIComponent(prop.accountNumber)}`;
+    const sampleReceiptNo = `GCR-KKMA-2026-${(prop.accountNumber || "0000").slice(-4)}`;
+    const receiptLink = `${host}/receipts/verify?code=${encodeURIComponent(sampleReceiptNo)}`;
+
     const cleanMunicipality = (prop.municipality || "Kpone-Katamanso (KKMA)").replace(/\s*\([^)]*\)/, '').trim() || "Municipal";
     const billYear = prop.billYear || 2026;
+    const sampleAmount = (prop.totalAmountDueFormatted || "437.50").replace("GH₵ ", "");
 
-    return draftTemplate
-      .replace(/{{municipality}}/g, cleanMunicipality)
-      .replace(/{{billYear}}/g, String(billYear))
-      .replace(/{{accountNumber}}/g, prop.accountNumber)
-      .replace(/{{ownerName}}/g, prop.ownerName)
-      .replace(/{{totalAmountDue}}/g, (prop.totalAmountDueFormatted || "437.50").replace("GH₵ ", ""))
-      .replace(/{{arrears}}/g, (prop.arrearsFormatted || "0.00").replace("GH₵ ", ""))
-      .replace(/{{currentFee}}/g, (prop.currentFeeFormatted || "437.50").replace("GH₵ ", ""))
-      .replace(/{{dueDate}}/g, dueDate)
-      .replace(/{{billLink}}/g, billLink)
-      .replace(/{{paymentLink}}/g, paymentLink);
-  }, [draftTemplate, previewProp, properties, dueDate]);
+    if (activeTemplateType === "BILLING") {
+      return draftTemplate
+        .replace(/{{municipality}}/g, cleanMunicipality)
+        .replace(/{{billYear}}/g, String(billYear))
+        .replace(/{{accountNumber}}/g, prop.accountNumber)
+        .replace(/{{ownerName}}/g, prop.ownerName)
+        .replace(/{{totalAmountDue}}/g, sampleAmount)
+        .replace(/{{arrears}}/g, (prop.arrearsFormatted || "0.00").replace("GH₵ ", ""))
+        .replace(/{{currentFee}}/g, (prop.currentFeeFormatted || "437.50").replace("GH₵ ", ""))
+        .replace(/{{dueDate}}/g, dueDate)
+        .replace(/{{billLink}}/g, billLink)
+        .replace(/{{paymentLink}}/g, paymentLink);
+    } else {
+      return draftTemplate
+        .replace(/{{receiptNumber}}/g, sampleReceiptNo)
+        .replace(/{{amount}}/g, sampleAmount)
+        .replace(/{{accountNumber}}/g, prop.accountNumber)
+        .replace(/{{ownerName}}/g, prop.ownerName)
+        .replace(/{{paymentMethod}}/g, "Paystack MoMo")
+        .replace(/{{datePaid}}/g, new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }))
+        .replace(/{{receiptLink}}/g, receiptLink);
+    }
+  }, [draftTemplate, activeTemplateType, previewProp, properties, dueDate]);
 
   const handleOpenAuthModal = () => {
     setAdminPassword("");
@@ -696,10 +785,7 @@ export function SmsRolloutSimulator({
                         aria-label="Filter rollout by municipality"
                         className="w-full h-7.5 px-2 rounded-md border border-[#DADCE0] bg-white text-[11px] text-[#2C2C2C] focus:outline-none focus:border-[#612D53]"
                       >
-                        <option value="ALL">All Assemblies</option>
                         <option value="Kpone-Katamanso (KKMA)">Kpone-Katamanso (KKMA)</option>
-                        <option value="Tema Metropolitan (TMA)">Tema Metropolitan (TMA)</option>
-                        <option value="Accra Metropolitan (AMA)">Accra Metropolitan (AMA)</option>
                       </select>
                     </div>
 
@@ -741,12 +827,40 @@ export function SmsRolloutSimulator({
                 </div>
               </div>
 
-              {/* Section 2: Template Editor with Tag Palette (High Density Productivity Layout) */}
+              {/* Section 2: Template Editor with Category Filter (Statutory Billing vs Payment Receipt) */}
               <div className="bg-white border border-[#DADCE0] rounded-xl p-3 shadow-2xs space-y-2 shrink-0">
                 <div className="flex items-center justify-between border-b border-[#F1F3F4] pb-1.5">
-                  <h3 className="text-xs font-semibold text-[#2C2C2C]">
-                    2. Dual-Link SMS Template Engine
-                  </h3>
+                  <div className="flex items-center gap-2.5">
+                    <h3 className="text-xs font-semibold text-[#2C2C2C]">
+                      2. SMS Template Engine
+                    </h3>
+                    <div className="flex items-center gap-2 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setActiveTemplateType("BILLING")}
+                        className={`transition-colors cursor-pointer text-[11px] font-medium ${
+                          activeTemplateType === "BILLING"
+                            ? "text-[#612D53] font-semibold underline underline-offset-4"
+                            : "text-[#717171] hover:text-[#2C2C2C]"
+                        }`}
+                      >
+                        Billing Notice
+                      </button>
+                      <span className="text-[#DADCE0]">&bull;</span>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTemplateType("RECEIPT")}
+                        className={`transition-colors cursor-pointer text-[11px] font-medium ${
+                          activeTemplateType === "RECEIPT"
+                            ? "text-[#612D53] font-semibold underline underline-offset-4"
+                            : "text-[#717171] hover:text-[#2C2C2C]"
+                        }`}
+                      >
+                        Payment Receipt Notice
+                      </button>
+                    </div>
+                  </div>
+
                   <button
                     type="button"
                     onClick={handleResetDefaultTemplate}
@@ -759,8 +873,12 @@ export function SmsRolloutSimulator({
                 {/* Variable Tags Palette (Zero Pills - Clean typographic monospace tokens) */}
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] text-[#717171] font-medium">Insert Dynamic Tokens:</span>
-                    <span className="text-[10px] text-[#717171]">Act 936 Compliant</span>
+                    <span className="text-[10px] text-[#717171] font-medium">
+                      Insert {activeTemplateType === "BILLING" ? "Billing" : "Receipt"} Tokens:
+                    </span>
+                    <span className="text-[10px] text-[#717171]">
+                      {activeTemplateType === "BILLING" ? "Act 936 Compliant" : "Official GCR Standard"}
+                    </span>
                   </div>
                   <div className="flex flex-wrap gap-1">
                     {dynamicTokens.map((item) => (
@@ -779,47 +897,66 @@ export function SmsRolloutSimulator({
 
                 <div className="space-y-1">
                   <textarea
-                    value={messageTemplate}
-                    onClick={handleOpenTemplateModal}
-                    onFocus={handleOpenTemplateModal}
+                    value={currentTemplate}
+                    onClick={() => handleOpenTemplateModal(activeTemplateType)}
+                    onFocus={() => handleOpenTemplateModal(activeTemplateType)}
                     readOnly
                     rows={3}
                     className="w-full p-2.5 rounded-lg border border-[#DADCE0] bg-[#FDFDFD] text-xs text-[#2C2C2C] focus:outline-none focus:border-[#612D53] resize-none leading-relaxed font-sans cursor-pointer hover:border-[#612D53]/60 transition-all"
                   />
                   <div className="flex items-center justify-between text-[10px] text-[#717171]">
-                    <span>Character Count: {messageTemplate.length} chars (approx. {Math.ceil(messageTemplate.length / 160)} SMS segments)</span>
-                    <span>Dual Deep Links Standard</span>
+                    <span>
+                      Character Count: {currentTemplate.length} chars (approx. {Math.ceil(currentTemplate.length / 160)} SMS segment{Math.ceil(currentTemplate.length / 160) === 1 ? "" : "s"})
+                    </span>
+                    <span>
+                      {activeTemplateType === "BILLING" ? "Direct Payment Link Standard" : "Direct Scanned Leaf Link Standard"}
+                    </span>
                   </div>
                 </div>
 
                 {/* Statutory Due Date Setting & Action */}
-                <div className="pt-1.5 border-t border-[#F1F3F4] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5">
-                    <label className="text-[#717171] font-medium text-[11px] whitespace-nowrap">Due Date:</label>
-                    <input
-                      type="text"
-                      value={dueDate}
-                      onChange={(e) => setDueDate(e.target.value)}
-                      aria-label="Statutory bill due date"
-                      className="w-28 h-7.5 px-2 rounded-md border border-[#DADCE0] bg-white text-[11px] text-[#2C2C2C] focus:outline-none focus:border-[#612D53]"
-                      placeholder="30-Jun-2025"
-                    />
-                  </div>
+                {activeTemplateType === "BILLING" ? (
+                  <div className="pt-1.5 border-t border-[#F1F3F4] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <label className="text-[#717171] font-medium text-[11px] whitespace-nowrap">Due Date:</label>
+                      <input
+                        type="text"
+                        value={dueDate}
+                        onChange={(e) => setDueDate(e.target.value)}
+                        aria-label="Statutory bill due date"
+                        className="w-28 h-7.5 px-2 rounded-md border border-[#DADCE0] bg-white text-[11px] text-[#2C2C2C] focus:outline-none focus:border-[#612D53]"
+                        placeholder="30-Jun-2025"
+                      />
+                    </div>
 
-                  <button
-                    type="button"
-                    onClick={handleOpenAuthModal}
-                    disabled={isProcessing || unpaidTargets.length === 0}
-                    className="btn-3d-primary h-8 px-3.5 rounded-lg font-medium text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0"
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                    <span>
-                      {isProcessing
-                        ? "Dispatching SMS..."
-                        : `Queue Rollout Notice (${unpaidTargets.length})`}
+                    <button
+                      type="button"
+                      onClick={handleOpenAuthModal}
+                      disabled={isProcessing || unpaidTargets.length === 0}
+                      className="btn-3d-primary h-8 px-3.5 rounded-lg font-medium text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      <span>
+                        {isProcessing
+                          ? "Dispatching SMS..."
+                          : `Queue Rollout Notice (${unpaidTargets.length})`}
+                      </span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="pt-1.5 border-t border-[#F1F3F4] flex items-center justify-between text-xs">
+                    <span className="text-[11px] text-[#717171]">
+                      Dispatched automatically upon payment verification or via Ratepayer Dossier.
                     </span>
-                  </button>
-                </div>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenTemplateModal("RECEIPT")}
+                      className="text-[11px] font-semibold text-[#612D53] hover:underline cursor-pointer"
+                    >
+                      Customize Receipt Notice &rarr;
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -887,38 +1024,57 @@ export function SmsRolloutSimulator({
                     </p>
 
                     {/* Highlighted Direct Payment Action Card */}
+                    {/* Highlighted Citizen Touchpoint Action Card */}
                     <div className="space-y-1 pt-1.5 border-t border-white/10">
                       <span className="text-[9px] uppercase text-[#9AA0A6] font-semibold tracking-wider block">
                         Citizen Touchpoint:
                       </span>
 
-                      {/* Direct In-App Payment Gateway */}
-                      <a
-                        href={previewData.paymentLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block p-1.5 rounded-md bg-[#81C995]/20 hover:bg-[#81C995]/30 transition-colors text-[10px] text-[#81C995] flex items-center justify-between font-medium cursor-pointer"
-                      >
-                        <span className="flex items-center gap-1.5">
-                          <CreditCard className="w-3 h-3 text-[#81C995]" />
-                          <span>Direct In-App Payment Gateway</span>
-                        </span>
-                        <ExternalLink className="w-2.5 h-2.5 text-[#81C995]" />
-                      </a>
+                      {activeTemplateType === "BILLING" ? (
+                        <>
+                          {/* Direct In-App Payment Gateway */}
+                          <a
+                            href={previewData.paymentLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block p-1.5 rounded-md bg-[#81C995]/20 hover:bg-[#81C995]/30 transition-colors text-[10px] text-[#81C995] flex items-center justify-between font-medium cursor-pointer"
+                          >
+                            <span className="flex items-center gap-1.5">
+                              <CreditCard className="w-3 h-3 text-[#81C995]" />
+                              <span>Direct In-App Payment Gateway</span>
+                            </span>
+                            <ExternalLink className="w-2.5 h-2.5 text-[#81C995]" />
+                          </a>
 
-                      {/* Optional View Digital Assessment (if included in custom template) */}
-                      {previewData.message.includes(previewData.billLink) && (
+                          {/* Optional View Digital Assessment (if included in custom template) */}
+                          {previewData.message.includes(previewData.billLink) && (
+                            <a
+                              href={previewData.billLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="block p-1.5 rounded-md bg-white/10 hover:bg-white/15 transition-colors text-[10px] text-[#8AB4F8] flex items-center justify-between font-medium cursor-pointer"
+                            >
+                              <span className="flex items-center gap-1.5">
+                                <FileText className="w-3 h-3 text-[#8AB4F8]" />
+                                <span>View Digital Assessment</span>
+                              </span>
+                              <ExternalLink className="w-2.5 h-2.5 text-[#8AB4F8]" />
+                            </a>
+                          )}
+                        </>
+                      ) : (
+                        /* Direct Official Receipt & Scanned Copy Gateway */
                         <a
-                          href={previewData.billLink}
+                          href={previewData.receiptLink}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="block p-1.5 rounded-md bg-white/10 hover:bg-white/15 transition-colors text-[10px] text-[#8AB4F8] flex items-center justify-between font-medium cursor-pointer"
+                          className="block p-1.5 rounded-md bg-[#81C995]/20 hover:bg-[#81C995]/30 transition-colors text-[10px] text-[#81C995] flex items-center justify-between font-medium cursor-pointer"
                         >
                           <span className="flex items-center gap-1.5">
-                            <FileText className="w-3 h-3 text-[#8AB4F8]" />
-                            <span>View Digital Assessment</span>
+                            <FileText className="w-3 h-3 text-[#81C995]" />
+                            <span>View Official Stamped Receipt &amp; Scanned Leaf</span>
                           </span>
-                          <ExternalLink className="w-2.5 h-2.5 text-[#8AB4F8]" />
+                          <ExternalLink className="w-2.5 h-2.5 text-[#81C995]" />
                         </a>
                       )}
                     </div>
@@ -1123,7 +1279,7 @@ export function SmsRolloutSimulator({
                       SMS Message Template Editor
                     </h3>
                     <p className="text-[11px] text-[#717171]">
-                      Customize statutory billing notice with dynamic token tags &amp; direct payment link.
+                      Customize statutory billing notice or official payment receipt template with live dynamic tokens.
                     </p>
                   </div>
                 </div>
@@ -1137,15 +1293,45 @@ export function SmsRolloutSimulator({
                 </button>
               </div>
 
+              {/* Template Category Switcher Tabs (Zero Pills - Clean Typographic Standard) */}
+              <div className="flex items-center gap-4 border-b border-[#F1F3F4] pb-2 text-xs shrink-0">
+                <span className="text-[#717171] text-[11px] font-medium">Select Template:</span>
+                <button
+                  type="button"
+                  onClick={() => handleSwitchModalTab("BILLING")}
+                  className={`text-xs font-semibold transition-colors cursor-pointer ${
+                    activeTemplateType === "BILLING"
+                      ? "text-[#612D53] underline underline-offset-4"
+                      : "text-[#717171] hover:text-[#2C2C2C]"
+                  }`}
+                >
+                  Statutory Billing Notice
+                </button>
+                <span className="text-[#DADCE0]">&bull;</span>
+                <button
+                  type="button"
+                  onClick={() => handleSwitchModalTab("RECEIPT")}
+                  className={`text-xs font-semibold transition-colors cursor-pointer ${
+                    activeTemplateType === "RECEIPT"
+                      ? "text-[#612D53] underline underline-offset-4"
+                      : "text-[#717171] hover:text-[#2C2C2C]"
+                  }`}
+                >
+                  Official Payment Receipt Notice
+                </button>
+              </div>
+
               {/* Scrollable Modal Content */}
               <div className="flex-1 min-h-0 overflow-y-auto space-y-3 pr-0.5">
                 {/* Dynamic Token Palette */}
                 <div className="space-y-1.5 bg-[#F8F9FA] p-2.5 rounded-xl border border-[#E8EAED]">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-medium text-[#2C2C2C]">
-                      Click Token to Insert at Cursor:
+                      Click Token to Insert ({activeTemplateType === "BILLING" ? "Billing Tokens" : "Receipt Tokens"}):
                     </span>
-                    <span className="text-[10px] text-[#717171]">Act 936 Standard</span>
+                    <span className="text-[10px] text-[#717171]">
+                      {activeTemplateType === "BILLING" ? "Act 936 Standard" : "Official GCR Standard"}
+                    </span>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {dynamicTokens.map((item) => (
@@ -1166,7 +1352,7 @@ export function SmsRolloutSimulator({
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
                     <label className="text-[11px] font-semibold text-[#2C2C2C]">
-                      Message Body (Drafting Canvas)
+                      Message Body ({activeTemplateType === "BILLING" ? "Statutory Bill Notice" : "Payment Receipt Notice"})
                     </label>
                     <span className="text-[10px] text-[#717171] font-mono">
                       {draftTemplate.length} chars &bull; {Math.ceil(draftTemplate.length / 160)} SMS segment{Math.ceil(draftTemplate.length / 160) === 1 ? "" : "s"}
@@ -1201,15 +1387,31 @@ export function SmsRolloutSimulator({
                     </p>
 
                     <div className="pt-2 border-t border-[#E8EAED] flex flex-wrap gap-2 text-[10px]">
-                      <span className="text-[#137333] font-medium flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3 text-[#137333]" />
-                        <span>Link 1 (Assessment Inspection): {(modalRenderedPreview.includes("/dashboard?accountNumber=") || modalRenderedPreview.includes("/properties?accountNumber=")) ? "Active" : "Missing"}</span>
-                      </span>
-                      <span className="text-[#DADCE0]">&bull;</span>
-                      <span className="text-[#137333] font-medium flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3 text-[#137333]" />
-                        <span>Link 2 (Direct Checkout): {modalRenderedPreview.includes("&action=pay") ? "Active" : "Missing"}</span>
-                      </span>
+                      {activeTemplateType === "BILLING" ? (
+                        <>
+                          <span className="text-[#137333] font-medium flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3 text-[#137333]" />
+                            <span>Link 1 (Assessment Inspection): {(modalRenderedPreview.includes("/dashboard?accountNumber=") || modalRenderedPreview.includes("/properties?accountNumber=")) ? "Active" : "Missing"}</span>
+                          </span>
+                          <span className="text-[#DADCE0]">&bull;</span>
+                          <span className="text-[#137333] font-medium flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3 text-[#137333]" />
+                            <span>Link 2 (Direct Checkout): {modalRenderedPreview.includes("&action=pay") ? "Active" : "Missing"}</span>
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-[#137333] font-medium flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3 text-[#137333]" />
+                            <span>Direct Receipt Link: {modalRenderedPreview.includes("/receipts/verify?code=") ? "Active" : "Missing"}</span>
+                          </span>
+                          <span className="text-[#DADCE0]">&bull;</span>
+                          <span className="text-[#188038] font-medium flex items-center gap-1">
+                            <ShieldCheck className="w-3 h-3 text-[#188038]" />
+                            <span>Public Verification &amp; Scanned Copy Linked</span>
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1222,7 +1424,7 @@ export function SmsRolloutSimulator({
                   onClick={handleResetDefaultTemplate}
                   className="text-xs text-[#717171] hover:text-[#2C2C2C] hover:underline cursor-pointer font-medium"
                 >
-                  Reset Default Template
+                  Reset Default ({activeTemplateType === "BILLING" ? "Billing Notice" : "Receipt Notice"})
                 </button>
 
                 <div className="flex items-center gap-2">

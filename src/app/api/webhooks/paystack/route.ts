@@ -69,6 +69,8 @@ export async function POST(req: Request) {
         });
       }
 
+      const createdReceiptNumbers: string[] = [];
+
       for (const prop of properties) {
         if (remainingAmount <= 0) break;
 
@@ -93,17 +95,12 @@ export async function POST(req: Request) {
           if (propPaymentAmount >= prop.totalAmountDue) {
             newArrears = 0;
             newCurrentFee = 0;
-            newStatus = 'PAID';
           } else {
-            if (propPaymentAmount <= prop.arrears) {
-              newArrears = prop.arrears - propPaymentAmount;
-            } else {
-              const remainder = propPaymentAmount - prop.arrears;
-              newArrears = 0;
-              newCurrentFee = Math.max(0, prop.currentFee - remainder);
-            }
-            newStatus = newArrears + newCurrentFee <= 0 ? 'PAID' : 'PARTIALLY_PAID';
+            const remainder = propPaymentAmount - prop.arrears;
+            newArrears = 0;
+            newCurrentFee = Math.max(0, prop.currentFee - remainder);
           }
+          newStatus = newArrears + newCurrentFee <= 0 ? 'PAID' : 'PARTIALLY_PAID';
         }
 
         const newTotalAmountDue = newArrears + newCurrentFee;
@@ -130,6 +127,8 @@ export async function POST(req: Request) {
 
         const uniqueSuffix = Math.floor(1000 + Math.random() * 9000);
         const receiptNumber: string = gcrRecord?.gcrNo || `GCR-KKMA-${new Date().getFullYear()}-${uniqueSuffix}`;
+        createdReceiptNumbers.push(receiptNumber);
+
         if (gcrRecord) {
           // Gray out / mark receipt as consumed
           await prisma.tGCRNr.update({
@@ -196,12 +195,19 @@ export async function POST(req: Request) {
         } catch (err) {}
       }
 
-      // Send SMS with official GCR Receipt and physical issuance notice (Rule 3)
+      // Send SMS with official GCR Receipt and deep link to view digital & scanned receipt
       if (transaction.user && transaction.user.phoneNumber) {
+        let host = (process.env.NEXT_PUBLIC_APP_URL || "https://property-rate-app.vercel.app").replace(/\/$/, "");
+        if (host.includes("-projects.vercel.app") || host.includes("kzz98dclv")) {
+          host = "https://property-rate-app.vercel.app";
+        }
+        const primaryReceipt = createdReceiptNumbers[0] || `GCR-KKMA-${new Date().getFullYear()}-${transaction.reference.substring(0, 4).toUpperCase()}`;
+        const receiptUrl = `${host}/receipts/verify?code=${encodeURIComponent(primaryReceipt)}`;
+
         const smsGateway = new SMSGateway();
         smsGateway.getProvider().sendSMS(
           transaction.user.phoneNumber,
-          `Payment Confirmed: GH₵${amountPaid.toFixed(2)} received. Official GCR Receipt #${transaction.receipt?.receiptNumber || 'Allocated'} issued. Your physical stamped copy will be issued out soon.`
+          `Payment Confirmed: GHS ${amountPaid.toFixed(2)} received.\n\nOfficial GCR Receipt #${primaryReceipt} issued.\n\nView official receipt & scanned copy:\n${receiptUrl}\n\nKeep receipt for verification.`
         ).catch(smsErr => {
           console.error('Failed to send SMS receipt in background:', smsErr);
         });

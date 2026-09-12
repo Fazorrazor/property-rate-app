@@ -6,7 +6,7 @@ import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 import { TwilioProvider } from '@/lib/sms/twilio';
 import { ArkeselProvider } from '@/lib/sms/arkesel';
-import { DEFAULT_SMS_NOTICE_TEMPLATE } from '@/lib/sms/types';
+import { DEFAULT_SMS_NOTICE_TEMPLATE, DEFAULT_RECEIPT_NOTICE_TEMPLATE } from '@/lib/sms/types';
 
 const arkeselService = new ArkeselProvider();
 const twilioServiceInstance = new TwilioProvider();
@@ -17,6 +17,7 @@ let activeSmsConfig = {
   arkeselApiKey: process.env.ARKESEL_API_KEY || 'YUlJRXNnTUdJaUdndHRNd2Zubms',
   arkeselSenderId: process.env.ARKESEL_SENDER_ID || 'Arnold',
   messageTemplate: DEFAULT_SMS_NOTICE_TEMPLATE,
+  receiptTemplate: DEFAULT_RECEIPT_NOTICE_TEMPLATE,
 };
 
 arkeselService.setApiKey(activeSmsConfig.arkeselApiKey);
@@ -39,6 +40,9 @@ export interface AdminPropertyReceipt {
   paymentMethod: string;
   status: string;
   datePaid: string;
+  scannedImageUrl?: string | null;
+  propertyAccountNumber?: string;
+  userId?: string;
 }
 
 export interface AdminProperty {
@@ -559,16 +563,7 @@ export async function getAdminOverview(
       const ownerName = p.owner?.name || primaryUser?.name || 'Municipal Ratepayer';
       const ownerPhone = p.owner?.tel || p.owner?.mobileNumber || primaryUser?.phoneNumber || 'N/A';
 
-      let muni = p.municipality || 'Kpone-Katamanso (KKMA)';
-      if (p.accountNumber.startsWith('TMA') || p.ownerDigitalAddress?.startsWith('GT')) {
-        muni = 'Tema Metropolitan (TMA)';
-      } else if (p.accountNumber.startsWith('AMA') || p.ownerDigitalAddress?.startsWith('GA')) {
-        muni = 'Accra Metropolitan (AMA)';
-      } else if (p.accountNumber.startsWith('ASHMA') || p.ownerDigitalAddress?.startsWith('GB')) {
-        muni = 'Ashaiman Municipal (ASHMA)';
-      } else if (p.accountNumber.startsWith('GEMA') || p.ownerDigitalAddress?.startsWith('GE')) {
-        muni = 'Ga East Municipal (GEMA)';
-      }
+      const muni = p.municipality || 'Kpone-Katamanso (KKMA)';
 
       const receiptsList: AdminPropertyReceipt[] = (p.receipts || []).map((r: any) => ({
         id: r.id,
@@ -753,6 +748,9 @@ export async function getRatepayerHistory(userId: string): Promise<RatepayerHist
           day: '2-digit', month: 'short', year: 'numeric',
           hour: '2-digit', minute: '2-digit'
         }),
+        scannedImageUrl: r.scannedImageUrl || null,
+        propertyAccountNumber: p.accountNumber,
+        userId: user.id,
       }));
 
       return {
@@ -797,6 +795,8 @@ export async function getRatepayerHistory(userId: string): Promise<RatepayerHist
         day: '2-digit', month: 'short', year: 'numeric',
         hour: '2-digit', minute: '2-digit'
       }),
+      scannedImageUrl: r.scannedImageUrl || null,
+      userId: user.id,
     }));
 
     const notifications = (user.notifications || []).map((n: any) => ({
@@ -1338,6 +1338,7 @@ export interface SmsSettingsData {
   arkeselApiKey: string;
   arkeselSenderId: string;
   messageTemplate?: string;
+  receiptTemplate?: string;
   balanceInfo?: {
     smsBalance: number;
     mainBalance: string;
@@ -1391,6 +1392,7 @@ export async function getSmsSettings(): Promise<SmsSettingsData> {
     arkeselApiKey: activeSmsConfig.arkeselApiKey,
     arkeselSenderId: activeSmsConfig.arkeselSenderId,
     messageTemplate: activeSmsConfig.messageTemplate,
+    receiptTemplate: activeSmsConfig.receiptTemplate,
     balanceInfo,
   };
 }
@@ -1401,6 +1403,7 @@ export async function updateSmsSettings(newConfig: {
   arkeselApiKey?: string;
   arkeselSenderId?: string;
   messageTemplate?: string;
+  receiptTemplate?: string;
 }) {
   const admin = await verifyAdminSession();
 
@@ -1409,6 +1412,7 @@ export async function updateSmsSettings(newConfig: {
   if (newConfig.arkeselApiKey !== undefined) activeSmsConfig.arkeselApiKey = newConfig.arkeselApiKey;
   if (newConfig.arkeselSenderId !== undefined) activeSmsConfig.arkeselSenderId = newConfig.arkeselSenderId;
   if (newConfig.messageTemplate !== undefined) activeSmsConfig.messageTemplate = newConfig.messageTemplate;
+  if (newConfig.receiptTemplate !== undefined) activeSmsConfig.receiptTemplate = newConfig.receiptTemplate;
 
   if (activeSmsConfig.arkeselApiKey) {
     arkeselService.setApiKey(activeSmsConfig.arkeselApiKey);
@@ -1430,22 +1434,35 @@ export async function updateSmsSettings(newConfig: {
   return { success: true, settings: activeSmsConfig };
 }
 
-export async function saveSmsTemplate(template: string) {
+export async function saveSmsTemplate(template: string, type: 'BILLING' | 'RECEIPT' = 'BILLING') {
   const admin = await verifyAdminSession();
-  const cleanTemplate = template.trim() || DEFAULT_SMS_NOTICE_TEMPLATE;
-  activeSmsConfig.messageTemplate = cleanTemplate;
-
-  await prisma.auditLog.create({
-    data: {
-      action: 'SMS_TEMPLATE_UPDATE',
-      entityType: 'SystemConfig',
-      details: `Saved statutory SMS notice template (${cleanTemplate.length} characters)`,
-      adminId: admin.id,
-    },
-  });
-
-  revalidatePath('/');
-  return { success: true, template: cleanTemplate };
+  if (type === 'RECEIPT') {
+    const cleanTemplate = template.trim() || DEFAULT_RECEIPT_NOTICE_TEMPLATE;
+    activeSmsConfig.receiptTemplate = cleanTemplate;
+    await prisma.auditLog.create({
+      data: {
+        action: 'SMS_RECEIPT_TEMPLATE_UPDATE',
+        entityType: 'SystemConfig',
+        details: `Saved payment receipt SMS notice template (${cleanTemplate.length} characters)`,
+        adminId: admin.id,
+      },
+    });
+    revalidatePath('/');
+    return { success: true, template: cleanTemplate, type };
+  } else {
+    const cleanTemplate = template.trim() || DEFAULT_SMS_NOTICE_TEMPLATE;
+    activeSmsConfig.messageTemplate = cleanTemplate;
+    await prisma.auditLog.create({
+      data: {
+        action: 'SMS_TEMPLATE_UPDATE',
+        entityType: 'SystemConfig',
+        details: `Saved statutory SMS notice template (${cleanTemplate.length} characters)`,
+        adminId: admin.id,
+      },
+    });
+    revalidatePath('/');
+    return { success: true, template: cleanTemplate, type };
+  }
 }
 
 export async function testArkeselGatewayConnection(apiKey?: string) {
@@ -1913,5 +1930,153 @@ export async function importCadastreCsvBatch(rows: any[], adminPassword?: string
   } catch (error) {
     console.error('Error importing cadastre CSV batch:', error);
     return { success: false, error: 'Failed to process CSV cadastre batch import.' };
+  }
+}
+
+/**
+ * Uploads a physical scanned GCR receipt image to Supabase Storage and links to the Receipt record.
+ */
+export async function attachScannedReceiptImage(
+  receiptId: string,
+  base64Data: string,
+  mimeType: string = 'image/jpeg'
+) {
+  try {
+    const admin = await verifyAdminSession();
+
+    if (!receiptId || !base64Data) {
+      return { success: false, error: 'Receipt ID and image data are required.' };
+    }
+
+    // Clean base64 string
+    const cleanBase64 = base64Data.replace(/^data:image\/\w+;base64,/, '');
+    const buffer = Buffer.from(cleanBase64, 'base64');
+
+    const ext = mimeType.includes('png') ? 'png' : mimeType.includes('webp') ? 'webp' : 'jpg';
+    const fileName = `gcr_${receiptId}_${Date.now()}.${ext}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('receipt-scans')
+      .upload(fileName, buffer, {
+        contentType: mimeType,
+        upsert: true,
+      });
+
+    if (uploadError) {
+      console.error('Supabase storage upload error:', uploadError);
+      return { success: false, error: `Storage upload failed: ${uploadError.message}` };
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from('receipt-scans')
+      .getPublicUrl(fileName);
+
+    const publicUrl = publicUrlData.publicUrl;
+
+    // Update receipt record with scanned URL
+    const updated = await prisma.receipt.update({
+      where: { id: receiptId },
+      data: {
+        scannedImageUrl: publicUrl,
+        isPhysicalIssued: true,
+      },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        action: 'RECEIPT_SCAN_ATTACHED',
+        entityType: 'Receipt',
+        entityId: receiptId,
+        details: `Attached physical scanned receipt image for receipt #${updated.receiptNumber || receiptId}`,
+        adminId: admin.id,
+      },
+    });
+
+    revalidatePath('/');
+    return { success: true, publicUrl, receiptNumber: updated.receiptNumber };
+  } catch (err: any) {
+    console.error('Error attaching scanned receipt image:', err);
+    return { success: false, error: err.message || 'Failed to attach scanned receipt image' };
+  }
+}
+
+/**
+ * Dispatches an official receipt SMS notification with direct verification link to the ratepayer.
+ */
+export async function sendReceiptNoticeSMS(receiptId: string, customTemplate?: string) {
+  try {
+    const admin = await verifyAdminSession();
+
+    const receipt = await prisma.receipt.findUnique({
+      where: { id: receiptId },
+    });
+
+    if (!receipt) {
+      return { success: false, error: 'Receipt record not found.' };
+    }
+
+    const [user, property] = await Promise.all([
+      receipt.userId ? prisma.user.findUnique({ where: { id: receipt.userId } }) : null,
+      receipt.propertyId ? prisma.property.findUnique({ where: { id: receipt.propertyId } }) : null,
+    ]);
+
+    const targetPhone = user?.phoneNumber || receipt.paymentPhoneNumber;
+    if (!targetPhone) {
+      return { success: false, error: 'No phone number linked to this receipt or ratepayer.' };
+    }
+
+    let host = (process.env.NEXT_PUBLIC_APP_URL || 'https://property-rate-app.vercel.app').replace(/\/$/, '');
+    if (host.includes('-projects.vercel.app') || host.includes('kzz98dclv')) {
+      host = 'https://property-rate-app.vercel.app';
+    }
+
+    const receiptLink = `${host}/receipts/verify?code=${encodeURIComponent(receipt.receiptNumber)}`;
+    const formattedAmount = Number(receipt.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const formattedDate = new Date(receipt.datePaid || Date.now()).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+
+    const templateToUse = customTemplate?.trim() || activeSmsConfig.receiptTemplate || DEFAULT_RECEIPT_NOTICE_TEMPLATE;
+    const messageText = templateToUse
+      .replace(/{{amount}}/g, formattedAmount)
+      .replace(/{{receiptNumber}}/g, receipt.receiptNumber)
+      .replace(/{{accountNumber}}/g, property?.accountNumber || 'MUNICIPAL')
+      .replace(/{{receiptLink}}/g, receiptLink)
+      .replace(/{{paymentMethod}}/g, receipt.paymentMethod || 'Mobile Money')
+      .replace(/{{datePaid}}/g, formattedDate)
+      .replace(/{{ownerName}}/g, user?.name || 'Ratepayer');
+
+    const provider = getActiveSmsProvider();
+    const smsRes = await provider.sendSMS(targetPhone, messageText);
+
+    if (smsRes.success) {
+      if (user?.id) {
+        await prisma.notification.create({
+          data: {
+            userId: user.id,
+            title: `Payment Receipt Issued: #${receipt.receiptNumber}`,
+            message: messageText,
+            type: 'PAYMENT_CONFIRMATION',
+            deliveryMethod: 'SMS',
+            deliveryStatus: 'DELIVERED',
+          },
+        });
+      }
+
+      await prisma.auditLog.create({
+        data: {
+          action: 'SMS_RECEIPT_DISPATCHED',
+          entityType: 'Receipt',
+          entityId: receipt.id,
+          details: `Dispatched payment receipt SMS to ${targetPhone} for Receipt #${receipt.receiptNumber}`,
+          adminId: admin.id,
+        },
+      });
+
+      return { success: true, message: `Receipt SMS successfully dispatched to ${targetPhone}` };
+    } else {
+      return { success: false, error: smsRes.error || 'Failed to dispatch SMS' };
+    }
+  } catch (err: any) {
+    console.error('Error sending receipt notice SMS:', err);
+    return { success: false, error: err.message || 'Failed to send receipt notice SMS' };
   }
 }

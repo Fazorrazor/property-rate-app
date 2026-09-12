@@ -8,6 +8,21 @@ export interface SMSResponse {
 export const DEFAULT_SMS_NOTICE_TEMPLATE =
   "Dear {{municipality}} Resident,\n\nDo find below your {{billYear}} Property Rate bill:\n\nValuation ID: {{accountNumber}}\n\nAmount due: GHS {{totalAmountDue}}\n\nPay online: {{paymentLink}}\n\nFor payment & enquiries kindly call 0256039385/0538702445\nDisregard if already paid. Keep receipt for verification.";
 
+export const DEFAULT_RECEIPT_NOTICE_TEMPLATE =
+  "Payment Confirmed: GHS {{amount}} received for Property {{accountNumber}}.\n\nOfficial GCR Receipt #{{receiptNumber}} issued.\n\nView official receipt & scanned copy:\n{{receiptLink}}\n\nDisregard if already received. Keep receipt for verification.";
+
+export interface ReceiptNoticeSMSParams {
+  receiptNumber: string;
+  accountNumber: string;
+  amount: number;
+  recipientPhone: string;
+  recipientName?: string;
+  paymentMethod?: string;
+  datePaid?: string;
+  baseUrl?: string;
+  customTemplate?: string;
+}
+
 export interface BillRolloutSMSParams {
   accountNumber: string;
   ownerName: string;

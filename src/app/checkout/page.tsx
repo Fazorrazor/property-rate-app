@@ -33,6 +33,11 @@ type SettlementType = "TOTAL" | "ARREARS" | "CURRENT_FEE" | "PARTIAL";
 interface CheckoutState {
   title: string;
   subtitle: string;
+  accountNumber?: string;
+  ownerName?: string;
+  arrearsFormatted?: string;
+  annualRateFormatted?: string;
+  amountDueFormatted?: string;
   settlementType?: SettlementType;
   settlementLabel?: string;
   fiscalYear: number;
@@ -359,7 +364,7 @@ function CheckoutContent() {
 
           <div className="text-center">
             <h1 className="text-xs font-semibold text-foreground uppercase tracking-wider">
-              {step === "CONFIRMATION" ? "Official Receipt" : "KKMA Rate Settlement"}
+              {step === "CONFIRMATION" ? "Official Receipt" : "Property Rate Payment"}
             </h1>
             <p className="text-[11px] text-on-surface-muted font-normal flex items-center justify-center gap-1">
               <Lock className="w-3 h-3 text-on-surface-muted" />
@@ -384,27 +389,37 @@ function CheckoutContent() {
         >
           <div className="space-y-4">
             {/* Invoice Summary Card */}
-            <div className="p-4 rounded-xl bg-surface border border-border-light space-y-1.5 shadow-2xs">
+            <div className="p-4 rounded-xl bg-surface border border-border-light space-y-3 shadow-2xs">
               <div className="flex items-center justify-between text-xs text-on-surface-muted">
-                <span>Assessment Notice</span>
+                <span>Bill Payment</span>
                 <span>{checkoutData.fiscalYear} Fiscal</span>
               </div>
-              <h2 className="text-sm font-semibold text-foreground">
-                {checkoutData.title}
-              </h2>
-              <p className="text-xs text-on-surface-muted">{checkoutData.subtitle}</p>
 
-              {checkoutData.settlementLabel && (
-                <div className="text-xs text-on-surface-muted font-medium pt-1">
-                  Scope: {checkoutData.settlementLabel}
+              {/* Structured Ratepayer Bill Breakdown */}
+              <div className="space-y-1.5 py-1 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-on-surface-muted">Account No:</span>
+                  <span className="font-semibold text-foreground font-mono">{checkoutData.accountNumber || "—"}</span>
                 </div>
-              )}
+                <div className="flex items-center justify-between">
+                  <span className="text-on-surface-muted">Owner Name:</span>
+                  <span className="font-medium text-foreground">{checkoutData.ownerName || "—"}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-on-surface-muted">Arrears:</span>
+                  <span className="font-medium text-foreground">{checkoutData.arrearsFormatted || "GH₵ 0.00"}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-on-surface-muted">Annual Rate:</span>
+                  <span className="font-medium text-foreground">{checkoutData.annualRateFormatted || "GH₵ 0.00"}</span>
+                </div>
+              </div>
 
               <div className="pt-3 border-t border-border-light flex flex-col gap-2">
                 <div className="flex items-center justify-between">
                   <div>
                     <span className="text-xs text-on-surface-muted block">
-                      {paymentMode === "PARTIAL" ? "Custom Installment" : "Total Due"}
+                      {paymentMode === "PARTIAL" ? "Custom Installment" : "Amount Due"}
                     </span>
                     {paymentMode === "PARTIAL" && (
                       <span className="text-[11px] text-on-surface-muted block">
@@ -433,7 +448,7 @@ function CheckoutContent() {
             <div className="space-y-2.5">
               <div className="flex items-center justify-between px-0.5">
                 <h3 className="text-xs font-semibold text-on-surface-muted uppercase tracking-wider">
-                  Select Settlement Channel
+                  Payment Mode
                 </h3>
                 <span className="text-xs text-on-surface-muted">
                   Step 1 of 2

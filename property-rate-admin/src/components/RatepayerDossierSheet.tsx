@@ -10,8 +10,19 @@ import {
   Receipt,
   MessageSquare,
   Loader2,
+  Camera,
+  Eye,
+  ExternalLink,
+  CheckCircle2,
+  AlertCircle,
+  Send,
 } from "lucide-react";
-import { RatepayerHistoryDossier } from "@/app/actions";
+import {
+  RatepayerHistoryDossier,
+  AdminPropertyReceipt,
+  attachScannedReceiptImage,
+  sendReceiptNoticeSMS,
+} from "@/app/actions";
 
 export interface RatepayerDossierPreview {
   id: string;
@@ -47,6 +58,100 @@ export function RatepayerDossierSheet({
   onSelectProperty,
 }: RatepayerDossierSheetProps) {
   const [activeTab, setActiveTab] = useState<DossierTab>("PROPERTIES");
+  const [localReceipts, setLocalReceipts] = useState<AdminPropertyReceipt[]>([]);
+  const [confirmUpload, setConfirmUpload] = useState<{
+    receiptId: string;
+    receiptNumber: string;
+    dataUrl: string;
+    mimeType: string;
+  } | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [previewingImage, setPreviewingImage] = useState<{
+    url: string;
+    receiptNumber: string;
+  } | null>(null);
+  const [sendingSmsReceiptId, setSendingSmsReceiptId] = useState<string | null>(null);
+  const [smsStatus, setSmsStatus] = useState<{ [receiptId: string]: string }>({});
+
+  useEffect(() => {
+    if (dossier?.receipts) {
+      setLocalReceipts(dossier.receipts);
+    }
+  }, [dossier]);
+
+  const handleFileSelected = (
+    receiptId: string,
+    receiptNumber: string,
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setConfirmUpload({
+        receiptId,
+        receiptNumber,
+        dataUrl: reader.result as string,
+        mimeType: file.type || "image/jpeg",
+      });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  const handleConfirmUpload = async () => {
+    if (!confirmUpload) return;
+    setIsUploading(true);
+    try {
+      const res = await attachScannedReceiptImage(
+        confirmUpload.receiptId,
+        confirmUpload.dataUrl,
+        confirmUpload.mimeType
+      );
+      if (res.success && res.publicUrl) {
+        setLocalReceipts((prev) =>
+          prev.map((r) =>
+            r.id === confirmUpload.receiptId
+              ? { ...r, scannedImageUrl: res.publicUrl }
+              : r
+          )
+        );
+        setConfirmUpload(null);
+      } else {
+        alert(res.error || "Failed to attach image.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("An unexpected error occurred while uploading.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleSendReceiptSms = async (receiptId: string) => {
+    setSendingSmsReceiptId(receiptId);
+    try {
+      const res = await sendReceiptNoticeSMS(receiptId);
+      if (res.success) {
+        setSmsStatus((prev) => ({ ...prev, [receiptId]: "SMS Dispatched!" }));
+        setTimeout(() => {
+          setSmsStatus((prev) => {
+            const copy = { ...prev };
+            delete copy[receiptId];
+            return copy;
+          });
+        }, 4000);
+      } else {
+        alert(res.error || "Failed to send SMS notice.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error sending receipt SMS.");
+    } finally {
+      setSendingSmsReceiptId(null);
+    }
+  };
 
   // Keyboard escape listener for prompt accessibility
   useEffect(() => {
@@ -83,7 +188,7 @@ export function RatepayerDossierSheet({
   } : null);
 
   const properties = dossier?.properties || [];
-  const receipts = dossier?.receipts || [];
+  const receipts = localReceipts.length > 0 ? localReceipts : (dossier?.receipts || []);
   const notifications = dossier?.notifications || [];
   const auditLogs = dossier?.auditLogs || [];
 
@@ -453,22 +558,83 @@ export function RatepayerDossierSheet({
                         receipts.map((r) => (
                           <div
                             key={r.id}
-                            className="p-3.5 bg-white border border-[#DADCE0] rounded-xl flex items-center justify-between gap-3"
+                            className="p-3.5 bg-white border border-[#DADCE0] rounded-xl space-y-2.5"
                           >
-                            <div className="space-y-0.5 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <Receipt className="w-3.5 h-3.5 text-[#612D53] shrink-0" />
-                                <span className="font-semibold text-[#2C2C2C] whitespace-nowrap">{r.receiptNumber}</span>
-                                <span className="text-[#137333] font-medium whitespace-nowrap">&bull; Reconciled</span>
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="space-y-0.5 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <Receipt className="w-3.5 h-3.5 text-[#612D53] shrink-0" />
+                                  <span className="font-semibold text-[#2C2C2C]">{r.receiptNumber}</span>
+                                  <span className="text-[#137333] font-medium">&bull; Reconciled</span>
+                                  {r.scannedImageUrl ? (
+                                    <span className="text-[#188038] text-[11px] font-medium flex items-center gap-1">
+                                      <CheckCircle2 className="w-3 h-3 text-[#188038]" />
+                                      <span>Scanned GCR Attached</span>
+                                    </span>
+                                  ) : (
+                                    <span className="text-[#717171] text-[11px] italic">
+                                      &bull; No Physical Scan
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[#717171] text-[11px]">
+                                  {r.paymentMethod} &bull; {r.datePaid}
+                                </p>
                               </div>
-                              <p className="text-[#717171] text-[11px] whitespace-nowrap">
-                                {r.paymentMethod} &bull; {r.datePaid}
-                              </p>
+
+                              <div className="text-right shrink-0">
+                                <span className="font-semibold text-[#188038] text-sm whitespace-nowrap tabular-nums">{r.amountFormatted}</span>
+                                <p className="text-[#717171] text-[10px] mt-0.5 whitespace-nowrap">{r.settlementType} Assessment</p>
+                              </div>
                             </div>
 
-                            <div className="text-right shrink-0">
-                              <span className="font-semibold text-[#188038] text-sm whitespace-nowrap tabular-nums">{r.amountFormatted}</span>
-                              <p className="text-[#717171] text-[10px] mt-0.5 whitespace-nowrap">{r.settlementType} Assessment</p>
+                            {/* Action Bar: View/Attach Stamped Leaf & Dispatch SMS */}
+                            <div className="pt-2 border-t border-[#F1F3F4] flex items-center justify-between gap-2 text-xs flex-wrap">
+                              <div className="flex items-center gap-3">
+                                {r.scannedImageUrl && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setPreviewingImage({ url: r.scannedImageUrl!, receiptNumber: r.receiptNumber })}
+                                    className="text-[#612D53] hover:underline font-medium flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <Eye className="w-3.5 h-3.5" />
+                                    <span>Inspect Scanned Leaf</span>
+                                  </button>
+                                )}
+
+                                <label className="text-[#612D53] hover:underline font-medium flex items-center gap-1 cursor-pointer">
+                                  <Camera className="w-3.5 h-3.5" />
+                                  <span>{r.scannedImageUrl ? "Replace Scan" : "Attach Scanned GCR Leaf"}</span>
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    capture="environment"
+                                    className="hidden"
+                                    onChange={(e) => handleFileSelected(r.id, r.receiptNumber, e)}
+                                  />
+                                </label>
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                {smsStatus[r.id] && (
+                                  <span className="text-[11px] text-[#137333] font-medium">
+                                    {smsStatus[r.id]}
+                                  </span>
+                                )}
+                                <button
+                                  type="button"
+                                  disabled={sendingSmsReceiptId === r.id}
+                                  onClick={() => handleSendReceiptSms(r.id)}
+                                  className="text-[#137333] hover:underline font-medium flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                                >
+                                  {sendingSmsReceiptId === r.id ? (
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                  ) : (
+                                    <Send className="w-3 h-3" />
+                                  )}
+                                  <span>{sendingSmsReceiptId === r.id ? "Dispatching..." : "Dispatch Receipt SMS"}</span>
+                                </button>
+                              </div>
                             </div>
                           </div>
                         ))
@@ -549,6 +715,123 @@ export function RatepayerDossierSheet({
               </button>
             </div>
           </motion.aside>
+
+          {/* Scanned Receipt Upload Confirmation Modal */}
+          {confirmUpload && (
+            <div className="fixed inset-0 z-60 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="bg-white border border-[#DADCE0] shadow-2xl rounded-2xl max-w-sm w-full p-5 space-y-4 text-xs"
+              >
+                <div className="flex items-center justify-between border-b border-[#F1F3F4] pb-2.5">
+                  <div>
+                    <h4 className="font-semibold text-sm text-[#2C2C2C]">Attach Scanned GCR Leaf</h4>
+                    <p className="text-[11px] text-[#717171]">Receipt #{confirmUpload.receiptNumber}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmUpload(null)}
+                    className="w-6 h-6 rounded flex items-center justify-center text-[#717171] hover:text-[#2C2C2C]"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="rounded-xl overflow-hidden border border-[#DADCE0] bg-[#F8F9FA] max-h-56 flex items-center justify-center">
+                  <img
+                    src={confirmUpload.dataUrl}
+                    alt="Scanned Receipt Preview"
+                    className="max-h-56 w-auto object-contain"
+                  />
+                </div>
+
+                <p className="text-[11px] text-[#717171] leading-relaxed">
+                  Confirm attaching this physical GCR receipt leaf. It will be stored in municipal cloud storage and accessible by the citizen via their SMS receipt link.
+                </p>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#F1F3F4]">
+                  <button
+                    type="button"
+                    disabled={isUploading}
+                    onClick={() => setConfirmUpload(null)}
+                    className="btn-3d-secondary h-8 px-3 rounded-lg text-xs font-medium cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isUploading}
+                    onClick={handleConfirmUpload}
+                    className="btn-3d-primary h-8 px-4 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    {isUploading ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Uploading to Storage...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Attach to Receipt</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+
+          {/* High-Res Scanned Image Lightbox */}
+          {previewingImage && (
+            <div className="fixed inset-0 z-60 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="bg-white border border-[#DADCE0] shadow-2xl rounded-2xl max-w-lg w-full p-4 space-y-3 text-xs">
+                <div className="flex items-center justify-between border-b border-[#F1F3F4] pb-2">
+                  <div>
+                    <h4 className="font-semibold text-sm text-[#2C2C2C]">Physical Stamped GCR Leaf</h4>
+                    <p className="text-[11px] text-[#717171]">Receipt #{previewingImage.receiptNumber}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={previewingImage.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-1 text-[#612D53] hover:bg-[#F6ECF2] rounded cursor-pointer"
+                      title="Open full size"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewingImage(null)}
+                      className="w-6 h-6 rounded flex items-center justify-center text-[#717171] hover:text-[#2C2C2C] cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="rounded-xl overflow-hidden border border-[#DADCE0] bg-[#1E1E1E] max-h-[60vh] flex items-center justify-center p-2">
+                  <img
+                    src={previewingImage.url}
+                    alt={`Receipt ${previewingImage.receiptNumber}`}
+                    className="max-h-[56vh] w-auto object-contain rounded"
+                  />
+                </div>
+
+                <div className="text-right">
+                  <button
+                    type="button"
+                    onClick={() => setPreviewingImage(null)}
+                    className="btn-3d-secondary h-8 px-4 rounded-lg text-xs font-medium cursor-pointer"
+                  >
+                    Close Preview
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </AnimatePresence>

@@ -36,6 +36,7 @@ interface ReceiptItem {
   propertyClassification: string;
   fiscalYear: number;
   taxpayerName: string;
+  scannedImageUrl?: string | null;
 }
 
 export default function ReceiptsPage() {
@@ -352,11 +353,35 @@ export default function ReceiptsPage() {
                 </p>
               </div>
 
+              {/* Scanned Physical GCR Leaf (if uploaded) */}
+              {selectedReceipt.scannedImageUrl && (
+                <div className="border-t border-border-light pt-2.5 space-y-1.5 text-xs relative z-10">
+                  <div className="flex items-center justify-between">
+                    <span className="text-on-surface-muted text-[11px] font-medium">Original Stamped GCR Leaf</span>
+                    <span className="text-[11px] text-[#188038] font-medium">&bull; Scanned Copy Attached</span>
+                  </div>
+                  <Link
+                    href={`/receipts/verify?code=${selectedReceipt.receiptNumber}`}
+                    target="_blank"
+                    className="block rounded-xl overflow-hidden border border-border-light bg-[#F8F9FA] hover:border-[#612D53] transition-all p-1.5 group cursor-pointer shadow-2xs"
+                  >
+                    <img
+                      src={selectedReceipt.scannedImageUrl}
+                      alt={`Scanned Receipt #${selectedReceipt.receiptNumber}`}
+                      className="w-full h-32 object-contain rounded-lg bg-black/5 group-hover:scale-[1.01] transition-transform duration-200"
+                    />
+                    <span className="text-[10px] text-center text-[#612D53] group-hover:underline block pt-1 font-medium">
+                      Click to inspect full high-resolution scan &rarr;
+                    </span>
+                  </Link>
+                </div>
+              )}
+
               {/* QR Code & Anti-Fraud Verification Block */}
               <div className="border-t border-border-light pt-3 flex items-center gap-3 bg-[#F8F9FA]/60 rounded-lg p-2.5 relative z-10">
                 <div className="bg-white p-1 rounded border border-border-light shadow-2xs shrink-0">
                   <QRCodeSVG
-                    value={`http://localhost:3000/receipts/verify?code=${selectedReceipt.receiptNumber}`}
+                    value={`https://property-rate-app.vercel.app/receipts/verify?code=${selectedReceipt.receiptNumber}`}
                     size={72}
                     darkColor="#2C2C2C"
                   />

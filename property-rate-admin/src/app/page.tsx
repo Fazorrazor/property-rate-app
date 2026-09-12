@@ -225,7 +225,7 @@ export default function AdminDashboardPage() {
   const [treasuryMethodFilter, setTreasuryMethodFilter] = useState("ALL");
   const [isSearchingProperties, setIsSearchingProperties] = useState(false);
   const [isSearchingRatepayers, setIsSearchingRatepayers] = useState(false);
-  const [municipalityFilter, setMunicipalityFilter] = useState("ALL");
+  const [municipalityFilter, setMunicipalityFilter] = useState("Kpone-Katamanso (KKMA)");
   const [classificationFilter, setClassificationFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "PAID" | "UNPAID">("ALL");
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -513,7 +513,7 @@ export default function AdminDashboardPage() {
       // Fast-path: instant 0ms restoration of baseline overview
       if (
         baselineOverviewRef.current &&
-        municipalityFilter === "ALL" &&
+        (municipalityFilter === "ALL" || municipalityFilter === "Kpone-Katamanso (KKMA)") &&
         classificationFilter === "ALL" &&
         statusFilter === "ALL" &&
         activeTab !== "DEFAULTERS"
@@ -542,7 +542,7 @@ export default function AdminDashboardPage() {
     setIsSearchingProperties(false);
     if (
       baselineOverviewRef.current &&
-      municipalityFilter === "ALL" &&
+      (municipalityFilter === "ALL" || municipalityFilter === "Kpone-Katamanso (KKMA)") &&
       classificationFilter === "ALL" &&
       statusFilter === "ALL" &&
       activeTab !== "DEFAULTERS"
@@ -1156,12 +1156,7 @@ export default function AdminDashboardPage() {
                   aria-label="Select Municipal Assembly"
                   className="w-full text-xs font-semibold text-[#2C2C2C] bg-white border border-[#DADCE0] rounded-md py-1.5 px-2 focus:outline-none focus:border-[#612D53]"
                 >
-                  <option value="ALL">National Overview (All Assemblies)</option>
                   <option value="Kpone-Katamanso (KKMA)">Kpone-Katamanso (KKMA)</option>
-                  <option value="Tema Metropolitan (TMA)">Tema Metropolitan (TMA)</option>
-                  <option value="Accra Metropolitan (AMA)">Accra Metropolitan (AMA)</option>
-                  <option value="Ashaiman Municipal (ASHMA)">Ashaiman Municipal (ASHMA)</option>
-                  <option value="Ga East Municipal (GEMA)">Ga East Municipal (GEMA)</option>
                 </select>
               </div>
 
@@ -1367,12 +1362,7 @@ export default function AdminDashboardPage() {
                   aria-label="Select Municipal Assembly"
                   className="text-xs font-semibold text-[#2C2C2C] bg-transparent border-none focus:outline-none cursor-pointer py-1 px-2 rounded-md transition-colors -ml-2"
                 >
-                  <option value="ALL">National Overview (All Assemblies)</option>
                   <option value="Kpone-Katamanso (KKMA)">Kpone-Katamanso (KKMA)</option>
-                  <option value="Tema Metropolitan (TMA)">Tema Metropolitan (TMA)</option>
-                  <option value="Accra Metropolitan (AMA)">Accra Metropolitan (AMA)</option>
-                  <option value="Ashaiman Municipal (ASHMA)">Ashaiman Municipal (ASHMA)</option>
-                  <option value="Ga East Municipal (GEMA)">Ga East Municipal (GEMA)</option>
                 </select>
                 <span className="text-xs text-[#DADCE0]">|</span>
                 <span className="text-xs text-[#717171] font-normal">

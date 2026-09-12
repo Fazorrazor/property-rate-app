@@ -722,6 +722,29 @@ export const adminDb = {
       return data;
     },
 
+    async findUnique(args: { where: { id?: string; receiptNumber?: string } }) {
+      let query = supabase.from('Receipt').select('*');
+      if (args.where.id) query = query.eq('id', args.where.id);
+      if (args.where.receiptNumber) query = query.eq('receiptNumber', args.where.receiptNumber);
+      const { data, error } = await query.single();
+      if (error || !data) return null;
+      return data;
+    },
+
+    async update(args: { where: { id: string }; data: any }) {
+      const { data, error } = await supabase
+        .from('Receipt')
+        .update({
+          ...args.data,
+          updatedAt: new Date().toISOString(),
+        })
+        .eq('id', args.where.id)
+        .select()
+        .single();
+      if (error) throw new Error(error.message);
+      return data;
+    },
+
     async findMany(args?: { where?: any; orderBy?: any }) {
       let query = supabase.from('Receipt').select('*');
       if (args?.where?.userId) query = query.eq('userId', args.where.userId);

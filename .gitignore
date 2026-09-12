@@ -53,4 +53,5 @@ src/generated/prisma/
 scratch/
 *.BAK
 docs/DB/
+*temp.md
 

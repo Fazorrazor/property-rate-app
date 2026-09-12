@@ -476,6 +476,7 @@ export async function getUserReceipts() {
         propertyClassification: r.property.propertyClassification,
         fiscalYear: r.property.billYear,
         taxpayerName: user.name || 'Property Owner',
+        scannedImageUrl: (r as any).scannedImageUrl || null,
       };
     });
   } catch (error) {
@@ -500,6 +501,10 @@ export async function getCheckoutData(propertyId: string, settlementType: Settle
     let subtitle = '';
     let fiscalYear = 2025;
     let targetProp: any = null;
+    let accountNumber = '';
+    let ownerName = '';
+    let arrears = 0;
+    let annualRate = 0;
 
     if (propertyId === 'ALL') {
       if (!user) return null;
@@ -508,18 +513,32 @@ export async function getCheckoutData(propertyId: string, settlementType: Settle
       totalAmount = actualBill;
       title = 'All Municipal Property Rates';
       subtitle = `${unpaidProps.length} Account Head${unpaidProps.length === 1 ? '' : 's'} assessed under KKMA`;
+      accountNumber = 'All Accounts';
+      ownerName = user.name || 'Municipal Ratepayer';
+      arrears = unpaidProps.reduce((sum, p) => sum + (p.arrears || 0), 0);
+      annualRate = unpaidProps.reduce((sum, p) => sum + (p.currentFee || 0), 0);
     } else {
-      targetProp = user?.properties?.find((p) => p.id === propertyId || p.accountNumber === propertyId);
-      if (!targetProp) {
-        targetProp = await prisma.property.findUnique({
-          where: propertyId.startsWith('prop_') ? { id: propertyId } : { accountNumber: propertyId },
-          include: { users: true }
-        });
+      targetProp = await prisma.property.findUnique({
+        where: propertyId.startsWith('prop_') ? { id: propertyId } : { accountNumber: propertyId },
+        include: { users: true, owner: true }
+      });
+      if (!targetProp && user?.properties) {
+        const found = user.properties.find((p) => p.id === propertyId || p.accountNumber === propertyId);
+        if (found) {
+          targetProp = await prisma.property.findUnique({
+            where: { id: found.id },
+            include: { users: true, owner: true }
+          });
+        }
       }
       if (!targetProp) return null;
 
       fiscalYear = targetProp.billYear || 2026;
       actualBill = targetProp.totalAmountDue;
+      accountNumber = targetProp.accountNumber;
+      ownerName = targetProp.owner?.name || targetProp.users?.[0]?.name || user?.name || 'Ratepayer';
+      arrears = targetProp.arrears || 0;
+      annualRate = targetProp.currentFee || 0;
 
       if (settlementType === 'ARREARS') {
         actualBill = targetProp.arrears;
@@ -556,13 +575,19 @@ export async function getCheckoutData(propertyId: string, settlementType: Settle
 
     const resolvedUser = user || {
       id: targetProp?.users?.[0]?.id || 'usr_direct',
-      name: targetProp?.users?.[0]?.name || 'Municipal Ratepayer',
-      phoneNumber: targetProp?.users?.[0]?.phoneNumber || '0240000000',
+      name: ownerName || 'Municipal Ratepayer',
+      phoneNumber: targetProp?.users?.[0]?.phoneNumber || targetProp?.owner?.mobileNumber || targetProp?.owner?.tel || '0240000000',
     };
 
     return {
       title,
       subtitle,
+      accountNumber,
+      ownerName,
+      arrears,
+      arrearsFormatted: `GH₵ ${arrears.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      annualRate,
+      annualRateFormatted: `GH₵ ${annualRate.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       settlementType,
       settlementLabel:
         settlementType === 'ARREARS'
@@ -1437,6 +1462,7 @@ export interface PublicReceiptVerificationData {
   municipality: string;
   fiscalYear: number;
   antiFraudCode: string;
+  scannedImageUrl?: string | null;
 }
 
 export async function getPublicReceiptVerification(receiptNumber: string): Promise<PublicReceiptVerificationData | null> {
@@ -1466,7 +1492,7 @@ export async function getPublicReceiptVerification(receiptNumber: string): Promi
     const antiFraudCode = `KKMA-AUTH-${receipt.id.slice(0, 8).toUpperCase()}-${dt.getFullYear()}`;
 
     return {
-      isValid: receipt.status === 'PAID',
+      isValid: receipt.status?.toUpperCase() === 'PAID',
       receiptNumber: receipt.receiptNumber,
       amount: receipt.amount,
       amountFormatted: `GH₵ ${receipt.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
@@ -1483,6 +1509,7 @@ export async function getPublicReceiptVerification(receiptNumber: string): Promi
       municipality: property?.municipality || 'Kpone-Katamanso Municipal Assembly (KKMA)',
       fiscalYear: property?.billYear || dt.getFullYear(),
       antiFraudCode,
+      scannedImageUrl: (receipt as any).scannedImageUrl || null,
     };
   } catch (error) {
     console.error('Error verifying public receipt:', error);

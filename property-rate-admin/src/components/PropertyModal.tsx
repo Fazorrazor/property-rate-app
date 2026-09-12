@@ -177,8 +177,6 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
                       className="w-full text-xs p-2.5 sm:p-2 border border-[#DADCE0] rounded-md focus:ring-[#612D53] focus:border-[#612D53]"
                     >
                       <option>Kpone-Katamanso (KKMA)</option>
-                      <option>Tema Metropolitan (TMA)</option>
-                      <option>Accra Metropolitan (AMA)</option>
                     </select>
                   </div>
                 </div>

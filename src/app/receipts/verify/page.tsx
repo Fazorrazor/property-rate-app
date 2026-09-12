@@ -3,7 +3,7 @@
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { getPublicReceiptVerification, PublicReceiptVerificationData } from "@/app/actions";
-import { ShieldCheck, ShieldAlert, CheckCircle2, Search, ArrowLeft, Building2, Landmark, Clock, FileText } from "lucide-react";
+import { ShieldCheck, ShieldAlert, CheckCircle2, Search, ArrowLeft, Building2, Landmark, Clock, FileText, Image as ImageIcon, ZoomIn, X, ExternalLink } from "lucide-react";
 import Link from "next/link";
 
 function ReceiptVerifyContent() {
@@ -15,6 +15,7 @@ function ReceiptVerifyContent() {
   const [isLoading, setIsLoading] = useState(Boolean(codeParam));
   const [hasSearched, setHasSearched] = useState(Boolean(codeParam));
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
 
   const handleVerify = async (ref: string) => {
     const trimmed = ref.trim();
@@ -186,6 +187,58 @@ function ReceiptVerifyContent() {
               </div>
             </div>
 
+            {/* Scanned Original Physical GCR Receipt Section */}
+            <div className="p-5 bg-white space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ImageIcon className="w-4 h-4 text-[#612D53]" />
+                  <span className="text-xs font-semibold text-[#2C2C2C]">
+                    Original Stamped GCR Leaf
+                  </span>
+                </div>
+                {data.scannedImageUrl ? (
+                  <span className="text-xs font-medium text-[#188038] flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>&bull; Archival Leaf Attached</span>
+                  </span>
+                ) : (
+                  <span className="text-[11px] text-[#717171]">
+                    &bull; Physical leaf on file at Municipal Revenue Office
+                  </span>
+                )}
+              </div>
+
+              {data.scannedImageUrl ? (
+                <div className="space-y-2">
+                  <div
+                    onClick={() => setIsImageModalOpen(true)}
+                    className="relative group rounded-xl overflow-hidden border border-[#DADCE0] bg-[#F8F9FA] cursor-pointer max-h-80 flex items-center justify-center shadow-2xs hover:border-[#612D53] transition-all"
+                  >
+                    <img
+                      src={data.scannedImageUrl}
+                      alt={`Original Physical Receipt #${data.receiptNumber}`}
+                      className="w-full max-h-80 object-contain bg-black/5 group-hover:scale-[1.01] transition-transform duration-200"
+                    />
+                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 text-white text-xs font-medium backdrop-blur-2xs">
+                      <ZoomIn className="w-4 h-4" />
+                      <span>Click to view full-resolution scan</span>
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-[#717171] leading-relaxed">
+                    Official photographic archival record of the physical General Counterfoil Receipt (GCR) issued, signed, and stamped by the Kpone-Katamanso Municipal Assembly Revenue Directorate.
+                  </p>
+                </div>
+              ) : (
+                <div className="p-3.5 rounded-xl border border-dashed border-[#DADCE0] bg-[#F8F9FA] text-center space-y-1">
+                  <p className="text-xs text-[#2C2C2C] font-medium">Physical GCR Leaf on Treasury File</p>
+                  <p className="text-[11px] text-[#717171]">
+                    This electronic certificate serves as full legal proof of settlement under Act 936. If an administrator uploads an image of your physical stamped GCR leaf, it will appear here automatically.
+                  </p>
+                </div>
+              )}
+            </div>
+
             {/* Anti-Fraud Cryptographic Stamp */}
             <div className="p-4 bg-[#F8F9FA] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
               <div>
@@ -217,6 +270,58 @@ function ReceiptVerifyContent() {
           </div>
         )}
       </main>
+
+      {/* Full-Screen Scanned Receipt Image Lightbox */}
+      {isImageModalOpen && data?.scannedImageUrl && (
+        <div
+          onClick={() => setIsImageModalOpen(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative max-w-3xl w-full max-h-[90vh] bg-white rounded-2xl overflow-hidden shadow-2xl flex flex-col cursor-default border border-white/20"
+          >
+            <div className="p-3 bg-[#2C2C2C] text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <ImageIcon className="w-4 h-4 text-[#E8D4E2]" />
+                <span className="text-xs font-semibold">
+                  Original GCR Stamped Receipt Leaf — #{data.receiptNumber}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <a
+                  href={data.scannedImageUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-[#BDC1C6] hover:text-white flex items-center gap-1 hover:underline cursor-pointer"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Open in new tab</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setIsImageModalOpen(false)}
+                  className="w-7 h-7 rounded-lg text-[#BDC1C6] hover:text-white hover:bg-white/10 flex items-center justify-center cursor-pointer ml-2"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 min-h-0 overflow-auto p-2 bg-[#1A1A1A] flex items-center justify-center">
+              <img
+                src={data.scannedImageUrl}
+                alt={`Stamped GCR Receipt #${data.receiptNumber}`}
+                className="max-w-full max-h-[78vh] object-contain rounded shadow"
+              />
+            </div>
+
+            <div className="p-2.5 bg-white border-t border-[#DADCE0] text-center text-[11px] text-[#717171] shrink-0">
+              KKMA Municipal Treasury Cadastre &bull; General Counterfoil Receipt Verification
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       <footer className="shrink-0 h-10 bg-white border-t border-[#DADCE0] px-4 flex items-center justify-between text-[11px] text-[#717171]">

@@ -187,6 +187,7 @@ model Receipt {
   collectorName      String       @default("APP_PAYMENT")
   cashierName        String       @default("APP_PAYMENT")
   isPhysicalIssued   Boolean      @default(false)
+  scannedImageUrl    String?
   datePaid           DateTime     @default(now())
   userId             String
   propertyId         String
