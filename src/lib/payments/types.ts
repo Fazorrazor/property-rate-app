@@ -3,6 +3,7 @@ export interface InitializationParams {
   email: string;
   reference: string;
   callbackUrl?: string;
+  channels?: string[];
   metadata?: Record<string, any>;
 }
 

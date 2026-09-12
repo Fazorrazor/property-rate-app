@@ -624,6 +624,9 @@ export async function initializePayment(data: {
   propertyId: string;
   settlementType: SettlementType;
   amount: number;
+  channel?: 'CARD' | 'BANK';
+  callbackUrl?: string;
+  metadata?: Record<string, any>;
 }) {
   try {
     let user = await getAuthenticatedSession();
@@ -649,7 +652,7 @@ export async function initializePayment(data: {
       }
     });
 
-    if (recentPending >= 3) {
+    if (recentPending >= 5) {
       return { success: false, error: 'Too many pending transactions. Please wait before trying again.' };
     }
 
@@ -707,15 +710,24 @@ export async function initializePayment(data: {
     });
 
     const gateway = new PaymentGateway('PAYSTACK');
+    const callbackTarget = data.callbackUrl
+      ? (data.callbackUrl.includes('?') ? `${data.callbackUrl}&reference=${reference}` : `${data.callbackUrl}?reference=${reference}`)
+      : `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/checkout/verify?reference=${reference}`;
+
     const response = await gateway.getProvider().initializeTransaction({
       email: `${user.phoneNumber}@propertyrate.kkma.gov.gh`,
       amount,
       reference,
-      callbackUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/checkout/verify?reference=${reference}`,
+      channels: data.channel === 'CARD' ? ['card'] : undefined,
+      callbackUrl: callbackTarget,
       metadata: {
         userId: user.id,
         propertyIds: primaryPropertyId,
         settlementType,
+        paymentChannel: data.channel || 'CARD',
+        isSubscription: false,
+        oneTimePayment: true,
+        ...(data.metadata || {})
       }
     });
 
@@ -735,6 +747,74 @@ export async function initializePayment(data: {
   } catch (error) {
     console.error('Payment initialization error:', error);
     return { success: false, error: 'Payment service unavailable.' };
+  }
+}
+
+export async function recordBankTransferAction(data: {
+  propertyId: string;
+  settlementType: SettlementType;
+  amount: number;
+  bankName: string;
+  treasuryAccount: string;
+  depositorName: string;
+}) {
+  try {
+    let user = await getAuthenticatedSession();
+    if (!user && data.propertyId !== 'ALL') {
+      const prop = await prisma.property.findUnique({
+        where: data.propertyId.startsWith('prop_') ? { id: data.propertyId } : { accountNumber: data.propertyId },
+        include: { users: true }
+      });
+      if (prop?.users?.[0]) {
+        user = prop.users[0] as any;
+      } else if (prop) {
+        user = (await prisma.user.findFirst()) as any;
+      }
+    }
+    if (!user) return { success: false, error: 'User session or property record not found' };
+
+    let primaryPropertyId = '';
+    let matchedProp: any = null;
+
+    if (data.propertyId === 'ALL') {
+      const unpaidProps = user.properties.filter((p: any) => p.status !== 'PAID');
+      primaryPropertyId = unpaidProps[0]?.id;
+    } else {
+      matchedProp = user.properties?.find((p: any) => p.id === data.propertyId || p.accountNumber === data.propertyId);
+      if (!matchedProp) {
+        matchedProp = await prisma.property.findUnique({
+          where: data.propertyId.startsWith('prop_') ? { id: data.propertyId } : { accountNumber: data.propertyId }
+        });
+      }
+      primaryPropertyId = matchedProp?.id || data.propertyId;
+    }
+
+    if (!primaryPropertyId) return { success: false, error: 'No properties to settle.' };
+
+    const reference = `TXN-WIRE-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    await prisma.transaction.create({
+      data: {
+        userId: user.id,
+        propertyId: primaryPropertyId,
+        amount: data.amount,
+        reference,
+        status: 'PENDING',
+        settlementType: data.settlementType,
+        provider: 'BANK_WIRE',
+      }
+    });
+
+    return {
+      success: true,
+      reference,
+      status: 'PENDING',
+      bankName: data.bankName,
+      treasuryAccount: data.treasuryAccount,
+    };
+  } catch (error: any) {
+    console.error('Bank transfer record error:', error);
+    return { success: false, error: 'Failed to record bank transfer order.' };
   }
 }
 

@@ -23,8 +23,34 @@ import {
 import { HeinzLoader } from "@/components/ui/HeinzLoader";
 import { CheckoutSkeleton } from "@/components/ui/Skeletons";
 import { motion, AnimatePresence } from "framer-motion";
-import { getCheckoutData, chargeMobileMoneyAction, verifyPaymentTransaction } from "@/app/actions";
+import { getCheckoutData, chargeMobileMoneyAction, verifyPaymentTransaction, initializePayment, recordBankTransferAction } from "@/app/actions";
 import { identifyNetworkCarrier } from "@/lib/utils/network-detector";
+
+const GHANA_BANKS = [
+  { code: "GCB", name: "GCB Bank PLC", account: "1021130004921" },
+  { code: "ECO", name: "Ecobank Ghana PLC", account: "0010014482910" },
+  { code: "STN", name: "Stanbic Bank Ghana Ltd", account: "9040003829104" },
+  { code: "ABS", name: "Absa Bank Ghana Ltd", account: "0341100982341" },
+  { code: "SCB", name: "Standard Chartered Bank Ghana PLC", account: "0100110293847" },
+  { code: "ZEN", name: "Zenith Bank (Ghana) Ltd", account: "1010023489102" },
+  { code: "FID", name: "Fidelity Bank Ghana Ltd", account: "2090014829103" },
+  { code: "CAL", name: "CalBank PLC", account: "1400009283719" },
+  { code: "ACC", name: "Access Bank (Ghana) PLC", account: "0020110482910" },
+  { code: "UBA", name: "United Bank for Africa (Ghana) PLC", account: "0120014892019" },
+  { code: "REP", name: "Republic Bank (Ghana) PLC", account: "0230004829104" },
+  { code: "ADB", name: "Agricultural Development Bank (ADB)", account: "1040019283710" },
+  { code: "CBG", name: "Consolidated Bank Ghana (CBG)", account: "1150004928103" },
+  { code: "PRU", name: "Prudential Bank Ltd", account: "0090014829102" },
+  { code: "FAB", name: "First Atlantic Bank Ltd", account: "0180004928103" },
+  { code: "FBN", name: "FBNBank Ghana Ltd", account: "0300014829102" },
+  { code: "BOA", name: "Bank of Africa Ghana Ltd", account: "0140004928104" },
+  { code: "SGG", name: "Societe Generale Ghana PLC", account: "0050014829101" },
+  { code: "FNB", name: "First National Bank Ghana (FNB)", account: "0280004928102" },
+  { code: "OMB", name: "OmniBSIC Bank Ghana Ltd", account: "0320014829104" },
+  { code: "GTB", name: "Guaranty Trust Bank (Ghana) Ltd", account: "0170014829103" },
+  { code: "NIB", name: "National Investment Bank (NIB)", account: "1080004928102" },
+  { code: "UMB", name: "Universal Merchant Bank (UMB)", account: "0070014829101" },
+];
 
 type Step = "CHANNELS" | "DETAILS" | "PROCESSING" | "CONFIRMATION" | "FAILED";
 type Channel = "MOMO" | "CARD" | "BANK";
@@ -74,8 +100,15 @@ function CheckoutContent() {
   const [step, setStep] = useState<Step>("CHANNELS");
   const [channel, setChannel] = useState<Channel>("MOMO");
   const [network, setNetwork] = useState<MoMoNetwork>("MTN");
-  const [phoneNumber, setPhoneNumber] = useState("024 400 0000");
-  const [payerName, setPayerName] = useState("Kwame Mensah-Bonsu");
+  // Clean initial states (no pre-filled mock data)
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [payerName, setPayerName] = useState("");
+  const [cardholderName, setCardholderName] = useState("");
+  const [cardNumber, setCardNumber] = useState("");
+  const [cardExpiry, setCardExpiry] = useState("");
+  const [cardCvc, setCardCvc] = useState("");
+  const [selectedBankCode, setSelectedBankCode] = useState("GCB");
+  const [depositorName, setDepositorName] = useState("");
 
   const [checkoutData, setCheckoutData] = useState<CheckoutState | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -157,12 +190,7 @@ function CheckoutContent() {
             const clamped = Math.min(Math.max(customAmount, data.minPartialAmount), data.maxPartialAmount);
             setCustomSubtotal(clamped.toString());
           }
-          if (data.user.name) setPayerName(data.user.name);
-          if (data.user.phoneNumber) {
-            setPhoneNumber(data.user.phoneNumber);
-            const detected = identifyNetworkCarrier(data.user.phoneNumber);
-            if (detected) setNetwork(detected);
-          }
+          // Do not prefill user fields initially per ratepayer workflow requirements
         }
       } catch (err) {
         console.error(err);
@@ -274,13 +302,120 @@ function CheckoutContent() {
     }
   };
 
+  const handleCardNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value.replace(/\D/g, "").slice(0, 19);
+    const formatted = raw.replace(/(\d{4})(?=\d)/g, "$1 ");
+    setCardNumber(formatted);
+  };
+
+  const handleExpiryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value.replace(/\D/g, "").slice(0, 4);
+    if (raw.length >= 3) {
+      setCardExpiry(`${raw.slice(0, 2)}/${raw.slice(2)}`);
+    } else {
+      setCardExpiry(raw);
+    }
+  };
+
+  const handleCvcChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value.replace(/\D/g, "").slice(0, 4);
+    setCardCvc(raw);
+  };
+
   const handleCompletePayment = async () => {
     if (!checkoutData || isSubmitting) return;
 
     if (channel === "MOMO") {
+      if (!phoneNumber.trim()) {
+        showToast("Please enter your Mobile Money phone number.", "error");
+        return;
+      }
       await executePayment(activeTotalAmount, activeSubtotal, activeProcessingFee);
-    } else {
-      showToast("Only Mobile Money is supported for this demo.", "info");
+    } else if (channel === "CARD") {
+      if (!cardholderName.trim()) {
+        showToast("Please enter the name on your card.", "error");
+        return;
+      }
+      const cleanCard = cardNumber.replace(/\s/g, "");
+      if (cleanCard.length < 15) {
+        showToast("Please enter a valid card number (15–16 digits).", "error");
+        return;
+      }
+      if (cardExpiry.length < 5 || !cardExpiry.includes("/")) {
+        showToast("Please enter a valid card expiry date (MM/YY).", "error");
+        return;
+      }
+      if (cardCvc.length < 3) {
+        showToast("Please enter a valid 3 or 4-digit CVC.", "error");
+        return;
+      }
+
+      setIsSubmitting(true);
+      try {
+        const res = await initializePayment({
+          propertyId: propertyId || "ALL",
+          settlementType: paymentMode === "PARTIAL" ? "PARTIAL" : settlementTypeParam,
+          amount: activeTotalAmount,
+          channel: "CARD",
+          callbackUrl: `${window.location.origin}/checkout/verify`,
+          metadata: {
+            cardholderName: cardholderName.trim(),
+            cardLast4: cleanCard.slice(-4),
+            oneTimePayment: true,
+            isSubscription: false,
+            subtotal: activeSubtotal,
+            processingFee: activeProcessingFee,
+          }
+        });
+
+        if (res.success && res.authorizationUrl) {
+          window.location.href = res.authorizationUrl;
+        } else {
+          showToast(res.error || "Card payment initialization failed.", "error");
+        }
+      } catch (err) {
+        console.error("Card payment error:", err);
+        showToast("An unexpected error occurred authorizing card.", "error");
+      } finally {
+        setIsSubmitting(false);
+      }
+    } else if (channel === "BANK") {
+      if (!depositorName.trim()) {
+        showToast("Please enter your account or depositor name.", "error");
+        return;
+      }
+
+      const bank = GHANA_BANKS.find((b) => b.code === selectedBankCode) || GHANA_BANKS[0];
+      setIsSubmitting(true);
+      try {
+        const res = await recordBankTransferAction({
+          propertyId: propertyId || "ALL",
+          settlementType: paymentMode === "PARTIAL" ? "PARTIAL" : settlementTypeParam,
+          amount: activeTotalAmount,
+          bankName: bank.name,
+          treasuryAccount: bank.account,
+          depositorName: depositorName.trim(),
+        });
+
+        if (res.success && res.reference) {
+          setActiveReference(res.reference);
+          setStep("CONFIRMATION");
+          setReceiptResult({
+            receiptNumber: `BNK-${res.reference.slice(-8)}`,
+            receiptId: res.reference,
+            amountFormatted: activeTotalAmountFormatted,
+            paymentMethod: `Bank Wire (${bank.name})`,
+            timestamp: new Date().toISOString(),
+          });
+        } else {
+          showToast(res.error || "Failed to record bank transfer order.", "error");
+        }
+      } catch (err) {
+        console.error("Bank wire error:", err);
+        showToast("An error occurred recording bank wire order.", "error");
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -654,7 +789,7 @@ function CheckoutContent() {
                       const detected = identifyNetworkCarrier(val);
                       if (detected) setNetwork(detected);
                     }}
-                    placeholder="024 400 0000"
+                    placeholder="e.g. 024 000 0000"
                     className="w-full h-10 px-3 rounded-lg bg-surface border border-border-light text-xs font-medium text-foreground focus:outline-none focus:border-[#4B1426]"
                   />
                 </div>
@@ -665,7 +800,7 @@ function CheckoutContent() {
                     type="text"
                     value={payerName}
                     onChange={(e) => setPayerName(e.target.value)}
-                    placeholder="Kwame Mensah-Bonsu"
+                    placeholder="e.g. Kwame Mensah"
                     className="w-full h-10 px-3 rounded-lg bg-surface border border-border-light text-xs font-medium text-foreground focus:outline-none focus:border-[#4B1426]"
                   />
                 </div>
@@ -679,19 +814,24 @@ function CheckoutContent() {
                   <label className="font-medium text-on-surface-muted">Cardholder Name</label>
                   <input
                     type="text"
-                    value={payerName}
-                    onChange={(e) => setPayerName(e.target.value)}
-                    placeholder="Name on card"
+                    value={cardholderName}
+                    onChange={(e) => setCardholderName(e.target.value)}
+                    placeholder="Name as it appears on card"
                     className="w-full h-10 px-3 rounded-lg bg-surface border border-border-light text-xs font-medium text-foreground focus:outline-none focus:border-[#4B1426]"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-medium text-on-surface-muted">Card Number</label>
+                  <div className="flex items-center justify-between">
+                    <label className="font-medium text-on-surface-muted">Card Number</label>
+                    <span className="text-[11px] text-on-surface-muted font-normal">Debit &bull; Credit &bull; Virtual &bull; Prepaid</span>
+                  </div>
                   <input
                     type="text"
-                    defaultValue="•••• •••• •••• 4242"
-                    className="w-full h-10 px-3 rounded-lg bg-surface border border-border-light text-xs font-medium text-foreground focus:outline-none focus:border-[#4B1426]"
+                    value={cardNumber}
+                    onChange={handleCardNumberChange}
+                    placeholder="•••• •••• •••• ••••"
+                    className="w-full h-10 px-3 rounded-lg bg-surface border border-border-light text-xs font-medium text-foreground focus:outline-none focus:border-[#4B1426] tracking-wider font-mono"
                   />
                 </div>
 
@@ -700,20 +840,38 @@ function CheckoutContent() {
                     <label className="font-medium text-on-surface-muted">Expiry (MM/YY)</label>
                     <input
                       type="text"
-                      defaultValue="12/28"
+                      value={cardExpiry}
+                      onChange={handleExpiryChange}
                       placeholder="MM/YY"
-                      className="w-full h-10 px-3 rounded-lg bg-surface border border-border-light text-xs font-medium text-foreground focus:outline-none focus:border-[#4B1426]"
+                      maxLength={5}
+                      className="w-full h-10 px-3 rounded-lg bg-surface border border-border-light text-xs font-medium text-foreground focus:outline-none focus:border-[#4B1426] font-mono text-center"
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="font-medium text-on-surface-muted">CVC</label>
+                    <label className="font-medium text-on-surface-muted">CVC / CVV</label>
                     <input
-                      type="text"
-                      defaultValue="•••"
-                      placeholder="CVC"
-                      className="w-full h-10 px-3 rounded-lg bg-surface border border-border-light text-xs font-medium text-foreground focus:outline-none focus:border-[#4B1426]"
+                      type="password"
+                      maxLength={4}
+                      value={cardCvc}
+                      onChange={handleCvcChange}
+                      placeholder="•••"
+                      className="w-full h-10 px-3 rounded-lg bg-surface border border-border-light text-xs font-medium text-foreground focus:outline-none focus:border-[#4B1426] font-mono text-center"
                     />
                   </div>
+                </div>
+
+                {/* Acceptance & One-Time Payment Reassurance */}
+                <div className="pt-2 border-t border-border-light space-y-1 text-on-surface-muted">
+                  <div className="flex items-center gap-1.5 text-foreground font-medium">
+                    <ShieldCheck className="w-3.5 h-3.5 text-[#4B1426]" />
+                    <span>Universal Card Acceptance &bull; 3D Secure Protected</span>
+                  </div>
+                  <p className="text-[11px] leading-relaxed">
+                    Supports Visa, Mastercard, Virtual Cards (Chipper, Eversend, Barter), Shopping Cards &amp; Prepaid Cards (Africard, GTBank).
+                  </p>
+                  <p className="text-[11px] text-foreground font-medium">
+                    &bull; One-time rate settlement &bull; No recurring billing or subscriptions
+                  </p>
                 </div>
               </div>
             )}
@@ -722,14 +880,55 @@ function CheckoutContent() {
             {channel === "BANK" && (
               <div className="space-y-3 text-xs">
                 <div className="space-y-1">
-                  <label className="font-medium text-on-surface-muted">Select Bank</label>
-                  <select className="w-full h-10 px-3 rounded-lg bg-surface border border-border-light text-xs font-medium text-foreground focus:outline-none focus:border-[#4B1426]">
-                    <option>GCB Bank Municipal Collection Account</option>
-                    <option>Ecobank Ghana Treasury</option>
-                    <option>Standard Chartered Bank</option>
-                    <option>Zenith Bank Ghana</option>
+                  <label className="font-medium text-on-surface-muted">Select Bank (All Licensed Universal Banks in Ghana)</label>
+                  <select
+                    value={selectedBankCode}
+                    onChange={(e) => setSelectedBankCode(e.target.value)}
+                    className="w-full h-10 px-3 rounded-lg bg-surface border border-border-light text-xs font-medium text-foreground focus:outline-none focus:border-[#4B1426]"
+                  >
+                    {GHANA_BANKS.map((bank) => (
+                      <option key={bank.code} value={bank.code}>
+                        {bank.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
+
+                {/* Treasury Account Details Card */}
+                {(() => {
+                  const b = GHANA_BANKS.find((x) => x.code === selectedBankCode) || GHANA_BANKS[0];
+                  return (
+                    <div className="p-3 rounded-xl bg-surface border border-border-light space-y-2 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-on-surface-muted">Beneficiary:</span>
+                        <span className="font-semibold text-foreground">KKMA Treasury</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-on-surface-muted">Treasury Account:</span>
+                        <span className="font-mono font-semibold text-foreground">{b.account}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-on-surface-muted">Transfer Memo / Narration:</span>
+                        <span className="font-mono font-bold text-[#4B1426]">{checkoutData.accountNumber || "PROPERTY_ACCOUNT"}</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                <div className="space-y-1">
+                  <label className="font-medium text-on-surface-muted">Depositor / Payer Account Name</label>
+                  <input
+                    type="text"
+                    value={depositorName}
+                    onChange={(e) => setDepositorName(e.target.value)}
+                    placeholder="Name on your bank account"
+                    className="w-full h-10 px-3 rounded-lg bg-surface border border-border-light text-xs font-medium text-foreground focus:outline-none focus:border-[#4B1426]"
+                  />
+                </div>
+
+                <p className="text-[11px] text-on-surface-muted leading-relaxed">
+                  Enter your Property Account Number as the payment reference or narration when transferring funds for automated municipal reconciliation.
+                </p>
               </div>
             )}
 
@@ -770,8 +969,8 @@ function CheckoutContent() {
                     {channel === "MOMO"
                       ? `Authorize via ${network === "MTN" ? "MTN MoMo" : network === "TELECEL" ? "Telecel Cash" : "AT Money"} • ${activeTotalAmountFormatted}`
                       : channel === "CARD"
-                      ? `Pay with Card • ${activeTotalAmountFormatted}`
-                      : `Authorize Bank Settlement • ${activeTotalAmountFormatted}`}
+                      ? `Pay One-Time with Card • ${activeTotalAmountFormatted}`
+                      : `Confirm Bank Transfer Order • ${activeTotalAmountFormatted}`}
                   </span>
                 </>
               )}

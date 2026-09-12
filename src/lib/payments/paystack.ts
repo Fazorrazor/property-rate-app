@@ -31,6 +31,7 @@ export class PaystackProvider implements IPaymentProvider {
           amount: Math.round(params.amount * 100), // Convert GHS to pesewas
           reference: params.reference,
           callback_url: params.callbackUrl,
+          channels: params.channels,
           metadata: params.metadata,
         }),
       });
