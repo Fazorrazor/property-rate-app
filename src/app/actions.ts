@@ -757,6 +757,7 @@ export async function recordBankTransferAction(data: {
   bankName: string;
   treasuryAccount: string;
   depositorName: string;
+  payerAccountNumber?: string;
 }) {
   try {
     let user = await getAuthenticatedSession();
@@ -802,6 +803,7 @@ export async function recordBankTransferAction(data: {
         status: 'PENDING',
         settlementType: data.settlementType,
         provider: 'BANK_WIRE',
+        paymentPhoneNumber: data.payerAccountNumber || null,
       }
     });
 
@@ -811,6 +813,8 @@ export async function recordBankTransferAction(data: {
       status: 'PENDING',
       bankName: data.bankName,
       treasuryAccount: data.treasuryAccount,
+      payerAccountNumber: data.payerAccountNumber,
+      depositorName: data.depositorName,
     };
   } catch (error: any) {
     console.error('Bank transfer record error:', error);

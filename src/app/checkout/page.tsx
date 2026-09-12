@@ -108,6 +108,7 @@ function CheckoutContent() {
   const [cardExpiry, setCardExpiry] = useState("");
   const [cardCvc, setCardCvc] = useState("");
   const [selectedBankCode, setSelectedBankCode] = useState("GCB");
+  const [payerAccountNumber, setPayerAccountNumber] = useState("");
   const [depositorName, setDepositorName] = useState("");
 
   const [checkoutData, setCheckoutData] = useState<CheckoutState | null>(null);
@@ -380,8 +381,12 @@ function CheckoutContent() {
         setIsSubmitting(false);
       }
     } else if (channel === "BANK") {
+      if (!payerAccountNumber.trim()) {
+        showToast("Please enter your bank account number.", "error");
+        return;
+      }
       if (!depositorName.trim()) {
-        showToast("Please enter your account or depositor name.", "error");
+        showToast("Please enter your account name.", "error");
         return;
       }
 
@@ -395,6 +400,7 @@ function CheckoutContent() {
           bankName: bank.name,
           treasuryAccount: bank.account,
           depositorName: depositorName.trim(),
+          payerAccountNumber: payerAccountNumber.trim(),
         });
 
         if (res.success && res.reference) {
@@ -404,7 +410,7 @@ function CheckoutContent() {
             receiptNumber: `BNK-${res.reference.slice(-8)}`,
             receiptId: res.reference,
             amountFormatted: activeTotalAmountFormatted,
-            paymentMethod: `Bank Wire (${bank.name})`,
+            paymentMethod: `Bank Transfer (${bank.name})`,
             timestamp: new Date().toISOString(),
           });
         } else {
@@ -673,8 +679,8 @@ function CheckoutContent() {
                       <BankTreasuryLogo className="w-6 h-6 text-foreground" />
                     </div>
                     <div>
-                      <h4 className="text-xs font-semibold text-foreground">GovPay Direct Bank Wire</h4>
-                      <p className="text-[11px] text-on-surface-muted">Municipal Treasury Account</p>
+                      <h4 className="text-xs font-semibold text-foreground">Bank Transfer</h4>
+                      <p className="text-[11px] text-on-surface-muted">Pay directly via your bank</p>
                     </div>
                   </div>
                   <div
@@ -718,7 +724,7 @@ function CheckoutContent() {
               <h2 className="text-base font-semibold text-foreground mt-0.5">
                 {channel === "MOMO" && "Enter Mobile Money Number"}
                 {channel === "CARD" && "Enter Card Details"}
-                {channel === "BANK" && "GovPay Direct Wire Details"}
+                {channel === "BANK" && "Bank Transfer Details"}
               </h2>
             </div>
 
@@ -861,17 +867,9 @@ function CheckoutContent() {
                 </div>
 
                 {/* Acceptance & One-Time Payment Reassurance */}
-                <div className="pt-2 border-t border-border-light space-y-1 text-on-surface-muted">
-                  <div className="flex items-center gap-1.5 text-foreground font-medium">
-                    <ShieldCheck className="w-3.5 h-3.5 text-[#4B1426]" />
-                    <span>Universal Card Acceptance &bull; 3D Secure Protected</span>
-                  </div>
-                  <p className="text-[11px] leading-relaxed">
-                    Supports Visa, Mastercard, Virtual Cards (Chipper, Eversend, Barter), Shopping Cards &amp; Prepaid Cards (Africard, GTBank).
-                  </p>
-                  <p className="text-[11px] text-foreground font-medium">
-                    &bull; One-time rate settlement &bull; No recurring billing or subscriptions
-                  </p>
+                <div className="pt-2 border-t border-border-light space-y-0.5 text-on-surface-muted text-[11px]">
+                  <p className="text-foreground font-medium">Supports Visa, Mastercard, Virtual &amp; Prepaid Cards.</p>
+                  <p>One-time payment. No recurring charges.</p>
                 </div>
               </div>
             )}
@@ -880,7 +878,7 @@ function CheckoutContent() {
             {channel === "BANK" && (
               <div className="space-y-3 text-xs">
                 <div className="space-y-1">
-                  <label className="font-medium text-on-surface-muted">Select Bank (All Licensed Universal Banks in Ghana)</label>
+                  <label className="font-medium text-on-surface-muted">Select Bank</label>
                   <select
                     value={selectedBankCode}
                     onChange={(e) => setSelectedBankCode(e.target.value)}
@@ -898,36 +896,48 @@ function CheckoutContent() {
                 {(() => {
                   const b = GHANA_BANKS.find((x) => x.code === selectedBankCode) || GHANA_BANKS[0];
                   return (
-                    <div className="p-3 rounded-xl bg-surface border border-border-light space-y-2 text-xs">
+                    <div className="p-3 rounded-xl bg-surface border border-border-light space-y-1.5 text-xs">
                       <div className="flex items-center justify-between">
-                        <span className="text-on-surface-muted">Beneficiary:</span>
+                        <span className="text-on-surface-muted">Pay To:</span>
                         <span className="font-semibold text-foreground">KKMA Treasury</span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-on-surface-muted">Treasury Account:</span>
+                        <span className="text-on-surface-muted">Account:</span>
                         <span className="font-mono font-semibold text-foreground">{b.account}</span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-on-surface-muted">Transfer Memo / Narration:</span>
-                        <span className="font-mono font-bold text-[#4B1426]">{checkoutData.accountNumber || "PROPERTY_ACCOUNT"}</span>
+                        <span className="text-on-surface-muted">Reference:</span>
+                        <span className="font-mono font-bold text-[#4B1426]">{checkoutData.accountNumber || "—"}</span>
                       </div>
                     </div>
                   );
                 })()}
 
                 <div className="space-y-1">
-                  <label className="font-medium text-on-surface-muted">Depositor / Payer Account Name</label>
+                  <label className="font-medium text-on-surface-muted">Your Account Number</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={payerAccountNumber}
+                    onChange={(e) => setPayerAccountNumber(e.target.value.replace(/\D/g, ''))}
+                    placeholder="e.g. 1023456789"
+                    className="w-full h-10 px-3 rounded-lg bg-surface border border-border-light text-xs font-medium text-foreground focus:outline-none focus:border-[#4B1426] font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-medium text-on-surface-muted">Account Name</label>
                   <input
                     type="text"
                     value={depositorName}
                     onChange={(e) => setDepositorName(e.target.value)}
-                    placeholder="Name on your bank account"
+                    placeholder="e.g. Kwame Mensah"
                     className="w-full h-10 px-3 rounded-lg bg-surface border border-border-light text-xs font-medium text-foreground focus:outline-none focus:border-[#4B1426]"
                   />
                 </div>
 
-                <p className="text-[11px] text-on-surface-muted leading-relaxed">
-                  Enter your Property Account Number as the payment reference or narration when transferring funds for automated municipal reconciliation.
+                <p className="text-[11px] text-on-surface-muted">
+                  Use reference <strong className="text-foreground font-mono">{checkoutData.accountNumber}</strong> in your transfer narration.
                 </p>
               </div>
             )}
@@ -969,8 +979,8 @@ function CheckoutContent() {
                     {channel === "MOMO"
                       ? `Authorize via ${network === "MTN" ? "MTN MoMo" : network === "TELECEL" ? "Telecel Cash" : "AT Money"} • ${activeTotalAmountFormatted}`
                       : channel === "CARD"
-                      ? `Pay One-Time with Card • ${activeTotalAmountFormatted}`
-                      : `Confirm Bank Transfer Order • ${activeTotalAmountFormatted}`}
+                      ? `Pay with Card • ${activeTotalAmountFormatted}`
+                      : `Confirm Bank Transfer • ${activeTotalAmountFormatted}`}
                   </span>
                 </>
               )}
