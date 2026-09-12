@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   ShieldCheck,
   CheckCircle2,
+  Check,
   Lock,
   ReceiptText as ReceiptIcon,
   AlertTriangle,
@@ -402,7 +403,7 @@ function CheckoutContent() {
                   <span className="font-semibold text-foreground font-mono">{checkoutData.accountNumber || "—"}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-on-surface-muted">Owner Name:</span>
+                  <span className="text-on-surface-muted">Name:</span>
                   <span className="font-medium text-foreground">{checkoutData.ownerName || "—"}</span>
                 </div>
                 <div className="flex items-center justify-between">
@@ -595,12 +596,15 @@ function CheckoutContent() {
                     <button
                       type="button"
                       onClick={() => setNetwork("MTN")}
-                      className={`p-2.5 rounded-lg border text-center font-medium transition-colors cursor-pointer flex flex-col items-center gap-1 ${
+                      className={`relative p-2.5 rounded-xl border text-center font-medium transition-all cursor-pointer flex flex-col items-center gap-1 ${
                         network === "MTN"
-                          ? "border-[#4B1426] bg-background text-foreground font-semibold"
-                          : "border-border-light bg-surface text-on-surface-muted hover:bg-background"
+                          ? "border-2 border-[#4B1426] bg-[#4B1426]/5 text-[#4B1426] font-bold shadow-xs"
+                          : "border border-border-light bg-surface text-on-surface-muted opacity-70 hover:opacity-100 hover:bg-background"
                       }`}
                     >
+                      {network === "MTN" && (
+                        <Check className="w-3.5 h-3.5 text-[#4B1426] absolute top-1.5 right-1.5" />
+                      )}
                       <MtnMomoLogo className="w-6 h-6" />
                       <span>MTN MoMo</span>
                     </button>
@@ -608,12 +612,15 @@ function CheckoutContent() {
                     <button
                       type="button"
                       onClick={() => setNetwork("TELECEL")}
-                      className={`p-2.5 rounded-lg border text-center font-medium transition-colors cursor-pointer flex flex-col items-center gap-1 ${
+                      className={`relative p-2.5 rounded-xl border text-center font-medium transition-all cursor-pointer flex flex-col items-center gap-1 ${
                         network === "TELECEL"
-                          ? "border-[#4B1426] bg-background text-foreground font-semibold"
-                          : "border-border-light bg-surface text-on-surface-muted hover:bg-background"
+                          ? "border-2 border-[#4B1426] bg-[#4B1426]/5 text-[#4B1426] font-bold shadow-xs"
+                          : "border border-border-light bg-surface text-on-surface-muted opacity-70 hover:opacity-100 hover:bg-background"
                       }`}
                     >
+                      {network === "TELECEL" && (
+                        <Check className="w-3.5 h-3.5 text-[#4B1426] absolute top-1.5 right-1.5" />
+                      )}
                       <TelecelLogo className="w-6 h-6" />
                       <span>Telecel</span>
                     </button>
@@ -621,12 +628,15 @@ function CheckoutContent() {
                     <button
                       type="button"
                       onClick={() => setNetwork("AIRTELTIGO")}
-                      className={`p-2.5 rounded-lg border text-center font-medium transition-colors cursor-pointer flex flex-col items-center gap-1 ${
+                      className={`relative p-2.5 rounded-xl border text-center font-medium transition-all cursor-pointer flex flex-col items-center gap-1 ${
                         network === "AIRTELTIGO"
-                          ? "border-[#4B1426] bg-background text-foreground font-semibold"
-                          : "border-border-light bg-surface text-on-surface-muted hover:bg-background"
+                          ? "border-2 border-[#4B1426] bg-[#4B1426]/5 text-[#4B1426] font-bold shadow-xs"
+                          : "border border-border-light bg-surface text-on-surface-muted opacity-70 hover:opacity-100 hover:bg-background"
                       }`}
                     >
+                      {network === "AIRTELTIGO" && (
+                        <Check className="w-3.5 h-3.5 text-[#4B1426] absolute top-1.5 right-1.5" />
+                      )}
                       <AirtelTigoLogo className="w-6 h-6" />
                       <span>AT Money</span>
                     </button>
