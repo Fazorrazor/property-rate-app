@@ -103,12 +103,14 @@ export function SmsRolloutSimulator({
     try {
       const cached = localStorage.getItem("kkma_sms_message_template");
       if (cached && cached.trim()) {
-        if (cached.includes("*227*4362#") || cached.includes("GH₵") || cached.includes("Pay Via")) {
+        if (cached.includes("*227*4362#") || cached.includes("GH₵") || cached.includes("Pay Via") || cached.includes("View your bills:")) {
           const sanitized = cached
             .replace(/Pay Via \*227\*4362# or ({{paymentLink}}|\S+) with your payment reference {{accountNumber}}/g, 'Pay online: {{paymentLink}}')
             .replace(/Pay Via \*227\*4362# or {{paymentLink}}/g, 'Pay online: {{paymentLink}}')
             .replace(/\*227\*4362# or /g, '')
-            .replace(/GH₵/g, 'GHS');
+            .replace(/GH₵/g, 'GHS')
+            .replace(/View your bills: ({{billLink}}|\S+)\n\n/g, '')
+            .replace(/View your bills: [^\n]+\n\n/g, '');
           localStorage.setItem("kkma_sms_message_template", sanitized);
           setMessageTemplate(sanitized);
           setDraftTemplate(sanitized);
@@ -124,12 +126,14 @@ export function SmsRolloutSimulator({
       .then((settings) => {
         if (settings?.messageTemplate) {
           let tpl = settings.messageTemplate;
-          if (tpl.includes("*227*4362#") || tpl.includes("GH₵") || tpl.includes("Pay Via")) {
+          if (tpl.includes("*227*4362#") || tpl.includes("GH₵") || tpl.includes("Pay Via") || tpl.includes("View your bills:")) {
             tpl = tpl
               .replace(/Pay Via \*227\*4362# or ({{paymentLink}}|\S+) with your payment reference {{accountNumber}}/g, 'Pay online: {{paymentLink}}')
               .replace(/Pay Via \*227\*4362# or {{paymentLink}}/g, 'Pay online: {{paymentLink}}')
               .replace(/\*227\*4362# or /g, '')
-              .replace(/GH₵/g, 'GHS');
+              .replace(/GH₵/g, 'GHS')
+              .replace(/View your bills: ({{billLink}}|\S+)\n\n/g, '')
+              .replace(/View your bills: [^\n]+\n\n/g, '');
           }
           setMessageTemplate(tpl);
           setDraftTemplate(tpl);
@@ -149,8 +153,8 @@ export function SmsRolloutSimulator({
     { tag: "{{totalAmountDue}}", label: "Total Due" },
     { tag: "{{arrears}}", label: "Arrears" },
     { tag: "{{currentFee}}", label: "Current Fee" },
-    { tag: "{{billLink}}", label: "Link 1: View Bill" },
-    { tag: "{{paymentLink}}", label: "Link 2: In-App Pay" },
+    { tag: "{{paymentLink}}", label: "Payment Link" },
+    { tag: "{{billLink}}", label: "Bill View Link (Optional)" },
     { tag: "{{dueDate}}", label: "Due Date" },
   ];
 
@@ -249,7 +253,7 @@ export function SmsRolloutSimulator({
   const previewData = useMemo(() => {
     if (!previewProp) {
       return {
-        message: "Select an active property account to preview the dual-link SMS rollout notice.",
+        message: "Select an active property account to preview the SMS rollout notice.",
         billLink: `${(process.env.NEXT_PUBLIC_APP_URL || "https://property-rate-app.vercel.app").replace(/\/$/, "")}/dashboard?accountNumber=DEMO`,
         paymentLink: `${(process.env.NEXT_PUBLIC_APP_URL || "https://property-rate-app.vercel.app").replace(/\/$/, "")}/checkout?propertyId=DEMO`,
         recipientPhone: "+233 24 000 0000",
@@ -463,7 +467,7 @@ export function SmsRolloutSimulator({
                     </span>
                   </div>
                   <p className="text-[11px] text-[#717171] truncate mt-0.5">
-                    Statutory billing broadcasts with dual deep links for assessment inspection and instant in-app checkout.
+                    Statutory billing broadcasts with instant in-app checkout link.
                   </p>
                 </div>
 
@@ -882,27 +886,13 @@ export function SmsRolloutSimulator({
                       {previewData.message}
                     </p>
 
-                    {/* Highlighted Dual Direct Action Cards */}
+                    {/* Highlighted Direct Payment Action Card */}
                     <div className="space-y-1 pt-1.5 border-t border-white/10">
                       <span className="text-[9px] uppercase text-[#9AA0A6] font-semibold tracking-wider block">
-                        Citizen Touchpoints:
+                        Citizen Touchpoint:
                       </span>
 
-                      {/* Link 1: View Digital Assessment */}
-                      <a
-                        href={previewData.billLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block p-1.5 rounded-md bg-white/10 hover:bg-white/15 transition-colors text-[10px] text-[#8AB4F8] flex items-center justify-between font-medium cursor-pointer"
-                      >
-                        <span className="flex items-center gap-1.5">
-                          <FileText className="w-3 h-3 text-[#8AB4F8]" />
-                          <span>Link 1: View Digital Assessment</span>
-                        </span>
-                        <ExternalLink className="w-2.5 h-2.5 text-[#8AB4F8]" />
-                      </a>
-
-                      {/* Link 2: Instant Payment Gateway */}
+                      {/* Direct In-App Payment Gateway */}
                       <a
                         href={previewData.paymentLink}
                         target="_blank"
@@ -911,10 +901,26 @@ export function SmsRolloutSimulator({
                       >
                         <span className="flex items-center gap-1.5">
                           <CreditCard className="w-3 h-3 text-[#81C995]" />
-                          <span>Link 2: In-App Payment Gateway</span>
+                          <span>Direct In-App Payment Gateway</span>
                         </span>
                         <ExternalLink className="w-2.5 h-2.5 text-[#81C995]" />
                       </a>
+
+                      {/* Optional View Digital Assessment (if included in custom template) */}
+                      {previewData.message.includes(previewData.billLink) && (
+                        <a
+                          href={previewData.billLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block p-1.5 rounded-md bg-white/10 hover:bg-white/15 transition-colors text-[10px] text-[#8AB4F8] flex items-center justify-between font-medium cursor-pointer"
+                        >
+                          <span className="flex items-center gap-1.5">
+                            <FileText className="w-3 h-3 text-[#8AB4F8]" />
+                            <span>View Digital Assessment</span>
+                          </span>
+                          <ExternalLink className="w-2.5 h-2.5 text-[#8AB4F8]" />
+                        </a>
+                      )}
                     </div>
                   </div>
 
@@ -1117,7 +1123,7 @@ export function SmsRolloutSimulator({
                       SMS Message Template Editor
                     </h3>
                     <p className="text-[11px] text-[#717171]">
-                      Customize statutory billing notice with dynamic token tags &amp; dual deep links.
+                      Customize statutory billing notice with dynamic token tags &amp; direct payment link.
                     </p>
                   </div>
                 </div>

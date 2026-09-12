@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { adminLogin } from '../app/actions';
-import { Lock, User, Eye, EyeOff, Loader2, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { Lock, User, Eye, EyeOff, Loader2, ShieldAlert } from 'lucide-react';
 
 export default function AdminLoginForm() {
   const [username, setUsername] = useState('');
@@ -196,15 +196,10 @@ export default function AdminLoginForm() {
           disabled={isPending}
           className="btn-3d-primary w-full h-9 sm:h-10 text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed transition-all"
         >
-          {status === 'submitting' ? (
+          {isPending ? (
             <>
               <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
-              <span>Verifying Officer Credentials...</span>
-            </>
-          ) : status === 'success' ? (
-            <>
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Access Granted &bull; Redirecting...</span>
+              <span>Logging in...</span>
             </>
           ) : (
             <span>Login</span>
