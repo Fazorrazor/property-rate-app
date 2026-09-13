@@ -108,7 +108,7 @@ export default function AdminLoginForm() {
       {/* Officer Username Field */}
       <div>
         <label htmlFor="username" className="block text-[11px] font-semibold uppercase tracking-wider text-[#5F6368] mb-0.5">
-          Officer Username
+          Username
         </label>
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -130,17 +130,17 @@ export default function AdminLoginForm() {
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             className="block w-full pl-9 pr-3 py-1.5 sm:py-2 bg-white border border-[#DADCE0] text-xs sm:text-sm text-[#2C2C2C] placeholder:text-[#9AA0A6] focus:outline-none focus:border-[#612D53] focus:ring-1 focus:ring-[#612D53] disabled:bg-[#F8F9FA] disabled:text-[#717171] disabled:cursor-not-allowed transition-colors [&:-webkit-autofill]:shadow-[inset_0_0_0_1000px_white] [&:-webkit-autofill]:text-fill-[#2C2C2C]"
-            placeholder="Enter officer username"
+            placeholder="Enter username"
           />
         </div>
-        <p className="mt-0.5 text-[10px] text-[#717171]">Enter your registered municipal administration username</p>
+
       </div>
 
       {/* Password Field */}
       <div>
         <div className="flex items-center justify-between mb-0.5">
           <label htmlFor="password" className="block text-[11px] font-semibold uppercase tracking-wider text-[#5F6368]">
-            Authorization Key
+            Password
           </label>
         </div>
         <div className="relative">
