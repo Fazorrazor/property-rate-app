@@ -131,7 +131,7 @@ function CheckoutContent() {
   };
 
   const actualBill = checkoutData?.actualAmountDue ?? checkoutData?.subtotal ?? 0;
-  const minPartialAmount = checkoutData?.minPartialAmount ?? Number((actualBill * 0.2).toFixed(2));
+  const minPartialAmount = checkoutData?.minPartialAmount ?? Number((actualBill * 0.4).toFixed(2));
   const maxPartialAmount = checkoutData?.maxPartialAmount ?? actualBill;
 
   const activeSubtotal = paymentMode === "FULL" ? (checkoutData?.subtotal || 0) : (parseFloat(customSubtotal) || checkoutData?.subtotal || 0);
@@ -147,7 +147,7 @@ function CheckoutContent() {
   if (!tempAmount.trim() || isNaN(parsedTemp)) {
     tempValidationError = "Please enter an amount";
   } else if (parsedTemp < minPartialAmount) {
-    tempValidationError = `Minimum payment is 20% (GH₵ ${minPartialAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`;
+    tempValidationError = `Minimum payment is 40% (GH₵ ${minPartialAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`;
   } else if (parsedTemp > maxPartialAmount) {
     tempValidationError = `Amount cannot exceed total bill of GH₵ ${maxPartialAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
@@ -1199,12 +1199,7 @@ function CheckoutContent() {
                 </button>
               </div>
               <div className="space-y-1.5 pt-1">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-medium text-on-surface-muted">Custom Amount (GH₵)</label>
-                  <span className="text-[11px] text-on-surface-muted">
-                    Min 20%: GH₵ {minPartialAmount.toFixed(2)}
-                  </span>
-                </div>
+                <label className="text-xs font-medium text-on-surface-muted">Custom Amount (GH₵)</label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-foreground">GH₵</span>
                   <input
@@ -1221,13 +1216,9 @@ function CheckoutContent() {
                     }`}
                   />
                 </div>
-                {tempValidationError ? (
+                {tempValidationError && (
                   <p className="text-[11px] text-red-600 font-medium pt-0.5">
                     {tempValidationError}
-                  </p>
-                ) : (
-                  <p className="text-[11px] text-on-surface-muted pt-0.5">
-                    Allowed range: GH₵ {minPartialAmount.toFixed(2)} (20%) – GH₵ {maxPartialAmount.toFixed(2)} (Full bill)
                   </p>
                 )}
               </div>

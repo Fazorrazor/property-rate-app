@@ -564,7 +564,7 @@ export async function getCheckoutData(propertyId: string, settlementType: Settle
       }
     }
 
-    const minPartialAmount = Number((actualBill * 0.20).toFixed(2));
+    const minPartialAmount = Number((actualBill * 0.40).toFixed(2));
     const maxPartialAmount = actualBill;
     const subtotal = totalAmount;
     // Pass a 2% fee to the customer so that the treasury receives exactly the subtotal
