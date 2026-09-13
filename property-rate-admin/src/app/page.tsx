@@ -40,6 +40,7 @@ import {
   batchDispatchSms,
   recordManualCashPayment,
   runAnnualBillingBatch,
+  getSmsSettings,
   adminLogout,
   getCurrentAdmin,
   AdminDashboardData,
@@ -267,7 +268,7 @@ export default function AdminDashboardPage() {
     "Dear {{municipality}} Resident,\n\nDo find below your {{billYear}} Property Rate bill:\n\nValuation ID: {{accountNumber}}\n\nAmount due: GHS {{totalAmountDue}}\n\nView your bills: {{billLink}}\n\nPay online: {{paymentLink}}\n\nFor payment & enquiries kindly call 0256039385/0538702445\nDisregard if already paid. Keep receipt for verification."
   );
 
-  // Hydrate persistent template from localStorage cache
+  // Hydrate persistent template from localStorage cache and server configuration
   useEffect(() => {
     try {
       const cached = localStorage.getItem("kkma_sms_message_template");
@@ -285,6 +286,17 @@ export default function AdminDashboardPage() {
         }
       }
     } catch {}
+
+    getSmsSettings()
+      .then((settings) => {
+        if (settings?.messageTemplate) {
+          setMessageTemplate(settings.messageTemplate);
+          try {
+            localStorage.setItem("kkma_sms_message_template", settings.messageTemplate);
+          } catch {}
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const loadData = async (

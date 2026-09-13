@@ -913,6 +913,51 @@ export const adminDb = {
     },
   },
 
+  systemSetting: {
+    async findUnique(args: { where: { key: string } }) {
+      try {
+        const { data, error } = await supabase
+          .from('SystemSetting')
+          .select('*')
+          .eq('key', args.where.key)
+          .maybeSingle();
+        if (error || !data) return null;
+        return data;
+      } catch {
+        return null;
+      }
+    },
+    async findMany() {
+      try {
+        const { data, error } = await supabase
+          .from('SystemSetting')
+          .select('*');
+        if (error || !data) return [];
+        return data;
+      } catch {
+        return [];
+      }
+    },
+    async upsert(args: { where: { key: string }; update: { value: string }; create: { key: string; value: string } }) {
+      const row = {
+        key: args.where.key,
+        value: args.update?.value ?? args.create?.value,
+        updatedAt: new Date().toISOString(),
+      };
+      try {
+        const { data, error } = await supabase
+          .from('SystemSetting')
+          .upsert(row)
+          .select()
+          .single();
+        if (error) return row;
+        return data;
+      } catch {
+        return row;
+      }
+    },
+  },
+
   async $transaction(promisesOrFn: any) {
     if (typeof promisesOrFn === 'function') {
       return await promisesOrFn(adminDb);
@@ -923,3 +968,4 @@ export const adminDb = {
     return promisesOrFn;
   },
 };
+

@@ -93,7 +93,7 @@ export class TwilioProvider implements ISMSProvider {
       municipality = 'Kpone-Katamanso (KKMA)',
       billYear = new Date().getFullYear(),
       supportPhone = '0256039385/0538702445',
-      ussdCode = '*227*4362#',
+      ussdCode = process.env.NEXT_PUBLIC_USSD_CODE || process.env.USSD_SHORT_CODE || '*227*4362#',
     } = params;
 
     const { billLinkUrl, paymentLinkUrl } = this.buildBillLinks(accountNumber, baseUrl, token);
@@ -103,7 +103,7 @@ export class TwilioProvider implements ISMSProvider {
     const formattedArrears = arrears.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const formattedCurrentFee = currentFee.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-    const defaultMsg = `Dear ${cleanMunicipality} Resident,\n\nDo find below your ${billYear} Property Rate bill:\n\nValuation ID: ${accountNumber}\n\nAmount due: GHS ${formattedAmount}\n\nPay online: ${paymentLinkUrl}\n\nFor payment & enquiries kindly call ${supportPhone}\nDisregard if already paid. Keep receipt for verification.`;
+    const defaultMsg = `Dear ${cleanMunicipality} Resident,\n\nDo find below your ${billYear} Property Rate bill:\n\nValuation ID: ${accountNumber}\n\nAmount due: GHS ${formattedAmount}\n\nPay online: ${paymentLinkUrl}\n\nOffline/USSD: Dial ${ussdCode}\n\nFor payment & enquiries kindly call ${supportPhone}\nDisregard if already paid. Keep receipt for verification.`;
 
     let messageText: string;
 

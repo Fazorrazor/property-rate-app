@@ -631,3 +631,10 @@ model EventLog {
   eventDate DateTime @default(now())
   event     String
 }
+
+model SystemSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+

@@ -30,6 +30,34 @@ const getActiveSmsProvider = () => {
 const smsService = arkeselService;
 const twilioService = arkeselService;
 
+export async function syncActiveSmsConfig() {
+  try {
+    const settings = await (prisma as any).systemSetting.findMany();
+    if (settings && settings.length > 0) {
+      for (const s of settings) {
+        if (s.key === 'sms_dispatch_mode' && (s.value === 'LIVE' || s.value === 'TEST')) {
+          activeSmsConfig.dispatchMode = s.value;
+        } else if (s.key === 'sms_provider' && (s.value === 'arkesel' || s.value === 'twilio')) {
+          activeSmsConfig.provider = s.value;
+        } else if (s.key === 'sms_arkesel_api_key' && s.value) {
+          activeSmsConfig.arkeselApiKey = s.value;
+          arkeselService.setApiKey(s.value);
+        } else if (s.key === 'sms_arkesel_sender_id' && s.value) {
+          activeSmsConfig.arkeselSenderId = s.value;
+          arkeselService.setSenderId(s.value);
+        } else if (s.key === 'sms_message_template' && s.value) {
+          activeSmsConfig.messageTemplate = s.value;
+        } else if (s.key === 'sms_receipt_template' && s.value) {
+          activeSmsConfig.receiptTemplate = s.value;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Could not sync active SMS config from database:', err);
+  }
+}
+
+
 
 export interface AdminPropertyReceipt {
   id: string;
@@ -1016,6 +1044,7 @@ export async function getSmsRolloutLogs(): Promise<SmsRolloutLogItem[]> {
 export async function simulateSmsNoticeDispatch(accountNumber: string, customTemplate?: string, baseUrl?: string) {
   try {
     await verifyAdminSession();
+    await syncActiveSmsConfig();
 
     const property = await prisma.property.findUnique({
       where: { accountNumber },
@@ -1036,7 +1065,7 @@ export async function simulateSmsNoticeDispatch(accountNumber: string, customTem
       currentFee: property.currentFee,
       dueDate: '30-Jun-2025',
       baseUrl,
-      customTemplate,
+      customTemplate: customTemplate || activeSmsConfig.messageTemplate,
       municipality: property.municipality || 'Kpone-Katamanso (KKMA)',
       billYear: property.billYear || 2026,
     });
@@ -1191,25 +1220,8 @@ export async function batchDispatchSms(
     const notificationsToCreate = [];
 
     // Authoritative dispatch mode resolution with persistent DB fallback
-    let currentMode = overrideMode;
-    if (!currentMode) {
-      try {
-        const latestSettingLog = await prisma.auditLog.findFirst({
-          where: { action: 'SYSTEM_SETTINGS_UPDATE' },
-          orderBy: { createdAt: 'desc' },
-        });
-        if (latestSettingLog?.details) {
-          if (latestSettingLog.details.includes('Mode=TEST')) {
-            currentMode = 'TEST';
-          } else if (latestSettingLog.details.includes('Mode=LIVE')) {
-            currentMode = 'LIVE';
-          }
-        }
-      } catch (err) {
-        console.warn('Could not query AuditLog for SMS settings mode:', err);
-      }
-    }
-    const effectiveMode = currentMode || activeSmsConfig.dispatchMode || 'TEST';
+    await syncActiveSmsConfig();
+    const effectiveMode = overrideMode || activeSmsConfig.dispatchMode || 'TEST';
 
     for (const p of properties) {
       const primaryUser = p.users?.[0];
@@ -1246,7 +1258,7 @@ export async function batchDispatchSms(
           dueDate: '30-Jun-2025',
           baseUrl,
           token: userToken,
-          customTemplate,
+          customTemplate: customTemplate || activeSmsConfig.messageTemplate,
           municipality: p.municipality || 'Kpone-Katamanso (KKMA)',
           billYear: p.billYear || 2026,
         });
@@ -1347,24 +1359,7 @@ export interface SmsSettingsData {
 
 export async function getSmsSettings(): Promise<SmsSettingsData> {
   await verifyAdminSession();
-
-  try {
-    const { data: latestLog } = await supabase
-      .from('AuditLog')
-      .select('*')
-      .eq('action', 'SYSTEM_SETTINGS_UPDATE')
-      .order('createdAt', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (latestLog?.details) {
-      if (latestLog.details.includes('Mode=LIVE')) {
-        activeSmsConfig.dispatchMode = 'LIVE';
-      } else if (latestLog.details.includes('Mode=TEST')) {
-        activeSmsConfig.dispatchMode = 'TEST';
-      }
-    }
-  } catch (e) {}
+  await syncActiveSmsConfig();
 
   let balanceInfo = null;
 
@@ -1421,6 +1416,58 @@ export async function updateSmsSettings(newConfig: {
     arkeselService.setSenderId(activeSmsConfig.arkeselSenderId);
   }
 
+  // Persist all updated settings to SystemSetting table
+  try {
+    const upserts = [];
+    if (newConfig.dispatchMode) {
+      upserts.push((prisma as any).systemSetting.upsert({
+        where: { key: 'sms_dispatch_mode' },
+        update: { value: newConfig.dispatchMode },
+        create: { key: 'sms_dispatch_mode', value: newConfig.dispatchMode }
+      }));
+    }
+    if (newConfig.provider) {
+      upserts.push((prisma as any).systemSetting.upsert({
+        where: { key: 'sms_provider' },
+        update: { value: newConfig.provider },
+        create: { key: 'sms_provider', value: newConfig.provider }
+      }));
+    }
+    if (newConfig.arkeselApiKey !== undefined) {
+      upserts.push((prisma as any).systemSetting.upsert({
+        where: { key: 'sms_arkesel_api_key' },
+        update: { value: newConfig.arkeselApiKey },
+        create: { key: 'sms_arkesel_api_key', value: newConfig.arkeselApiKey }
+      }));
+    }
+    if (newConfig.arkeselSenderId !== undefined) {
+      upserts.push((prisma as any).systemSetting.upsert({
+        where: { key: 'sms_arkesel_sender_id' },
+        update: { value: newConfig.arkeselSenderId },
+        create: { key: 'sms_arkesel_sender_id', value: newConfig.arkeselSenderId }
+      }));
+    }
+    if (newConfig.messageTemplate !== undefined) {
+      upserts.push((prisma as any).systemSetting.upsert({
+        where: { key: 'sms_message_template' },
+        update: { value: newConfig.messageTemplate },
+        create: { key: 'sms_message_template', value: newConfig.messageTemplate }
+      }));
+    }
+    if (newConfig.receiptTemplate !== undefined) {
+      upserts.push((prisma as any).systemSetting.upsert({
+        where: { key: 'sms_receipt_template' },
+        update: { value: newConfig.receiptTemplate },
+        create: { key: 'sms_receipt_template', value: newConfig.receiptTemplate }
+      }));
+    }
+    if (upserts.length > 0) {
+      await Promise.all(upserts);
+    }
+  } catch (dbErr) {
+    console.error('Failed to persist settings to SystemSetting:', dbErr);
+  }
+
   await prisma.auditLog.create({
     data: {
       action: 'SYSTEM_SETTINGS_UPDATE',
@@ -1436,33 +1483,38 @@ export async function updateSmsSettings(newConfig: {
 
 export async function saveSmsTemplate(template: string, type: 'BILLING' | 'RECEIPT' = 'BILLING') {
   const admin = await verifyAdminSession();
+  const settingKey = type === 'RECEIPT' ? 'sms_receipt_template' : 'sms_message_template';
+  const fallback = type === 'RECEIPT' ? DEFAULT_RECEIPT_NOTICE_TEMPLATE : DEFAULT_SMS_NOTICE_TEMPLATE;
+  const cleanTemplate = template.trim() || fallback;
+
   if (type === 'RECEIPT') {
-    const cleanTemplate = template.trim() || DEFAULT_RECEIPT_NOTICE_TEMPLATE;
     activeSmsConfig.receiptTemplate = cleanTemplate;
-    await prisma.auditLog.create({
-      data: {
-        action: 'SMS_RECEIPT_TEMPLATE_UPDATE',
-        entityType: 'SystemConfig',
-        details: `Saved payment receipt SMS notice template (${cleanTemplate.length} characters)`,
-        adminId: admin.id,
-      },
-    });
-    revalidatePath('/');
-    return { success: true, template: cleanTemplate, type };
   } else {
-    const cleanTemplate = template.trim() || DEFAULT_SMS_NOTICE_TEMPLATE;
     activeSmsConfig.messageTemplate = cleanTemplate;
-    await prisma.auditLog.create({
-      data: {
-        action: 'SMS_TEMPLATE_UPDATE',
-        entityType: 'SystemConfig',
-        details: `Saved statutory SMS notice template (${cleanTemplate.length} characters)`,
-        adminId: admin.id,
-      },
-    });
-    revalidatePath('/');
-    return { success: true, template: cleanTemplate, type };
   }
+
+  // Persist directly to Supabase SystemSetting table
+  try {
+    await (prisma as any).systemSetting.upsert({
+      where: { key: settingKey },
+      update: { value: cleanTemplate },
+      create: { key: settingKey, value: cleanTemplate },
+    });
+  } catch (dbErr) {
+    console.error(`Failed to persist ${settingKey} to SystemSetting:`, dbErr);
+  }
+
+  await prisma.auditLog.create({
+    data: {
+      action: type === 'RECEIPT' ? 'SMS_RECEIPT_TEMPLATE_UPDATE' : 'SMS_TEMPLATE_UPDATE',
+      entityType: 'SystemConfig',
+      details: `Saved ${type === 'RECEIPT' ? 'payment receipt' : 'statutory'} SMS notice template (${cleanTemplate.length} characters)`,
+      adminId: admin.id,
+    },
+  });
+
+  revalidatePath('/');
+  return { success: true, template: cleanTemplate, type };
 }
 
 export async function testArkeselGatewayConnection(apiKey?: string) {
@@ -2034,6 +2086,7 @@ export async function sendReceiptNoticeSMS(receiptId: string, customTemplate?: s
     const formattedAmount = Number(receipt.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const formattedDate = new Date(receipt.datePaid || Date.now()).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
+    await syncActiveSmsConfig();
     const templateToUse = customTemplate?.trim() || activeSmsConfig.receiptTemplate || DEFAULT_RECEIPT_NOTICE_TEMPLATE;
     const messageText = templateToUse
       .replace(/{{amount}}/g, formattedAmount)
