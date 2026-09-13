@@ -83,10 +83,10 @@ export default function LoginPage() {
     >
       <motion.header variants={itemVariants} className={STYLES.typographyHeader}>
         <h1 className={STYLES.titleText}>
-          Sign In with Phone
+          Username
         </h1>
         <p className={STYLES.subtitleText}>
-          Enter your telephone number to authenticate and access your municipal property accounts.
+          Password
         </p>
       </motion.header>
 
