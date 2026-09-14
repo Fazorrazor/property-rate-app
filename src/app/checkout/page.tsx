@@ -18,42 +18,15 @@ import {
   TelecelLogo,
   AirtelTigoLogo,
   VisaLogo,
-  BankTreasuryLogo,
 } from "@/components/icons/PaymentLogos";
 import { HeinzLoader } from "@/components/ui/HeinzLoader";
 import { CheckoutSkeleton } from "@/components/ui/Skeletons";
 import { motion, AnimatePresence } from "framer-motion";
-import { getCheckoutData, chargeMobileMoneyAction, verifyPaymentTransaction, initializePayment, recordBankTransferAction } from "@/app/actions";
+import { getCheckoutData, chargeMobileMoneyAction, verifyPaymentTransaction, initializePayment, verifySubscriberAction } from "@/app/actions";
 import { identifyNetworkCarrier } from "@/lib/utils/network-detector";
 
-const GHANA_BANKS = [
-  { code: "GCB", name: "GCB Bank PLC", account: "1021130004921" },
-  { code: "ECO", name: "Ecobank Ghana PLC", account: "0010014482910" },
-  { code: "STN", name: "Stanbic Bank Ghana Ltd", account: "9040003829104" },
-  { code: "ABS", name: "Absa Bank Ghana Ltd", account: "0341100982341" },
-  { code: "SCB", name: "Standard Chartered Bank Ghana PLC", account: "0100110293847" },
-  { code: "ZEN", name: "Zenith Bank (Ghana) Ltd", account: "1010023489102" },
-  { code: "FID", name: "Fidelity Bank Ghana Ltd", account: "2090014829103" },
-  { code: "CAL", name: "CalBank PLC", account: "1400009283719" },
-  { code: "ACC", name: "Access Bank (Ghana) PLC", account: "0020110482910" },
-  { code: "UBA", name: "United Bank for Africa (Ghana) PLC", account: "0120014892019" },
-  { code: "REP", name: "Republic Bank (Ghana) PLC", account: "0230004829104" },
-  { code: "ADB", name: "Agricultural Development Bank (ADB)", account: "1040019283710" },
-  { code: "CBG", name: "Consolidated Bank Ghana (CBG)", account: "1150004928103" },
-  { code: "PRU", name: "Prudential Bank Ltd", account: "0090014829102" },
-  { code: "FAB", name: "First Atlantic Bank Ltd", account: "0180004928103" },
-  { code: "FBN", name: "FBNBank Ghana Ltd", account: "0300014829102" },
-  { code: "BOA", name: "Bank of Africa Ghana Ltd", account: "0140004928104" },
-  { code: "SGG", name: "Societe Generale Ghana PLC", account: "0050014829101" },
-  { code: "FNB", name: "First National Bank Ghana (FNB)", account: "0280004928102" },
-  { code: "OMB", name: "OmniBSIC Bank Ghana Ltd", account: "0320014829104" },
-  { code: "GTB", name: "Guaranty Trust Bank (Ghana) Ltd", account: "0170014829103" },
-  { code: "NIB", name: "National Investment Bank (NIB)", account: "1080004928102" },
-  { code: "UMB", name: "Universal Merchant Bank (UMB)", account: "0070014829101" },
-];
-
 type Step = "CHANNELS" | "DETAILS" | "PROCESSING" | "CONFIRMATION" | "FAILED";
-type Channel = "MOMO" | "CARD" | "BANK";
+type Channel = "MOMO" | "CARD";
 type MoMoNetwork = "MTN" | "TELECEL" | "AIRTELTIGO";
 type SettlementType = "TOTAL" | "ARREARS" | "CURRENT_FEE" | "PARTIAL";
 
@@ -78,6 +51,9 @@ interface CheckoutState {
   processingFeeFormatted: string;
   totalAmount: number;
   totalAmountFormatted: string;
+  verifiedSubscriberName?: string | null;
+  isHubtelVerified?: boolean;
+  preferredDisplayName?: string;
   user: {
     id: string;
     name: string | null;
@@ -107,9 +83,8 @@ function CheckoutContent() {
   const [cardNumber, setCardNumber] = useState("");
   const [cardExpiry, setCardExpiry] = useState("");
   const [cardCvc, setCardCvc] = useState("");
-  const [selectedBankCode, setSelectedBankCode] = useState("GCB");
-  const [payerAccountNumber, setPayerAccountNumber] = useState("");
-  const [depositorName, setDepositorName] = useState("");
+  const [isVerifyingSubscriber, setIsVerifyingSubscriber] = useState(false);
+  const [isHubtelVerified, setIsHubtelVerified] = useState(false);
 
   const [checkoutData, setCheckoutData] = useState<CheckoutState | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -191,7 +166,27 @@ function CheckoutContent() {
             const clamped = Math.min(Math.max(customAmount, data.minPartialAmount), data.maxPartialAmount);
             setCustomSubtotal(clamped.toString());
           }
-          // Do not prefill user fields initially per ratepayer workflow requirements
+
+          // Auto-populate Step 2 details from the registered user and Hubtel verification
+          const userPhone = data.user?.phoneNumber || "";
+          const resolvedName = data.verifiedSubscriberName || data.preferredDisplayName || data.user?.name || "";
+
+          if (userPhone) {
+            setPhoneNumber(userPhone);
+            const detectedCarrier = identifyNetworkCarrier(userPhone);
+            if (detectedCarrier) {
+              setNetwork(detectedCarrier);
+            }
+          }
+
+          if (resolvedName) {
+            setPayerName(resolvedName);
+            setCardholderName(resolvedName);
+          }
+
+          if (data.isHubtelVerified) {
+            setIsHubtelVerified(true);
+          }
         }
       } catch (err) {
         console.error(err);
@@ -201,6 +196,41 @@ function CheckoutContent() {
     }
     load();
   }, [propertyId, settlementTypeParam]);
+
+  // Debounced re-verification when user changes the mobile phone number
+  useEffect(() => {
+    const cleanDigits = phoneNumber.replace(/\D/g, "");
+    const isPotentiallyComplete =
+      (cleanDigits.length === 10 && cleanDigits.startsWith("0")) ||
+      (cleanDigits.length === 12 && cleanDigits.startsWith("233"));
+
+    if (!isPotentiallyComplete) {
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsVerifyingSubscriber(true);
+      try {
+        const res = await verifySubscriberAction(phoneNumber);
+        if (res.success && res.subscriberName) {
+          setPayerName(res.subscriberName);
+          setCardholderName(res.subscriberName);
+          setIsHubtelVerified(true);
+          if (res.network) {
+            setNetwork(res.network);
+          }
+        } else {
+          setIsHubtelVerified(false);
+        }
+      } catch {
+        setIsHubtelVerified(false);
+      } finally {
+        setIsVerifyingSubscriber(false);
+      }
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, [phoneNumber]);
 
 
   // Polling Effect
@@ -377,48 +407,6 @@ function CheckoutContent() {
       } catch (err) {
         console.error("Card payment error:", err);
         showToast("An unexpected error occurred authorizing card.", "error");
-      } finally {
-        setIsSubmitting(false);
-      }
-    } else if (channel === "BANK") {
-      if (!payerAccountNumber.trim()) {
-        showToast("Please enter your bank account number.", "error");
-        return;
-      }
-      if (!depositorName.trim()) {
-        showToast("Please enter your account name.", "error");
-        return;
-      }
-
-      const bank = GHANA_BANKS.find((b) => b.code === selectedBankCode) || GHANA_BANKS[0];
-      setIsSubmitting(true);
-      try {
-        const res = await recordBankTransferAction({
-          propertyId: propertyId || "ALL",
-          settlementType: paymentMode === "PARTIAL" ? "PARTIAL" : settlementTypeParam,
-          amount: activeTotalAmount,
-          bankName: bank.name,
-          treasuryAccount: bank.account,
-          depositorName: depositorName.trim(),
-          payerAccountNumber: payerAccountNumber.trim(),
-        });
-
-        if (res.success && res.reference) {
-          setActiveReference(res.reference);
-          setStep("CONFIRMATION");
-          setReceiptResult({
-            receiptNumber: `BNK-${res.reference.slice(-8)}`,
-            receiptId: res.reference,
-            amountFormatted: activeTotalAmountFormatted,
-            paymentMethod: `Bank Transfer (${bank.name})`,
-            timestamp: new Date().toISOString(),
-          });
-        } else {
-          showToast(res.error || "Failed to record bank transfer order.", "error");
-        }
-      } catch (err) {
-        console.error("Bank wire error:", err);
-        showToast("An error occurred recording bank wire order.", "error");
       } finally {
         setIsSubmitting(false);
       }
@@ -664,33 +652,6 @@ function CheckoutContent() {
                     {channel === "CARD" && <div className="w-1.5 h-1.5 rounded-full bg-surface" />}
                   </div>
                 </div>
-
-                {/* 3. Bank Wire */}
-                <div
-                  onClick={() => setChannel("BANK")}
-                  className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between shadow-2xs ${
-                    channel === "BANK"
-                      ? "border-[#4B1426] bg-background"
-                      : "border-border-light bg-surface hover:border-border-light"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-background flex items-center justify-center shrink-0">
-                      <BankTreasuryLogo className="w-6 h-6 text-foreground" />
-                    </div>
-                    <div>
-                      <h4 className="text-xs font-semibold text-foreground">Bank Transfer</h4>
-                      <p className="text-[11px] text-on-surface-muted">Pay directly via your bank</p>
-                    </div>
-                  </div>
-                  <div
-                    className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
-                      channel === "BANK" ? "border-[#4B1426] bg-[#4B1426]" : "border-border-light"
-                    }`}
-                  >
-                    {channel === "BANK" && <div className="w-1.5 h-1.5 rounded-full bg-surface" />}
-                  </div>
-                </div>
               </div>
             </div>
           </div>
@@ -719,13 +680,30 @@ function CheckoutContent() {
           className="space-y-4 flex flex-col"
         >
           <div className="space-y-4">
-            <div>
-              <span className="text-xs text-on-surface-muted font-medium">Step 2 of 2</span>
-              <h2 className="text-base font-semibold text-foreground mt-0.5">
-                {channel === "MOMO" && "Enter Mobile Money Number"}
-                {channel === "CARD" && "Enter Card Details"}
-                {channel === "BANK" && "Bank Transfer Details"}
-              </h2>
+            {/* Bold Total Amount Header for Step 2 */}
+            <div className="pb-3 border-b border-border-light flex items-start justify-between">
+              <div>
+                <span className="text-xs text-on-surface-muted font-medium block">Step 2 of 2</span>
+                <h2 className="text-base font-semibold text-foreground mt-0.5">
+                  {channel === "MOMO" ? "Mobile Money Payment" : "Card Payment"}
+                </h2>
+                <p className="text-[11px] text-on-surface-muted mt-0.5">
+                  {channel === "MOMO"
+                    ? "Confirm your number to authorize instant MoMo prompt"
+                    : "Enter your card details to complete payment"}
+                </p>
+              </div>
+              <div className="text-right shrink-0">
+                <span className="text-[10px] font-semibold text-on-surface-muted uppercase tracking-wider block">
+                  Total Payable
+                </span>
+                <span className="text-2xl font-black text-foreground tracking-tight block">
+                  {activeTotalAmountFormatted}
+                </span>
+                <span className="text-[10px] text-on-surface-muted block">
+                  (Incl. 2% fee)
+                </span>
+              </div>
             </div>
 
             {/* MOMO DETAILS */}
@@ -801,11 +779,27 @@ function CheckoutContent() {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-medium text-on-surface-muted">Account Holder Name</label>
+                  <div className="flex items-center justify-between">
+                    <label className="font-medium text-on-surface-muted">Account Holder Name</label>
+                    {isVerifyingSubscriber ? (
+                      <span className="text-[11px] text-on-surface-muted flex items-center gap-1 font-normal">
+                        <span className="w-2.5 h-2.5 border border-t-transparent border-[#4B1426] rounded-full animate-spin shrink-0" />
+                        Verifying subscriber...
+                      </span>
+                    ) : isHubtelVerified ? (
+                      <span className="text-[11px] text-emerald-700 flex items-center gap-1 font-medium">
+                        <Check className="w-3 h-3 text-emerald-600" />
+                        Verified via Hubtel
+                      </span>
+                    ) : null}
+                  </div>
                   <input
                     type="text"
                     value={payerName}
-                    onChange={(e) => setPayerName(e.target.value)}
+                    onChange={(e) => {
+                      setPayerName(e.target.value);
+                      setIsHubtelVerified(false);
+                    }}
                     placeholder="e.g. Kwame Mensah"
                     className="w-full h-10 px-3 rounded-lg bg-surface border border-border-light text-xs font-medium text-foreground focus:outline-none focus:border-[#4B1426]"
                   />
@@ -817,7 +811,15 @@ function CheckoutContent() {
             {channel === "CARD" && (
               <div className="space-y-3 text-xs">
                 <div className="space-y-1">
-                  <label className="font-medium text-on-surface-muted">Cardholder Name</label>
+                  <div className="flex items-center justify-between">
+                    <label className="font-medium text-on-surface-muted">Cardholder Name</label>
+                    {isHubtelVerified && (
+                      <span className="text-[11px] text-emerald-700 flex items-center gap-1 font-medium">
+                        <Check className="w-3 h-3 text-emerald-600" />
+                        Verified Name
+                      </span>
+                    )}
+                  </div>
                   <input
                     type="text"
                     value={cardholderName}
@@ -874,74 +876,6 @@ function CheckoutContent() {
               </div>
             )}
 
-            {/* BANK DETAILS */}
-            {channel === "BANK" && (
-              <div className="space-y-3 text-xs">
-                <div className="space-y-1">
-                  <label className="font-medium text-on-surface-muted">Select Bank</label>
-                  <select
-                    value={selectedBankCode}
-                    onChange={(e) => setSelectedBankCode(e.target.value)}
-                    className="w-full h-10 px-3 rounded-lg bg-surface border border-border-light text-xs font-medium text-foreground focus:outline-none focus:border-[#4B1426]"
-                  >
-                    {GHANA_BANKS.map((bank) => (
-                      <option key={bank.code} value={bank.code}>
-                        {bank.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Treasury Account Details Card */}
-                {(() => {
-                  const b = GHANA_BANKS.find((x) => x.code === selectedBankCode) || GHANA_BANKS[0];
-                  return (
-                    <div className="p-3 rounded-xl bg-surface border border-border-light space-y-1.5 text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="text-on-surface-muted">Pay To:</span>
-                        <span className="font-semibold text-foreground">KKMA Treasury</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-on-surface-muted">Account:</span>
-                        <span className="font-mono font-semibold text-foreground">{b.account}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-on-surface-muted">Reference:</span>
-                        <span className="font-mono font-bold text-[#4B1426]">{checkoutData.accountNumber || "—"}</span>
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                <div className="space-y-1">
-                  <label className="font-medium text-on-surface-muted">Your Account Number</label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={payerAccountNumber}
-                    onChange={(e) => setPayerAccountNumber(e.target.value.replace(/\D/g, ''))}
-                    placeholder="e.g. 1023456789"
-                    className="w-full h-10 px-3 rounded-lg bg-surface border border-border-light text-xs font-medium text-foreground focus:outline-none focus:border-[#4B1426] font-mono"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-medium text-on-surface-muted">Account Name</label>
-                  <input
-                    type="text"
-                    value={depositorName}
-                    onChange={(e) => setDepositorName(e.target.value)}
-                    placeholder="e.g. Kwame Mensah"
-                    className="w-full h-10 px-3 rounded-lg bg-surface border border-border-light text-xs font-medium text-foreground focus:outline-none focus:border-[#4B1426]"
-                  />
-                </div>
-
-                <p className="text-[11px] text-on-surface-muted">
-                  Use reference <strong className="text-foreground font-mono">{checkoutData.accountNumber}</strong> in your transfer narration.
-                </p>
-              </div>
-            )}
-
             {/* Order Summary */}
             <div className="p-3.5 rounded-xl bg-background border border-border-light space-y-1.5 text-xs">
               <div className="flex justify-between text-on-surface-muted">
@@ -978,9 +912,7 @@ function CheckoutContent() {
                   <span>
                     {channel === "MOMO"
                       ? `Authorize via ${network === "MTN" ? "MTN MoMo" : network === "TELECEL" ? "Telecel Cash" : "AT Money"} • ${activeTotalAmountFormatted}`
-                      : channel === "CARD"
-                      ? `Pay with Card • ${activeTotalAmountFormatted}`
-                      : `Confirm Bank Transfer • ${activeTotalAmountFormatted}`}
+                      : `Pay with Card • ${activeTotalAmountFormatted}`}
                   </span>
                 </>
               )}

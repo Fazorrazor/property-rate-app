@@ -173,6 +173,26 @@ export const ratepayerDb = {
       const { data, error } = await query.maybeSingle();
       if (error || !data) return null;
 
+      if (args.include?.owner && data.ownerId) {
+        const { data: owner } = await supabase.from('PropertyOwner').select('*').eq('ownerId', data.ownerId).maybeSingle();
+        data.owner = owner || null;
+      }
+
+      if (args.include?.users) {
+        const { data: links } = await supabase.from('_PropertyToUser').select('B').eq('A', data.id);
+        const userIds = (links || []).map((l: any) => l.B);
+        if (userIds.length > 0) {
+          const { data: users } = await supabase.from('User').select('*').in('id', userIds);
+          data.users = users || [];
+        } else if (data.owner?.mobileNumber || data.owner?.tel) {
+          const phone = data.owner.mobileNumber || data.owner.tel;
+          const { data: matchedUsers } = await supabase.from('User').select('*').eq('phoneNumber', phone);
+          data.users = matchedUsers || [];
+        } else {
+          data.users = [];
+        }
+      }
+
       if (args.include?.receipts) {
         const { data: receipts } = await supabase.from('Receipt').select('*').eq('propertyId', data.id);
         data.receipts = receipts || [];

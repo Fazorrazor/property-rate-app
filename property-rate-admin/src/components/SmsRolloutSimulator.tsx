@@ -125,7 +125,7 @@ export function SmsRolloutSimulator({
       if (cachedReceipt && cachedReceipt.trim()) {
         setReceiptTemplate(cachedReceipt);
       }
-    } catch {}
+    } catch { }
 
     getSmsSettings()
       .then((settings) => {
@@ -143,16 +143,16 @@ export function SmsRolloutSimulator({
           setMessageTemplate(tpl);
           try {
             localStorage.setItem("kkma_sms_message_template", tpl);
-          } catch {}
+          } catch { }
         }
         if (settings?.receiptTemplate) {
           setReceiptTemplate(settings.receiptTemplate);
           try {
             localStorage.setItem("kkma_sms_receipt_template", settings.receiptTemplate);
-          } catch {}
+          } catch { }
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const billingTokens = [
@@ -184,30 +184,60 @@ export function SmsRolloutSimulator({
   const [dueDate, setDueDate] = useState("30-Jun-2025");
   const [previewAccountIndex, setPreviewAccountIndex] = useState(0);
 
-  // Live Debounced Server Search for Specific Accounts
+  // Optimized server search:
+  // - ignores whitespace-only input
+  // - waits for a meaningful query (2+ characters)
+  // - debounces requests to reduce server/database load
+  // - prevents stale responses from replacing newer results
+  // - clears loading state only for the active request
+  const searchRequestIdRef = useRef(0);
+
   useEffect(() => {
-    if (!accountSearchQuery.trim()) {
+    const query = accountSearchQuery.trim();
+
+    if (query.length < 2) {
+      searchRequestIdRef.current += 1;
       setSearchResults([]);
       setIsSearchingSpecificAccounts(false);
       return;
     }
+
+    const requestId = ++searchRequestIdRef.current;
+    let isActive = true;
+
     setIsSearchingSpecificAccounts(true);
-    const timer = setTimeout(async () => {
+
+    const timer = window.setTimeout(async () => {
       try {
         const res = await getSmsRolloutAudience({
-          searchQuery: accountSearchQuery.trim(),
+          searchQuery: query,
           status: "ALL",
         });
-        if (res) {
-          setSearchResults(res.properties);
+
+        // Ignore responses belonging to an older query/request.
+        if (!isActive || requestId !== searchRequestIdRef.current) {
+          return;
         }
+
+        setSearchResults(res?.properties ?? []);
       } catch (err) {
+        if (!isActive || requestId !== searchRequestIdRef.current) {
+          return;
+        }
+
         console.error("Error searching specific accounts:", err);
+        setSearchResults([]);
       } finally {
-        setIsSearchingSpecificAccounts(false);
+        if (isActive && requestId === searchRequestIdRef.current) {
+          setIsSearchingSpecificAccounts(false);
+        }
       }
-    }, 300);
-    return () => clearTimeout(timer);
+    }, 400);
+
+    return () => {
+      isActive = false;
+      window.clearTimeout(timer);
+    };
   }, [accountSearchQuery]);
 
   const handleToggleSpecificAccount = (account: AdminProperty) => {
@@ -262,8 +292,15 @@ export function SmsRolloutSimulator({
     ? selectedSpecificAccounts
     : liveAudience;
 
+  const selectedAccountNumbers = useMemo(
+    () => new Set(selectedSpecificAccounts.map((p) => p.accountNumber)),
+    [selectedSpecificAccounts]
+  );
+
   const unpaidTargets = useMemo(() => {
-    return eligibleProperties.filter((p) => p.status !== "PAID" && p.totalAmountDue > 0);
+    return eligibleProperties.filter(
+      (p) => p.status !== "PAID" && p.totalAmountDue > 0
+    );
   }, [eligibleProperties]);
 
   const totalOutstandingDueSum = useMemo(() => {
@@ -356,12 +393,12 @@ export function SmsRolloutSimulator({
         setMessageTemplate(templateToSave);
         try {
           localStorage.setItem("kkma_sms_message_template", templateToSave);
-        } catch {}
+        } catch { }
       } else {
         setReceiptTemplate(templateToSave);
         try {
           localStorage.setItem("kkma_sms_receipt_template", templateToSave);
-        } catch {}
+        } catch { }
       }
 
       await saveSmsTemplate(templateToSave, activeTemplateType);
@@ -382,20 +419,20 @@ export function SmsRolloutSimulator({
       setMessageTemplate(defaultTemplate);
       try {
         localStorage.removeItem("kkma_sms_message_template");
-      } catch {}
+      } catch { }
       try {
         await saveSmsTemplate(defaultTemplate, "BILLING");
-      } catch {}
+      } catch { }
       onNotify?.("Billing SMS template reset to statutory standard.", "info");
     } else {
       setDraftTemplate(defaultReceiptTemplate);
       setReceiptTemplate(defaultReceiptTemplate);
       try {
         localStorage.removeItem("kkma_sms_receipt_template");
-      } catch {}
+      } catch { }
       try {
         await saveSmsTemplate(defaultReceiptTemplate, "RECEIPT");
-      } catch {}
+      } catch { }
       onNotify?.("Payment receipt SMS template reset to official standard.", "info");
     }
   };
@@ -596,8 +633,10 @@ export function SmsRolloutSimulator({
                       aria-label="Search accounts for SMS rollout"
                       onKeyDown={(e) => {
                         if (e.key === "Escape") {
+                          searchRequestIdRef.current += 1;
                           setAccountSearchQuery("");
                           setSearchResults([]);
+                          setIsSearchingSpecificAccounts(false);
                         }
                       }}
                       placeholder="Search Valuation ID, Ratepayer, Phone, GPS (e.g. GK-0010), Landmark, Class..."
@@ -607,8 +646,10 @@ export function SmsRolloutSimulator({
                       <button
                         type="button"
                         onClick={() => {
+                          searchRequestIdRef.current += 1;
                           setAccountSearchQuery("");
                           setSearchResults([]);
+                          setIsSearchingSpecificAccounts(false);
                         }}
                         className="absolute right-2 top-1/2 -translate-y-1/2 text-[#717171] hover:text-[#2C2C2C] p-1 cursor-pointer"
                       >
@@ -624,14 +665,13 @@ export function SmsRolloutSimulator({
                   {searchResults.length > 0 && (
                     <div className="max-h-48 overflow-y-auto rounded-lg border border-[#DADCE0] bg-white divide-y divide-[#F1F3F4] shadow-lg">
                       {searchResults.map((acc) => {
-                        const isSelected = selectedSpecificAccounts.some((p) => p.accountNumber === acc.accountNumber);
+                        const isSelected = selectedAccountNumbers.has(acc.accountNumber);
                         return (
                           <div
                             key={acc.id}
                             onClick={() => handleToggleSpecificAccount(acc)}
-                            className={`p-2 flex items-center justify-between text-xs cursor-pointer hover:bg-[#F8F9FA] transition-colors ${
-                              isSelected ? "bg-[#F6ECF2]/60" : ""
-                            }`}
+                            className={`p-2 flex items-center justify-between text-xs cursor-pointer hover:bg-[#F8F9FA] transition-colors ${isSelected ? "bg-[#F6ECF2]/60" : ""
+                              }`}
                           >
                             <div className="min-w-0 pr-2">
                               <div className="flex items-center gap-2">
@@ -655,11 +695,10 @@ export function SmsRolloutSimulator({
                                 e.stopPropagation();
                                 handleToggleSpecificAccount(acc);
                               }}
-                              className={`h-6 px-2 rounded text-[11px] font-medium shrink-0 flex items-center gap-1 transition-colors cursor-pointer ${
-                                isSelected
+                              className={`h-6 px-2 rounded text-[11px] font-medium shrink-0 flex items-center gap-1 transition-colors cursor-pointer ${isSelected
                                   ? "bg-[#612D53] text-white"
                                   : "border border-[#DADCE0] text-[#2C2C2C] hover:bg-[#F1F3F4]"
-                              }`}
+                                }`}
                             >
                               {isSelected ? (
                                 <>
@@ -736,11 +775,10 @@ export function SmsRolloutSimulator({
                           setAudienceScope("SELECTED");
                           setPreviewAccountIndex(0);
                         }}
-                        className={`text-[11px] font-medium transition-colors cursor-pointer ${
-                          audienceScope === "SELECTED"
+                        className={`text-[11px] font-medium transition-colors cursor-pointer ${audienceScope === "SELECTED"
                             ? "text-[#612D53] font-semibold underline"
                             : "text-[#717171] hover:text-[#2C2C2C]"
-                        }`}
+                          }`}
                       >
                         Selected Accounts ({selectedSpecificAccounts.length})
                       </button>
@@ -751,11 +789,10 @@ export function SmsRolloutSimulator({
                           setAudienceScope("DATABASE_FILTER");
                           setPreviewAccountIndex(0);
                         }}
-                        className={`text-[11px] font-medium transition-colors cursor-pointer ${
-                          audienceScope === "DATABASE_FILTER"
+                        className={`text-[11px] font-medium transition-colors cursor-pointer ${audienceScope === "DATABASE_FILTER"
                             ? "text-[#612D53] font-semibold underline"
                             : "text-[#717171] hover:text-[#2C2C2C]"
-                        }`}
+                          }`}
                       >
                         All Filtered Records ({liveAudience.length})
                       </button>
@@ -838,11 +875,10 @@ export function SmsRolloutSimulator({
                       <button
                         type="button"
                         onClick={() => setActiveTemplateType("BILLING")}
-                        className={`transition-colors cursor-pointer text-[11px] font-medium ${
-                          activeTemplateType === "BILLING"
+                        className={`transition-colors cursor-pointer text-[11px] font-medium ${activeTemplateType === "BILLING"
                             ? "text-[#612D53] font-semibold underline underline-offset-4"
                             : "text-[#717171] hover:text-[#2C2C2C]"
-                        }`}
+                          }`}
                       >
                         Billing Notice
                       </button>
@@ -850,11 +886,10 @@ export function SmsRolloutSimulator({
                       <button
                         type="button"
                         onClick={() => setActiveTemplateType("RECEIPT")}
-                        className={`transition-colors cursor-pointer text-[11px] font-medium ${
-                          activeTemplateType === "RECEIPT"
+                        className={`transition-colors cursor-pointer text-[11px] font-medium ${activeTemplateType === "RECEIPT"
                             ? "text-[#612D53] font-semibold underline underline-offset-4"
                             : "text-[#717171] hover:text-[#2C2C2C]"
-                        }`}
+                          }`}
                       >
                         Payment Receipt Notice
                       </button>
@@ -1203,13 +1238,12 @@ export function SmsRolloutSimulator({
                         </td>
                         <td className="py-2.5 px-3 text-center align-top">
                           <span
-                            className={`font-semibold text-[11px] block ${
-                              log.deliveryStatus === "DELIVERED"
+                            className={`font-semibold text-[11px] block ${log.deliveryStatus === "DELIVERED"
                                 ? "text-[#188038]"
                                 : log.deliveryStatus === "PENDING"
-                                ? "text-[#B45309]"
-                                : "text-[#D93025]"
-                            }`}
+                                  ? "text-[#B45309]"
+                                  : "text-[#D93025]"
+                              }`}
                           >
                             {log.deliveryStatus === "DELIVERED" ? "Delivered" : log.deliveryStatus === "PENDING" ? "Queued" : "Failed"}
                           </span>
@@ -1299,11 +1333,10 @@ export function SmsRolloutSimulator({
                 <button
                   type="button"
                   onClick={() => handleSwitchModalTab("BILLING")}
-                  className={`text-xs font-semibold transition-colors cursor-pointer ${
-                    activeTemplateType === "BILLING"
+                  className={`text-xs font-semibold transition-colors cursor-pointer ${activeTemplateType === "BILLING"
                       ? "text-[#612D53] underline underline-offset-4"
                       : "text-[#717171] hover:text-[#2C2C2C]"
-                  }`}
+                    }`}
                 >
                   Statutory Billing Notice
                 </button>
@@ -1311,11 +1344,10 @@ export function SmsRolloutSimulator({
                 <button
                   type="button"
                   onClick={() => handleSwitchModalTab("RECEIPT")}
-                  className={`text-xs font-semibold transition-colors cursor-pointer ${
-                    activeTemplateType === "RECEIPT"
+                  className={`text-xs font-semibold transition-colors cursor-pointer ${activeTemplateType === "RECEIPT"
                       ? "text-[#612D53] underline underline-offset-4"
                       : "text-[#717171] hover:text-[#2C2C2C]"
-                  }`}
+                    }`}
                 >
                   Official Payment Receipt Notice
                 </button>

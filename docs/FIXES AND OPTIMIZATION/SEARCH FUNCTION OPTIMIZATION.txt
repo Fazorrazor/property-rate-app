@@ -1,0 +1,373 @@
+What is happening now
+
+Imagine a user types:
+
+Heinz
+
+Your system currently behaves roughly like this:
+
+User types "Heinz"
+ ↓
+ Search Users → possibly thousands of records
+ ↓
+ Search Properties → possibly thousands
+ ↓
+ Search Owners → possibly thousands
+ ↓
+ Search Receipts → possibly thousands
+ ↓
+ Search relationships → possibly thousands
+ ↓
+ Combine everything
+ ↓
+ Show maybe 10 suggestions
+
+So you're potentially retrieving a huge amount of data just to display a handful of suggestions.
+
+And if this happens after every keystroke:
+
+H → search
+ He → search
+ Hei → search
+ Heinz → search
+
+That's unnecessary database and network traffic.
+
+What you should change
+1. Wait until the user stops typing
+
+Don't search immediately after every key.
+
+Wait about 300 milliseconds after their last keystroke.
+
+Also, don't search for:
+
+H
+
+Wait until they enter at least 2 or 3 characters.
+
+So:
+
+H ❌
+ He ✅ search after 300ms
+ Hei ✅ new search
+ Heinz ✅ new search
+
+This is called debouncing.
+
+2. Stop requesting 5,000 results
+
+This is probably one of the easiest improvements.
+
+If your search dropdown displays only around 10 results, there's little reason to retrieve 5,000.
+
+Change:
+
+Plain Text
+1
+limit=5000
+Show more lines
+
+to something like:
+
+Plain Text
+1
+limit=15
+2
+ 
+Show more lines
+
+Then, once the user clicks a result, retrieve the full record.
+
+3. Don't retrieve all the person's information
+
+For search suggestions, you probably only need something like:
+
+Plain Text
+1
+Property
+2
+Heinz Street
+3
+Property ID: P12345
+4
+``
+Show more lines
+
+So the search needs:
+
+Plain Text
+1
+id
+2
+name
+3
+type
+4
+secondary description
+5
+``
+Show more lines
+
+It doesn't need to retrieve things such as:
+
+Plain Text
+1
+email
+2
+phone
+3
+billing information
+4
+full address
+5
+other personal information
+Show more lines
+
+for every suggestion.
+
+Load those details after the user selects the record.
+
+4. Instead of making 5 requests, make 1
+
+This is the biggest structural improvement.
+
+Currently, your frontend seems to be doing something like:
+
+Plain Text
+1
+Search request
+2
+↓
+3
+Users
+4
+Properties
+5
+Owners
+6
+Receipts
+7
+Relationships
+Show more lines
+
+That's 5 separate database/network requests.
+
+A better approach:
+
+Plain Text
+1
+User searches "Heinz"
+2
+↓
+3
+ONE search request
+4
+↓
+5
+Database searches everything
+6
+↓
+7
+Returns best 15 matches
+Show more lines
+
+The frontend therefore doesn't need to know how all the search tables work.
+
+It simply asks:
+
+"Give me the best matches for Heinz."
+
+The database handles the rest.
+
+5. Make the database good at searching
+
+Your database currently uses searches like:
+
+SQL
+1
+ILIKE '%Heinz%'
+Show more lines
+
+That basically means:
+
+"Find anything containing the word Heinz."
+
+That is fine functionally, but as your database gets bigger, it can become slower.
+
+That's where pg_trgm indexes come in.
+
+Think of an index like the index at the back of a textbook.
+
+Instead of reading 500 pages trying to find "Heinz", you look in the index and immediately determine where it appears.
+
+So you'd add indexes to fields people frequently search, such as:
+
+Owner name
+Property name
+Address
+Business name
+
+You don't need to index everything.
+
+The ideal search system
+
+Ultimately, your search should operate like this:
+
+Plain Text
+1
+User types: "Hei"
+2
+↓
+3
+Wait 300ms
+4
+↓
+5
+Send ONE request
+6
+↓
+7
+Search indexed database
+8
+↓
+9
+Find matches across:
+10
+Properties
+11
+Owners
+12
+Receipts
+13
+etc.
+14
+↓
+15
+Return maximum 15 results
+16
+↓
+17
+Display suggestions
+Show more lines
+
+For example:
+
+Plain Text
+1
+Search: Heinz
+2
+ 
+3
+Results:
+4
+ 
+5
+🏠 Property
+6
+Heinz Street Property
+7
+P-10392
+8
+ 
+9
+👤 Owner
+10
+Heinz Holdings Ltd
+11
+Owner #234
+12
+ 
+13
+🧾 Receipt
+14
+Heinz Holdings Ltd
+15
+Receipt #R-38291
+Show more lines
+
+Then, if the user clicks Heinz Holdings Ltd, that's when your application retrieves its complete information.
+
+What I would do first
+
+Don't rebuild everything immediately. Do it in stages.
+
+Stage 1: Quick fixes
+
+Do these first:
+
+✅ Add 300ms debounce
+✅ Require at least 2–3 characters
+✅ Change limit=5000 → limit=15
+✅ Stop retrieving unnecessary columns
+
+These should be relatively easy changes and can already make a significant difference.
+
+Stage 2: Bigger improvement
+
+Then:
+
+✅ Replace the 5 separate requests with one search RPC
+
+Instead of:
+
+Plain Text
+1
+Frontend → User table
+2
+Frontend → Property table
+3
+Frontend → Owner table
+4
+Frontend → Receipt table
+5
+Frontend → Relationships
+Show more lines
+
+You get:
+
+Plain Text
+1
+Frontend
+2
+↓
+3
+search_entities("Heinz")
+4
+↓
+5
+Database
+6
+↓
+7
+15 results
+Show more lines
+Stage 3: Optimize the database
+
+Then:
+
+✅ Add pg_trgm indexes to commonly searched text fields.
+Stage 4: Only if necessary
+
+If the system becomes large, create a dedicated:
+
+Plain Text
+1
+entity_search
+Show more lines
+
+table containing searchable versions of your owners, properties, receipts, etc.
+
+That gives you essentially one central search index for the entire application.
+
+In one sentence
+
+Your system is currently searching too many places, retrieving too many records and making too many requests just to show a few suggestions.
+
+The goal is to change it to:
+
+Wait until the user pauses typing → send one request → search indexed data → return only the best 10–15 results.
+
+My recommendation
+
+Since your system is already working, don't jump straight to creating the entity_search table. Start with debounce + limit=15 + fewer columns, then consolidate the five searches into one RPC. Those changes alone may solve the performance issue without adding unnecessary complexity.

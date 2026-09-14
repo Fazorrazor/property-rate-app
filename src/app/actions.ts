@@ -7,6 +7,7 @@ import { PaymentGateway } from '@/lib/payments/gateway';
 import { NetworkProvider } from '@/lib/utils/network-detector';
 import { SMSGateway } from '@/lib/sms/gateway';
 import { TwilioProvider } from '@/lib/sms/twilio';
+import { verifyGhanaMobileSubscriber } from '@/lib/hubtel/verification';
 
 const twilioService = new TwilioProvider();
 
@@ -491,6 +492,105 @@ export async function getUserReceipts() {
 
 export type SettlementType = 'TOTAL' | 'ARREARS' | 'CURRENT_FEE' | 'PARTIAL';
 
+/**
+ * Deterministically resolves or associates the user for a specific property.
+ * Strictly adheres to the payment context (Property -> Assigned User or Owner).
+ * NEVER falls back to arbitrary prisma.user.findFirst().
+ */
+export async function resolvePropertyUser(propertyId: string, authenticatedUser: any = null) {
+  if (propertyId === 'ALL') {
+    return authenticatedUser || null;
+  }
+
+  const prop = await prisma.property.findUnique({
+    where: propertyId.startsWith('prop_') ? { id: propertyId } : { accountNumber: propertyId },
+    include: { users: true, owner: true },
+  });
+
+  if (!prop) {
+    if (authenticatedUser?.properties) {
+      const matched = authenticatedUser.properties.find(
+        (p: any) => p.id === propertyId || p.accountNumber === propertyId
+      );
+      if (matched) return authenticatedUser;
+    }
+    return authenticatedUser || null;
+  }
+
+  // 1. Return the property's directly assigned user if present
+  if (prop.users && prop.users.length > 0) {
+    return prop.users[0];
+  }
+
+  // 2. If property has an owner with phone number, resolve or create linked ratepayer user
+  const ownerPhone = prop.owner?.mobileNumber || prop.owner?.tel;
+  if (ownerPhone) {
+    const cleanDigits = ownerPhone.replace(/\D/g, '');
+    const formatted10 = cleanDigits.length === 12 && cleanDigits.startsWith('233') ? '0' + cleanDigits.substring(3) : cleanDigits;
+
+    let matchedUser = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { phoneNumber: ownerPhone },
+          { phoneNumber: cleanDigits },
+          { phoneNumber: formatted10 },
+        ],
+      },
+    });
+
+    if (!matchedUser) {
+      matchedUser = await prisma.user.create({
+        data: {
+          phoneNumber: formatted10 || cleanDigits || ownerPhone,
+          name: prop.owner?.name || 'Municipal Ratepayer',
+          role: 'RATEPAYER',
+          properties: { connect: { id: prop.id } },
+        },
+      });
+    } else {
+      // Ensure property is linked
+      try {
+        await prisma.property.update({
+          where: { id: prop.id },
+          data: { users: { connect: { id: matchedUser.id } } },
+        });
+      } catch {
+        // Safe ignore if relation already exists
+      }
+    }
+    return matchedUser;
+  }
+
+  // 3. Fall back to current session if present
+  if (authenticatedUser) {
+    return authenticatedUser;
+  }
+
+  return null;
+}
+
+export async function verifySubscriberAction(phoneNumber: string) {
+  try {
+    const result = await verifyGhanaMobileSubscriber(phoneNumber);
+    return {
+      success: result.success,
+      subscriberName: result.subscriberName,
+      network: result.network,
+      isHubtelVerified: result.isHubtelVerified,
+      error: result.error,
+    };
+  } catch (error) {
+    console.error('Error in verifySubscriberAction:', error);
+    return {
+      success: false,
+      subscriberName: null,
+      network: null,
+      isHubtelVerified: false,
+      error: 'Subscriber verification unavailable',
+    };
+  }
+}
+
 export async function getCheckoutData(propertyId: string, settlementType: SettlementType = 'TOTAL', customAmount?: number) {
   try {
     const user = await getAuthenticatedSession();
@@ -573,11 +673,34 @@ export async function getCheckoutData(propertyId: string, settlementType: Settle
     const totalPayable = Math.ceil(rawTotal);
     const processingFee = Number((totalPayable - subtotal).toFixed(2));
 
-    const resolvedUser = user || {
-      id: targetProp?.users?.[0]?.id || 'usr_direct',
-      name: ownerName || 'Municipal Ratepayer',
-      phoneNumber: targetProp?.users?.[0]?.phoneNumber || targetProp?.owner?.mobileNumber || targetProp?.owner?.tel || '0240000000',
-    };
+    // Deterministically resolve user for this property/account (no arbitrary findFirst)
+    let deterministicUser: any = null;
+    if (propertyId === 'ALL') {
+      deterministicUser = user;
+    } else if (targetProp) {
+      deterministicUser = await resolvePropertyUser(propertyId, user);
+    }
+
+    const resolvedUserPhone = deterministicUser?.phoneNumber || targetProp?.owner?.mobileNumber || targetProp?.owner?.tel || '';
+    const resolvedUserName = deterministicUser?.name || targetProp?.owner?.name || user?.name || ownerName || '';
+
+    // Verify subscriber name via Hubtel
+    let verifiedSubscriberName: string | null = null;
+    let isHubtelVerified = false;
+
+    if (resolvedUserPhone) {
+      try {
+        const hubtelRes = await verifyGhanaMobileSubscriber(resolvedUserPhone);
+        if (hubtelRes.success && hubtelRes.subscriberName) {
+          verifiedSubscriberName = hubtelRes.subscriberName;
+          isHubtelVerified = true;
+        }
+      } catch (err) {
+        console.warn('Hubtel subscriber verification failed gracefully:', err);
+      }
+    }
+
+    const preferredDisplayName = verifiedSubscriberName || resolvedUserName || 'Municipal Ratepayer';
 
     return {
       title,
@@ -608,10 +731,13 @@ export async function getCheckoutData(propertyId: string, settlementType: Settle
       processingFeeFormatted: `GH₵ ${processingFee.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       totalAmount: totalPayable,
       totalAmountFormatted: `GH₵ ${totalPayable.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      verifiedSubscriberName,
+      isHubtelVerified,
+      preferredDisplayName,
       user: {
-        id: resolvedUser.id,
-        name: resolvedUser.name,
-        phoneNumber: resolvedUser.phoneNumber,
+        id: deterministicUser?.id || targetProp?.users?.[0]?.id || 'usr_direct',
+        name: preferredDisplayName,
+        phoneNumber: resolvedUserPhone,
       },
     };
   } catch (error) {
@@ -631,15 +757,7 @@ export async function initializePayment(data: {
   try {
     let user = await getAuthenticatedSession();
     if (!user && data.propertyId !== 'ALL') {
-      const prop = await prisma.property.findUnique({
-        where: data.propertyId.startsWith('prop_') ? { id: data.propertyId } : { accountNumber: data.propertyId },
-        include: { users: true }
-      });
-      if (prop?.users?.[0]) {
-        user = prop.users[0] as any;
-      } else if (prop) {
-        user = (await prisma.user.findFirst()) as any;
-      }
+      user = (await resolvePropertyUser(data.propertyId, null)) as any;
     }
     if (!user) return { success: false, error: 'User session or property record not found' };
 
@@ -762,15 +880,7 @@ export async function recordBankTransferAction(data: {
   try {
     let user = await getAuthenticatedSession();
     if (!user && data.propertyId !== 'ALL') {
-      const prop = await prisma.property.findUnique({
-        where: data.propertyId.startsWith('prop_') ? { id: data.propertyId } : { accountNumber: data.propertyId },
-        include: { users: true }
-      });
-      if (prop?.users?.[0]) {
-        user = prop.users[0] as any;
-      } else if (prop) {
-        user = (await prisma.user.findFirst()) as any;
-      }
+      user = (await resolvePropertyUser(data.propertyId, null)) as any;
     }
     if (!user) return { success: false, error: 'User session or property record not found' };
 
@@ -834,15 +944,7 @@ export async function chargeMobileMoneyAction(params: {
   try {
     let user = await getAuthenticatedSession();
     if (!user && params.propertyId !== 'ALL') {
-      const prop = await prisma.property.findUnique({
-        where: params.propertyId.startsWith('prop_') ? { id: params.propertyId } : { accountNumber: params.propertyId },
-        include: { users: true }
-      });
-      if (prop?.users?.[0]) {
-        user = prop.users[0] as any;
-      } else if (prop) {
-        user = (await prisma.user.findFirst()) as any;
-      }
+      user = (await resolvePropertyUser(params.propertyId, null)) as any;
     }
     if (!user) return { success: false, error: 'User session or property record not found' };
 
@@ -958,15 +1060,7 @@ export async function processPayment(data: {
   try {
     let user = await getAuthenticatedSession();
     if (!user && data.propertyId && data.propertyId !== 'ALL') {
-      const prop = await prisma.property.findUnique({
-        where: data.propertyId.startsWith('prop_') ? { id: data.propertyId } : { accountNumber: data.propertyId },
-        include: { users: true }
-      });
-      if (prop?.users?.[0]) {
-        user = prop.users[0] as any;
-      } else if (prop) {
-        user = (await prisma.user.findFirst()) as any;
-      }
+      user = (await resolvePropertyUser(data.propertyId, null)) as any;
     }
     if (!user) return { success: false, error: 'User session or property record not found' };
 
