@@ -703,11 +703,13 @@ export function SmsRolloutSimulator({
     const primaryAcc = prop.accountNumber || "KKMA-ACC";
     const propertyAccounts = isMulti ? groupProps.map((p) => p.accountNumber).join(", ") : primaryAcc;
 
-    const publicAppUrl = (
-      typeof window !== "undefined" && window.location.origin
-        ? window.location.origin
-        : process.env.NEXT_PUBLIC_APP_URL || "https://property-rate-app.vercel.app"
+    let publicAppUrl = (
+      process.env.NEXT_PUBLIC_APP_URL || "https://property-rate-app.vercel.app"
     ).replace(/\/+$/, "");
+
+    if (publicAppUrl.includes("-projects.vercel.app") || publicAppUrl.includes("kzz98dclv") || publicAppUrl.includes("localhost:3001")) {
+      publicAppUrl = "https://property-rate-app.vercel.app";
+    }
 
     const assessmentLink = `${publicAppUrl}/dashboard?accountNumber=${encodeURIComponent(primaryAcc)}`;
     const checkoutLink = isMulti

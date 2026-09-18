@@ -1602,7 +1602,10 @@ async function processSmsJobInline(
     let sentCount = 0;
     let failedCount = 0;
 
-    const publicAppUrl = (process.env.NEXT_PUBLIC_APP_URL?.trim() || 'https://property-rate-app.vercel.app').replace(/\/+$/, '');
+    let publicAppUrl = (process.env.NEXT_PUBLIC_APP_URL?.trim() || 'https://property-rate-app.vercel.app').replace(/\/+$/, '');
+    if (publicAppUrl.includes('-projects.vercel.app') || publicAppUrl.includes('kzz98dclv') || publicAppUrl.includes('localhost:3001')) {
+      publicAppUrl = 'https://property-rate-app.vercel.app';
+    }
 
     for (let i = 0; i < groups.length; i += CONCURRENCY) {
       const chunk = groups.slice(i, i + CONCURRENCY);
