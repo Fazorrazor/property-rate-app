@@ -1,10 +1,74 @@
 import { supabase } from './supabase';
 
-/**
- * Ratepayer DB Client
- * Scoped strictly to citizen-facing entities (User, Property, Receipts, Transactions, Bills, Notifications).
- * Has zero exposure to internal administrative staff, value book logs, or audit records.
- */
+export function mapPropertyRow(p: any) {
+  if (!p) return null;
+  const arrears = Number(p.arrears || 0);
+  const currentFee = Number(p.current_bill !== undefined ? p.current_bill : p.currentFee || 0);
+  const amountPaidLastYear = Number(p.amount_paid !== undefined ? p.amount_paid : p.amountPaidLastYear || 0);
+  const totalAmountDue = Number(
+    p.outstanding_amt !== undefined && p.outstanding_amt !== null
+      ? p.outstanding_amt
+      : p.totalAmountDue !== undefined
+        ? p.totalAmountDue
+        : arrears + currentFee
+  );
+
+  let status: 'PAID' | 'PARTIALLY_PAID' | 'UNPAID' = p.status;
+  if (!status) {
+    if (totalAmountDue <= 0) {
+      status = 'PAID';
+    } else if (amountPaidLastYear > 0) {
+      status = 'PARTIALLY_PAID';
+    } else {
+      status = 'UNPAID';
+    }
+  }
+
+  return {
+    ...p,
+    accountNumber: p.account_no || p.accountNumber || '',
+    ownerNameDirect: p.name || null,
+    ownerPhoneDirect: p.telephone || null,
+    valuationNo: p.valuationNo || '',
+    propertyClassification: p.property_cat || p.propertyClassification || 'RESIDENTIAL',
+    currentFee,
+    amountPaidLastYear,
+    arrears,
+    totalAmountDue,
+    status,
+  };
+}
+
+function preparePropertyWritePayload(data: any) {
+  const { users, receipts, bills, owner, ...cleanData } = data;
+  const row: any = {
+    ...cleanData,
+    updatedAt: new Date().toISOString(),
+  };
+
+  if (cleanData.accountNumber !== undefined) {
+    row.account_no = cleanData.accountNumber;
+    delete row.accountNumber;
+  }
+  if (cleanData.propertyClassification !== undefined) {
+    row.property_cat = cleanData.propertyClassification;
+    delete row.propertyClassification;
+  }
+  if (cleanData.currentFee !== undefined) {
+    row.current_bill = cleanData.currentFee;
+    delete row.currentFee;
+  }
+  if (cleanData.amountPaidLastYear !== undefined) {
+    row.amount_paid = cleanData.amountPaidLastYear;
+    delete row.amountPaidLastYear;
+  }
+
+  delete row.totalAmountDue;
+  delete row.status;
+
+  return { row, users, receipts, bills, owner };
+}
+
 export const ratepayerDb = {
   user: {
     async findUnique(args: { where: { phoneNumber?: string; id?: string }; include?: any }) {
@@ -99,18 +163,16 @@ export const ratepayerDb = {
 
   property: {
     async findMany(args?: { where?: any; include?: any; orderBy?: any; take?: number; skip?: number }) {
-      let query = supabase.from('Property').select('id, accountNumber, valuationNo, ownerId, ownerDigitalAddress, propertyClassification, billYear, rateableValue, rateImposed, previousYearBill, amountPaidLastYear, arrears, currentFee, totalAmountDue, status, billDate, settlementDeadline, municipality');
+      let query = supabase.from('Property').select('id, account_no, valuationNo, ownerId, ownerDigitalAddress, property_cat, billYear, rateableValue, rateImposed, previousYearBill, amount_paid, arrears, current_bill, billDate, settlementDeadline, municipality, houseNo, plotNo, name, telephone, outstanding_amt');
 
       if (args?.where) {
-        if (args.where.status) query = query.eq('status', args.where.status);
-        if (args.where.accountNumber) query = query.eq('accountNumber', args.where.accountNumber);
+        if (args.where.accountNumber) query = query.eq('account_no', args.where.accountNumber);
         if (args.where.ownerDigitalAddress) query = query.eq('ownerDigitalAddress', args.where.ownerDigitalAddress);
-        
-        // Handle relation link through _PropertyToUser & PropertyOwner telephone match
+
         if (args.where.users?.some?.id) {
           const userId = args.where.users.some.id;
           const { data: userRecord } = await supabase.from('User').select('id, phoneNumber').eq('id', userId).maybeSingle();
-          
+
           const [linksRes, ownersRes] = await Promise.all([
             supabase.from('_PropertyToUser').select('A').eq('B', userId),
             userRecord?.phoneNumber
@@ -119,13 +181,13 @@ export const ratepayerDb = {
           ]);
           const directPropIds = (linksRes?.data || []).map((l: any) => l.A);
           const ownerIds = (ownersRes?.data || []).map((o: any) => o.ownerId);
-          
+
           let ownerPropIds: string[] = [];
           if (ownerIds.length > 0) {
             const { data: opData } = await supabase.from('Property').select('id').in('ownerId', ownerIds);
             ownerPropIds = (opData || []).map((p: any) => p.id);
           }
-          
+
           const allPropIds = Array.from(new Set([...directPropIds, ...ownerPropIds]));
           if (allPropIds.length === 0) return [];
           query = query.in('id', allPropIds);
@@ -133,7 +195,12 @@ export const ratepayerDb = {
       }
 
       if (args?.orderBy) {
-        const field = Object.keys(args.orderBy)[0];
+        let field = Object.keys(args.orderBy)[0];
+        if (field === 'accountNumber') field = 'account_no';
+        if (field === 'propertyClassification') field = 'property_cat';
+        if (field === 'currentFee') field = 'current_bill';
+        if (field === 'amountPaidLastYear') field = 'amount_paid';
+
         const dir = args.orderBy[field] === 'desc' ? { ascending: false } : { ascending: true };
         query = query.order(field, dir);
       }
@@ -141,17 +208,25 @@ export const ratepayerDb = {
       if (args?.take) query = query.limit(args.take);
       if (args?.skip) query = query.range(args.skip, (args.skip + (args.take || 10)) - 1);
 
-      const { data, error } = (await query) as { data: any[] | null; error: any };
-      if (error || !data || data.length === 0) return data || [];
+      const { data: rawData, error } = (await query) as { data: any[] | null; error: any };
+      if (error) {
+        console.error('Property query failed:', error);
+        throw new Error(`Property query failed: ${error.message}`);
+      }
 
-      // Include receipts if requested (Batch fetch in a single query with targeted columns)
+      if (!rawData) {
+        return [];
+      }
+
+      const data: any[] = rawData.map(mapPropertyRow);
+
       if (args?.include?.receipts) {
         const propIds = data.map((p: any) => p.id);
         const { data: allReceipts } = await supabase
           .from('Receipt')
           .select('id, receiptNumber, amount, datePaid, propertyId, gcrNumber, settlementType')
           .in('propertyId', propIds);
-        
+
         const receiptsByPropId = (allReceipts || []).reduce((acc: any, r: any) => {
           if (!acc[r.propertyId]) acc[r.propertyId] = [];
           acc[r.propertyId].push(r);
@@ -168,10 +243,12 @@ export const ratepayerDb = {
 
     async findUnique(args: { where: { accountNumber?: string; id?: string }; include?: any }) {
       let query = supabase.from('Property').select('*');
-      if (args.where.accountNumber) query = query.eq('accountNumber', args.where.accountNumber);
+      if (args.where.accountNumber) query = query.eq('account_no', args.where.accountNumber);
       if (args.where.id) query = query.eq('id', args.where.id);
-      const { data, error } = await query.maybeSingle();
-      if (error || !data) return null;
+      const { data: rawData, error } = await query.maybeSingle();
+      if (error || !rawData) return null;
+
+      const data = mapPropertyRow(rawData);
 
       if (args.include?.owner && data.ownerId) {
         const { data: owner } = await supabase.from('PropertyOwner').select('*').eq('ownerId', data.ownerId).maybeSingle();
@@ -201,18 +278,20 @@ export const ratepayerDb = {
     },
 
     async update(args: { where: { id?: string; accountNumber?: string }; data: any }) {
-      const { users, receipts, bills, ...cleanData } = args.data;
-      let query = supabase.from('Property').update({ ...cleanData, updatedAt: new Date().toISOString() });
+      const { row } = preparePropertyWritePayload(args.data);
+      let query = supabase.from('Property').update(row);
       if (args.where.id) query = query.eq('id', args.where.id);
-      if (args.where.accountNumber) query = query.eq('accountNumber', args.where.accountNumber);
+      if (args.where.accountNumber) query = query.eq('account_no', args.where.accountNumber);
       const { data, error } = await query.select().single();
       if (error) throw new Error(error.message);
-      return data;
+      return mapPropertyRow(data);
     },
 
     async count(args?: { where?: any }) {
       let query = supabase.from('Property').select('*', { count: 'exact', head: true });
-      if (args?.where?.status) query = query.eq('status', args.where.status);
+      if (args?.where?.status) {
+        query = query.or('arrears.gt.0,current_bill.gt.0');
+      }
       const { count, error } = await query;
       if (error) return 0;
       return count || 0;

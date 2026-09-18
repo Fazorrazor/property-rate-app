@@ -159,26 +159,26 @@ export function CsvImportModal({ isOpen, onClose, onSuccess }: CsvImportModalPro
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: "100%", opacity: 0 }}
             transition={{ type: "spring", damping: 28, stiffness: 300 }}
-            className="relative z-10 bg-white rounded-t-2xl sm:rounded-2xl border-t sm:border border-[#DADCE0] shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[90vh]"
+            className="relative z-10 bg-[#1E2329] rounded-t-2xl sm:rounded-2xl border-t sm:border border-[#2B3139] shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[90vh]"
           >
             {/* Anti-autofill Decoy Honeypot */}
             <input type="text" name="prevent_autofill_user" tabIndex={-1} aria-hidden="true" style={{ position: "absolute", top: -9999, left: -9999, opacity: 0, height: 0, width: 0, pointerEvents: "none" }} />
             <input type="password" name="prevent_autofill_pass" tabIndex={-1} aria-hidden="true" style={{ position: "absolute", top: -9999, left: -9999, opacity: 0, height: 0, width: 0, pointerEvents: "none" }} />
-            <div className="w-10 h-1 bg-[#DADCE0] rounded-full mx-auto my-2 sm:hidden shrink-0" />
+            <div className="w-10 h-1 bg-[#2B3139] rounded-full mx-auto my-2 sm:hidden shrink-0" />
         {/* Header */}
-        <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-[#DADCE0] flex items-center justify-between shrink-0 bg-white">
+        <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-[#2B3139] flex items-center justify-between shrink-0 bg-[#1E2329]">
           <div>
-            <h3 className="text-sm font-bold text-[#2C2C2C] tracking-tight">
+            <h3 className="text-sm font-bold text-[#EAECEF] tracking-tight">
               Bulk Cadastre &amp; Valuation Roll Importer
             </h3>
-            <p className="text-xs text-[#717171] mt-0.5">
+            <p className="text-xs text-[#848E9C] mt-0.5">
               Ingest municipal cadastre valuation rolls into the KKMA assembly database.
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-1 rounded-lg text-[#717171] hover:text-[#2C2C2C] hover:bg-[#F1F3F4] cursor-pointer"
+            className="p-1 rounded-lg text-[#848E9C] hover:text-[#EAECEF] hover:bg-[#2B313A] cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -198,16 +198,16 @@ export function CsvImportModal({ isOpen, onClose, onSuccess }: CsvImportModalPro
               onClick={() => fileInputRef.current?.click()}
               className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors flex flex-col items-center justify-center gap-2 ${
                 isDragging
-                  ? "border-[#612D53] bg-[#612D53]/5"
-                  : "border-[#DADCE0] hover:border-[#612D53] hover:bg-[#F8F9FA]"
+                  ? "border-[#FCD535] bg-[#FCD535]/5"
+                  : "border-[#2B3139] hover:border-[#FCD535] hover:bg-[#1E2329]"
               }`}
             >
-              <UploadCloud className="w-8 h-8 text-[#612D53]" />
+              <UploadCloud className="w-8 h-8 text-[#FCD535]" />
               <div className="space-y-0.5">
-                <span className="font-semibold text-[#2C2C2C] block">
+                <span className="font-semibold text-[#EAECEF] block">
                   Click to browse or drag &amp; drop your Cadastre CSV
                 </span>
-                <span className="text-[11px] text-[#717171] block">
+                <span className="text-[11px] text-[#848E9C] block">
                   Supports LVD exports with Account Number, Rateable Value, Owner, and GPS Digital Address
                 </span>
               </div>
@@ -224,12 +224,12 @@ export function CsvImportModal({ isOpen, onClose, onSuccess }: CsvImportModalPro
               />
             </div>
           ) : (
-            <div className="p-3 bg-[#F8F9FA] border border-[#DADCE0] rounded-xl flex items-center justify-between">
+            <div className="p-3 bg-[#1E2329] border border-[#2B3139] rounded-xl flex items-center justify-between">
               <div className="flex items-center gap-2.5 min-w-0">
-                <FileText className="w-5 h-5 text-[#612D53] shrink-0" />
+                <FileText className="w-5 h-5 text-[#FCD535] shrink-0" />
                 <div className="truncate">
-                  <span className="font-medium text-[#2C2C2C] truncate block">{file.name}</span>
-                  <span className="text-[11px] text-[#717171]">
+                  <span className="font-medium text-[#EAECEF] truncate block">{file.name}</span>
+                  <span className="text-[11px] text-[#848E9C]">
                     {(file.size / 1024).toFixed(1)} KB &bull; {parsedRows.length} records parsed
                   </span>
                 </div>
@@ -248,17 +248,17 @@ export function CsvImportModal({ isOpen, onClose, onSuccess }: CsvImportModalPro
           {previewRows.length > 0 && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="font-semibold text-[#2C2C2C]">
+                <span className="font-semibold text-[#EAECEF]">
                   Parsed Preview (First 5 of {parsedRows.length} parcels)
                 </span>
-                <span className="text-[11px] text-[#188038] font-medium">
+                <span className="text-[11px] text-[#0ECB81] font-medium">
                   &bull; Schema Headers Matched
                 </span>
               </div>
 
-              <div className="border border-[#DADCE0] rounded-lg overflow-hidden overflow-x-auto">
+              <div className="border border-[#2B3139] rounded-lg overflow-hidden overflow-x-auto">
                 <table className="w-full text-left text-xs border-collapse">
-                  <thead className="bg-[#F8F9FA] border-b border-[#DADCE0] text-[#717171] text-[11px]">
+                  <thead className="bg-[#1E2329] border-b border-[#2B3139] text-[#848E9C] text-[11px]">
                     <tr>
                       <th className="py-2 px-3 whitespace-nowrap">Account #</th>
                       <th className="py-2 px-3 whitespace-nowrap">Owner / Taxpayer</th>
@@ -267,7 +267,7 @@ export function CsvImportModal({ isOpen, onClose, onSuccess }: CsvImportModalPro
                       <th className="py-2 px-3 text-right whitespace-nowrap">Rateable Value</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#E8EAED] bg-white">
+                  <tbody className="divide-y divide-[#2B3139] bg-[#1E2329]">
                     {previewRows.map((r, idx) => {
                       const acc = r.accountNumber || r["Account Number"] || r["account_no"] || r["Account"] || "N/A";
                       const owner = r.ownerName || r["Owner Name"] || r["owner_name"] || r["Name"] || "Municipal Ratepayer";
@@ -276,12 +276,12 @@ export function CsvImportModal({ isOpen, onClose, onSuccess }: CsvImportModalPro
                       const val = parseFloat(r.rateableValue || r["Rateable Value"] || r["rateable_value"] || r["Value"] || 0) || 0;
 
                       return (
-                        <tr key={idx} className="hover:bg-[#F8F9FA]">
-                          <td className="py-2 px-3 font-mono font-medium text-[#2C2C2C] whitespace-nowrap">{acc}</td>
-                          <td className="py-2 px-3 text-[#2C2C2C] whitespace-nowrap">{owner}</td>
-                          <td className="py-2 px-3 font-mono text-[#717171] whitespace-nowrap">{gps}</td>
-                          <td className="py-2 px-3 text-[#717171] whitespace-nowrap">{cls}</td>
-                          <td className="py-2 px-3 text-right font-medium text-[#2C2C2C] whitespace-nowrap tabular-nums">
+                        <tr key={idx} className="hover:bg-[#1E2329]">
+                          <td className="py-2 px-3 font-mono font-medium text-[#EAECEF] whitespace-nowrap">{acc}</td>
+                          <td className="py-2 px-3 text-[#EAECEF] whitespace-nowrap">{owner}</td>
+                          <td className="py-2 px-3 font-mono text-[#848E9C] whitespace-nowrap">{gps}</td>
+                          <td className="py-2 px-3 text-[#848E9C] whitespace-nowrap">{cls}</td>
+                          <td className="py-2 px-3 text-right font-medium text-[#EAECEF] whitespace-nowrap tabular-nums">
                             GH₵ {val.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                           </td>
                         </tr>
@@ -303,11 +303,11 @@ export function CsvImportModal({ isOpen, onClose, onSuccess }: CsvImportModalPro
 
           {/* Administrator Password Challenge */}
           {parsedRows.length > 0 && (
-            <div className="p-4 bg-[#F8F9FA] border border-[#DADCE0] rounded-xl space-y-2">
-              <label className="text-xs font-semibold text-[#2C2C2C] block">
+            <div className="p-4 bg-[#1E2329] border border-[#2B3139] rounded-xl space-y-2">
+              <label className="text-xs font-semibold text-[#EAECEF] block">
                 Administrator Authorization Password
               </label>
-              <p className="text-[11px] text-[#717171]">
+              <p className="text-[11px] text-[#848E9C]">
                 Enter your administrative security password to confirm ingestion into the official cadastre.
               </p>
               <div className="relative">
@@ -321,12 +321,12 @@ export function CsvImportModal({ isOpen, onClose, onSuccess }: CsvImportModalPro
                   placeholder="Enter administrator password"
                   value={adminPassword}
                   onChange={(e) => setAdminPassword(e.target.value)}
-                  className="w-full h-9 pl-3 pr-9 rounded-lg border border-[#DADCE0] bg-white text-xs text-[#2C2C2C] focus:outline-none focus:border-[#612D53]"
+                  className="w-full h-9 pl-3 pr-9 rounded-lg border border-[#2B3139] bg-[#1E2329] text-xs text-[#EAECEF] focus:outline-none focus:border-[#FCD535]"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-2.5 top-2 text-[#717171] hover:text-[#2C2C2C] p-0.5 cursor-pointer"
+                  className="absolute right-2.5 top-2 text-[#848E9C] hover:text-[#EAECEF] p-0.5 cursor-pointer"
                 >
                   {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                 </button>
@@ -336,7 +336,7 @@ export function CsvImportModal({ isOpen, onClose, onSuccess }: CsvImportModalPro
         </div>
 
         {/* Modal Actions */}
-        <div className="px-4 sm:px-6 py-3.5 border-t border-[#DADCE0] bg-white flex items-center justify-between gap-2.5 shrink-0">
+        <div className="px-4 sm:px-6 py-3.5 border-t border-[#2B3139] bg-[#1E2329] flex items-center justify-between gap-2.5 shrink-0">
           <button
             type="button"
             onClick={onClose}

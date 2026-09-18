@@ -1,20 +1,10 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef } from "react";
+import React, { useState, useMemo, useEffect, useRef, Fragment } from "react";
 import {
   Send,
-  Smartphone,
   CheckCircle2,
   AlertTriangle,
-  RefreshCw,
-  ExternalLink,
-  MessageSquare,
-  FileText,
-  CreditCard,
-  Phone,
-  Clock,
-  Sparkles,
-  Info,
   Lock,
   ShieldCheck,
   Eye,
@@ -22,18 +12,52 @@ import {
   Loader2,
   X,
   Search,
-  Plus,
   ChevronLeft,
   ChevronRight,
+  Filter,
+  Check,
+  SlidersHorizontal,
+  ChevronDown,
+  Code2,
+  Bookmark,
+  FileText,
+  Edit3,
+  Users,
 } from "lucide-react";
-import { AdminProperty, SmsRolloutLogItem, getSmsRolloutAudience, saveSmsTemplate, getSmsSettings } from "@/app/actions";
-import { DEFAULT_SMS_NOTICE_TEMPLATE, DEFAULT_RECEIPT_NOTICE_TEMPLATE } from "@/lib/sms/types";
+import {
+  AdminProperty,
+  SmsRolloutLogItem,
+  getSmsRolloutAudience,
+  getSmsRolloutLogs,
+  searchSmsRolloutAccounts,
+  saveSmsTemplate,
+  getSmsSettings,
+  getArkeselBalance,
+} from "@/app/actions";
+import {
+  DEFAULT_SMS_NOTICE_TEMPLATE,
+  DEFAULT_RECEIPT_NOTICE_TEMPLATE,
+  FILTER_SMS_TEMPLATES,
+  DEFAULT_SAVED_TEMPLATES,
+} from "@/lib/sms/types";
 import { motion, AnimatePresence } from "framer-motion";
+
+const cleanDash = (val: any): string => {
+  if (val === null || val === undefined) return "—";
+  const s = String(val).trim();
+  if (!s || s.toUpperCase() === "N/A" || s === "null" || s === "undefined" || s === "NONE") return "—";
+  return s;
+};
 
 interface SmsRolloutSimulatorProps {
   properties: AdminProperty[];
   smsLogs: SmsRolloutLogItem[];
-  onTriggerBatchRollout: (accountNumbers: string[], template: string, password?: string, mode?: "TEST" | "LIVE") => Promise<{ success: boolean; error?: string } | void>;
+  onTriggerBatchRollout: (
+    target: any,
+    template: string,
+    password?: string,
+    mode?: "TEST" | "LIVE"
+  ) => Promise<{ success: boolean; error?: string } | void>;
   isProcessing: boolean;
   selectedProperties?: AdminProperty[];
   onClearSelectedProperties?: () => void;
@@ -49,23 +73,19 @@ export function SmsRolloutSimulator({
   onClearSelectedProperties,
   onNotify,
 }: SmsRolloutSimulatorProps) {
-  // Active View Pane: 'SIMULATOR' (SMS rollout engine & phone) vs 'LOGS' (audit delivery table)
+  // Active View Pane: 'SIMULATOR' vs 'LOGS'
   const [activeView, setActiveView] = useState<"SIMULATOR" | "LOGS">("SIMULATOR");
 
-  // Campaign Scope: 'SELECTED' (explicit user selection) vs 'DATABASE_FILTER' (full MMDA query)
+  // Campaign Scope: 'SELECTED' vs 'DATABASE_FILTER'
+  // Campaign Scope: 'SELECTED' vs 'DATABASE_FILTER'
   const [audienceScope, setAudienceScope] = useState<"SELECTED" | "DATABASE_FILTER">(
     selectedProperties && selectedProperties.length > 0 ? "SELECTED" : "DATABASE_FILTER"
   );
 
-  // Specific Account Search & Multi-Selection States
-  const [accountSearchQuery, setAccountSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<AdminProperty[]>([]);
-  const [isSearchingSpecificAccounts, setIsSearchingSpecificAccounts] = useState(false);
   const [selectedSpecificAccounts, setSelectedSpecificAccounts] = useState<AdminProperty[]>(
     selectedProperties && selectedProperties.length > 0 ? selectedProperties : []
   );
 
-  // Sync scope and specific accounts when selectedProperties prop changes
   useEffect(() => {
     if (selectedProperties && selectedProperties.length > 0) {
       setSelectedSpecificAccounts(selectedProperties);
@@ -73,84 +93,263 @@ export function SmsRolloutSimulator({
     }
   }, [selectedProperties]);
 
-  // Campaign Filter States
-  const [targetMunicipality, setTargetMunicipality] = useState("Kpone-Katamanso (KKMA)");
-  const [targetClassification, setTargetClassification] = useState("ALL");
-  const [targetStatus, setTargetStatus] = useState<"ALL" | "UNPAID" | "DEFAULTER">("UNPAID");
+  // Search Query State
+  const [accountSearchQuery, setAccountSearchQuery] = useState("");
 
-  // Dynamic Full Database Audience State
+  // Campaign Filters
+  const targetMunicipality = "Kpone-Katamanso (KKMA)";
+  const targetClassification = "ALL";
+  const [targetStatus, setTargetStatus] = useState<
+    "ALL" | "UNPAID" | "PAID" | "OVERPAID"
+  >("UNPAID");
+
+  const handleStatusChange = (newStatus: "ALL" | "UNPAID" | "PAID" | "OVERPAID") => {
+    setTargetStatus(newStatus);
+    const savedForStatus = typeof window !== "undefined" ? localStorage.getItem(`kkma_sms_template_${newStatus}`) : null;
+    const matched = savedForStatus || FILTER_SMS_TEMPLATES[newStatus];
+    if (matched) {
+      setMessageTemplate(matched);
+      try {
+        localStorage.setItem("kkma_sms_message_template", matched);
+      } catch {}
+    }
+  };
+
+  // Load persisted filters on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const savedStatus = localStorage.getItem("kkma_sms_target_status");
+      const validStatuses = ["ALL", "UNPAID", "PAID", "OVERPAID"];
+      if (savedStatus && validStatuses.includes(savedStatus)) {
+        setTargetStatus(savedStatus as any);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("kkma_sms_target_status", targetStatus);
+    }
+  }, [targetStatus]);
+
+  // Applied Required Fields state vs Draft Popover State
+  const [requiredFields, setRequiredFields] = useState<string[]>([]);
+  const [draftRequiredFields, setDraftRequiredFields] = useState<string[]>([]);
+  const [showFieldsFilter, setShowFieldsFilter] = useState(false);
+  const [fieldsSearchQuery, setFieldsSearchQuery] = useState("");
+
+  const fieldsFilterRef = useRef<HTMLDivElement>(null);
+  const fieldsFilterBtnRef = useRef<HTMLButtonElement>(null);
+
+  // Actionable ratepayer & property database fields for SMS campaign filtering
+  const availableFieldFilters = [
+    { key: "telephone", label: "Phone Number (SMS Contact)", category: "Contact" },
+    { key: "name", label: "Ratepayer Full Name", category: "Profile" },
+    { key: "ownerDigitalAddress", label: "GhanaPost GPS Digital Address", category: "Location" },
+    { key: "account_no", label: "Valuation Account Number", category: "Identification" },
+    { key: "current_bill", label: "Current Period Bill", category: "Financial" },
+    { key: "arrears", label: "Arrears Balance", category: "Financial" },
+    { key: "outstanding_amt", label: "Net Outstanding Due", category: "Financial" },
+    { key: "houseNo", label: "House / Building Number", category: "Location" },
+    { key: "plotNo", label: "Cadastral Plot Number", category: "Location" },
+    { key: "valuationNo", label: "Valuation Assessment Number", category: "Identification" },
+    { key: "electoral_area", label: "Electoral Area / Sub-District", category: "Location" },
+    { key: "property_cat", label: "Property Classification", category: "Classification" },
+    { key: "rateableValue", label: "Rateable Property Value", category: "Financial" },
+    { key: "amount_paid", label: "Previous Payment Records", category: "Financial" },
+  ];
+
+  const filteredAvailableFields = useMemo(() => {
+    const q = fieldsSearchQuery.trim().toLowerCase();
+    if (!q) return availableFieldFilters;
+    return availableFieldFilters.filter(
+      (f) =>
+        f.label.toLowerCase().includes(q) ||
+        f.category.toLowerCase().includes(q) ||
+        f.key.toLowerCase().includes(q)
+    );
+  }, [fieldsSearchQuery]);
+
+  const handleOpenFieldsFilter = () => {
+    setDraftRequiredFields(requiredFields);
+    setShowFieldsFilter((prev) => !prev);
+  };
+
+  const handleToggleDraftField = (fieldKey: string) => {
+    setDraftRequiredFields((prev) =>
+      prev.includes(fieldKey) ? prev.filter((f) => f !== fieldKey) : [...prev, fieldKey]
+    );
+  };
+
+  const handleApplyFieldsFilter = () => {
+    setRequiredFields(draftRequiredFields);
+    localStorage.setItem("kkma_sms_required_fields", JSON.stringify(draftRequiredFields));
+    setShowFieldsFilter(false);
+  };
+
+  const handleSelectAllFields = () => {
+    setDraftRequiredFields(availableFieldFilters.map((f) => f.key));
+  };
+
+  const handleClearAllFields = () => {
+    setDraftRequiredFields([]);
+  };
+
+  const handleResetDefaultFields = () => {
+    setDraftRequiredFields(["telephone", "name", "ownerDigitalAddress"]);
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        showFieldsFilter &&
+        fieldsFilterRef.current &&
+        !fieldsFilterRef.current.contains(e.target as Node) &&
+        fieldsFilterBtnRef.current &&
+        !fieldsFilterBtnRef.current.contains(e.target as Node)
+      ) {
+        setShowFieldsFilter(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showFieldsFilter]);
+
+  // Dynamic Full Database Audience State with Endless Scrolling
   const [liveAudience, setLiveAudience] = useState<AdminProperty[]>(properties);
   const [isLoadingAudience, setIsLoadingAudience] = useState(false);
+  const [audiencePage, setAudiencePage] = useState(1);
+  const [hasMoreAudience, setHasMoreAudience] = useState(true);
+  const [isLoadingMoreAudience, setIsLoadingMoreAudience] = useState(false);
+  const [totalAudienceCount, setTotalAudienceCount] = useState(properties.length);
+  const [totalAudienceDueFormatted, setTotalAudienceDueFormatted] = useState("GH₵ 0.00");
+  const audienceSentinelRef = useRef<HTMLTableRowElement | null>(null);
+
+  // Carousel Edge Fade Horizontal Scroll Detection
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+  const tableContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Delivery Logs Carousel Edge Fade
+  const [canLogsScrollLeft, setCanLogsScrollLeft] = useState(false);
+  const [canLogsScrollRight, setCanLogsScrollRight] = useState(false);
+  const logsTableContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Delivery Logs Endless Scrolling State
+  const [logsList, setLogsList] = useState<SmsRolloutLogItem[]>(smsLogs);
+  const [logsPage, setLogsPage] = useState(1);
+  const [hasMoreLogs, setHasMoreLogs] = useState(smsLogs.length >= 40);
+  const [isLoadingMoreLogs, setIsLoadingMoreLogs] = useState(false);
+  const logsSentinelRef = useRef<HTMLTableRowElement | null>(null);
+
+  useEffect(() => {
+    setLogsList(smsLogs);
+    setHasMoreLogs(smsLogs.length >= 40);
+  }, [smsLogs]);
+
+  // Ratepayer Hierarchical Portfolio Grouping
+  const [isHierarchicalView, setIsHierarchicalView] = useState(true);
+  const [collapsedGroupKeys, setCollapsedGroupKeys] = useState<Set<string>>(new Set());
+
+  const toggleGroupCollapse = (key: string) => {
+    setCollapsedGroupKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
 
   // Security Authorization Modal States
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [adminPassword, setAdminPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [isAuthorizing, setIsAuthorizing] = useState(false);
+  const [gatewayBalance, setGatewayBalance] = useState<{ smsBalance: number; mainBalance: string } | null>(null);
+  const [isFetchingBalance, setIsFetchingBalance] = useState(false);
 
-  // Template State & Focus Modal
+  // Template State
   const defaultTemplate = DEFAULT_SMS_NOTICE_TEMPLATE;
   const defaultReceiptTemplate = DEFAULT_RECEIPT_NOTICE_TEMPLATE;
 
   const [activeTemplateType, setActiveTemplateType] = useState<"BILLING" | "RECEIPT">("BILLING");
-  const [messageTemplate, setMessageTemplate] = useState(defaultTemplate);
+  const [messageTemplate, setMessageTemplate] = useState(FILTER_SMS_TEMPLATES.UNPAID);
   const [receiptTemplate, setReceiptTemplate] = useState(defaultReceiptTemplate);
-  const [showTemplateModal, setShowTemplateModal] = useState(false);
-  const [draftTemplate, setDraftTemplate] = useState(defaultTemplate);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
-  const modalTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
 
-  // Hydrate persistent templates from localStorage cache or server configuration
+  const [showTokenInserter, setShowTokenInserter] = useState(false);
+  const [showSavedTemplates, setShowSavedTemplates] = useState(false);
+  const [savedTemplates, setSavedTemplates] = useState(DEFAULT_SAVED_TEMPLATES);
+
+  const savedTemplatesRef = useRef<HTMLDivElement>(null);
+  const tokenInserterRef = useRef<HTMLDivElement>(null);
+  const savedTemplatesBtnRef = useRef<HTMLButtonElement>(null);
+  const tokenInserterBtnRef = useRef<HTMLButtonElement>(null);
+  const templateTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (showSavedTemplates && savedTemplatesRef.current && !savedTemplatesRef.current.contains(e.target as Node) && savedTemplatesBtnRef.current && !savedTemplatesBtnRef.current.contains(e.target as Node)) {
+        setShowSavedTemplates(false);
+      }
+      if (showTokenInserter && tokenInserterRef.current && !tokenInserterRef.current.contains(e.target as Node) && tokenInserterBtnRef.current && !tokenInserterBtnRef.current.contains(e.target as Node)) {
+        setShowTokenInserter(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showSavedTemplates, showTokenInserter]);
+
   useEffect(() => {
     try {
-      const cachedBilling = localStorage.getItem("kkma_sms_message_template");
-      if (cachedBilling && cachedBilling.trim()) {
-        if (cachedBilling.includes("*227*4362#") || cachedBilling.includes("GH₵") || cachedBilling.includes("Pay Via") || cachedBilling.includes("View your bills:")) {
-          const sanitized = cachedBilling
-            .replace(/Pay Via \*227\*4362# or ({{paymentLink}}|\S+) with your payment reference {{accountNumber}}/g, 'Pay online: {{paymentLink}}')
-            .replace(/Pay Via \*227\*4362# or {{paymentLink}}/g, 'Pay online: {{paymentLink}}')
-            .replace(/\*227\*4362# or /g, '')
-            .replace(/GH₵/g, 'GHS')
-            .replace(/View your bills: ({{billLink}}|\S+)\n\n/g, '')
-            .replace(/View your bills: [^\n]+\n\n/g, '');
-          localStorage.setItem("kkma_sms_message_template", sanitized);
-          setMessageTemplate(sanitized);
-        } else {
-          setMessageTemplate(cachedBilling);
+      const cachedRequiredFields = localStorage.getItem("kkma_sms_required_fields");
+      if (cachedRequiredFields) {
+        try {
+          const parsedRequiredFields = JSON.parse(cachedRequiredFields);
+          if (Array.isArray(parsedRequiredFields)) {
+            setRequiredFields(parsedRequiredFields);
+            setDraftRequiredFields(parsedRequiredFields);
+          }
+        } catch {
+          setRequiredFields([]);
+          setDraftRequiredFields([]);
         }
       }
 
-      const cachedReceipt = localStorage.getItem("kkma_sms_receipt_template");
-      if (cachedReceipt && cachedReceipt.trim()) {
-        setReceiptTemplate(cachedReceipt);
+      const initialStatus = (localStorage.getItem("kkma_sms_target_status") as any) || "UNPAID";
+      const cachedForStatus = localStorage.getItem(`kkma_sms_template_${initialStatus}`);
+      const cachedBilling = localStorage.getItem("kkma_sms_message_template");
+      if (cachedForStatus && cachedForStatus.trim()) {
+        setMessageTemplate(cachedForStatus);
+      } else if (cachedBilling && cachedBilling.trim()) {
+        setMessageTemplate(cachedBilling);
+      } else {
+        setMessageTemplate(FILTER_SMS_TEMPLATES[initialStatus] || FILTER_SMS_TEMPLATES.UNPAID);
       }
+
+      // Populate presets with any customized versions stored for specific types
+      const hydratedPresets = DEFAULT_SAVED_TEMPLATES.map((st) => {
+        if (st.type === "BILLING" && (st as any).filterKey) {
+          const custom = localStorage.getItem(`kkma_sms_template_${(st as any).filterKey}`);
+          return custom ? { ...st, content: custom } : st;
+        }
+        if (st.type === "RECEIPT") {
+          const customReceipt = localStorage.getItem("kkma_sms_receipt_template");
+          return customReceipt ? { ...st, content: customReceipt } : st;
+        }
+        return st;
+      });
+      setSavedTemplates(hydratedPresets);
+
+      const cachedReceipt = localStorage.getItem("kkma_sms_receipt_template");
+      if (cachedReceipt && cachedReceipt.trim()) setReceiptTemplate(cachedReceipt);
     } catch { }
 
     getSmsSettings()
       .then((settings) => {
-        if (settings?.messageTemplate) {
-          let tpl = settings.messageTemplate;
-          if (tpl.includes("*227*4362#") || tpl.includes("GH₵") || tpl.includes("Pay Via") || tpl.includes("View your bills:")) {
-            tpl = tpl
-              .replace(/Pay Via \*227\*4362# or ({{paymentLink}}|\S+) with your payment reference {{accountNumber}}/g, 'Pay online: {{paymentLink}}')
-              .replace(/Pay Via \*227\*4362# or {{paymentLink}}/g, 'Pay online: {{paymentLink}}')
-              .replace(/\*227\*4362# or /g, '')
-              .replace(/GH₵/g, 'GHS')
-              .replace(/View your bills: ({{billLink}}|\S+)\n\n/g, '')
-              .replace(/View your bills: [^\n]+\n\n/g, '');
-          }
-          setMessageTemplate(tpl);
-          try {
-            localStorage.setItem("kkma_sms_message_template", tpl);
-          } catch { }
-        }
-        if (settings?.receiptTemplate) {
-          setReceiptTemplate(settings.receiptTemplate);
-          try {
-            localStorage.setItem("kkma_sms_receipt_template", settings.receiptTemplate);
-          } catch { }
-        }
+        if (settings?.messageTemplate) setMessageTemplate(settings.messageTemplate);
+        if (settings?.receiptTemplate) setReceiptTemplate(settings.receiptTemplate);
       })
       .catch(() => { });
   }, []);
@@ -159,13 +358,14 @@ export function SmsRolloutSimulator({
     { tag: "{{municipality}}", label: "Municipality" },
     { tag: "{{billYear}}", label: "Bill Year" },
     { tag: "{{accountNumber}}", label: "Valuation ID / Account No." },
+    { tag: "{{propertyAccounts}}", label: "Multi-Property Accounts List" },
     { tag: "{{ownerName}}", label: "Ratepayer Name" },
     { tag: "{{totalAmountDue}}", label: "Total Due" },
     { tag: "{{arrears}}", label: "Arrears" },
     { tag: "{{currentFee}}", label: "Current Fee" },
     { tag: "{{paymentLink}}", label: "Payment Link" },
-    { tag: "{{billLink}}", label: "Bill View Link (Optional)" },
     { tag: "{{dueDate}}", label: "Due Date" },
+    { tag: "{{propertyGpsAddress}}", label: "Property GPS / Digital Address" },
   ];
 
   const receiptTokens = [
@@ -175,347 +375,424 @@ export function SmsRolloutSimulator({
     { tag: "{{ownerName}}", label: "Ratepayer Name" },
     { tag: "{{paymentMethod}}", label: "Payment Channel" },
     { tag: "{{datePaid}}", label: "Payment Date" },
-    { tag: "{{receiptLink}}", label: "Receipt & Scanned Copy Link" },
+    { tag: "{{receiptLink}}", label: "Receipt Link" },
   ];
 
   const dynamicTokens = activeTemplateType === "BILLING" ? billingTokens : receiptTokens;
   const currentTemplate = activeTemplateType === "BILLING" ? messageTemplate : receiptTemplate;
 
-  const [dueDate, setDueDate] = useState("30-Jun-2025");
-  const [previewAccountIndex, setPreviewAccountIndex] = useState(0);
-
-  // Optimized server search:
-  // - ignores whitespace-only input
-  // - waits for a meaningful query (2+ characters)
-  // - debounces requests to reduce server/database load
-  // - prevents stale responses from replacing newer results
-  // - clears loading state only for the active request
-  const searchRequestIdRef = useRef(0);
-
-  useEffect(() => {
-    const query = accountSearchQuery.trim();
-
-    if (query.length < 2) {
-      searchRequestIdRef.current += 1;
-      setSearchResults([]);
-      setIsSearchingSpecificAccounts(false);
-      return;
-    }
-
-    const requestId = ++searchRequestIdRef.current;
-    let isActive = true;
-
-    setIsSearchingSpecificAccounts(true);
-
-    const timer = window.setTimeout(async () => {
-      try {
-        const res = await getSmsRolloutAudience({
-          searchQuery: query,
-          status: "ALL",
-        });
-
-        // Ignore responses belonging to an older query/request.
-        if (!isActive || requestId !== searchRequestIdRef.current) {
-          return;
-        }
-
-        setSearchResults(res?.properties ?? []);
-      } catch (err) {
-        if (!isActive || requestId !== searchRequestIdRef.current) {
-          return;
-        }
-
-        console.error("Error searching specific accounts:", err);
-        setSearchResults([]);
-      } finally {
-        if (isActive && requestId === searchRequestIdRef.current) {
-          setIsSearchingSpecificAccounts(false);
-        }
-      }
-    }, 400);
-
-    return () => {
-      isActive = false;
-      window.clearTimeout(timer);
-    };
-  }, [accountSearchQuery]);
-
-  const handleToggleSpecificAccount = (account: AdminProperty) => {
-    setSelectedSpecificAccounts((prev) => {
-      const exists = prev.some((p) => p.accountNumber === account.accountNumber);
-      if (exists) {
-        return prev.filter((p) => p.accountNumber !== account.accountNumber);
-      } else {
-        return [...prev, account];
-      }
-    });
-    setAudienceScope("SELECTED");
-    setPreviewAccountIndex(0);
-  };
-
-  const handleClearSpecificAccounts = () => {
-    setSelectedSpecificAccounts([]);
-    if (onClearSelectedProperties) onClearSelectedProperties();
-    setAudienceScope("DATABASE_FILTER");
-    setPreviewAccountIndex(0);
-  };
-
-  // Fetch full dynamic audience across the entire database whenever filters change
+  // Dynamic Full Database Audience with Endless Scroll Initial Batch
   useEffect(() => {
     let isCancelled = false;
-    const fetchAudience = async () => {
-      setIsLoadingAudience(true);
+    setIsLoadingAudience(true);
+    setAudiencePage(1);
+
+    const timer = setTimeout(async () => {
       try {
         const res = await getSmsRolloutAudience({
           municipality: targetMunicipality,
           classification: targetClassification,
-          status: targetStatus as "ALL" | "UNPAID" | "DEFAULTER",
+          balanceStatus: targetStatus,
+          requiredFields,
+          searchQuery: accountSearchQuery.trim() || undefined,
+          page: 1,
+          limit: 50,
         });
+
         if (!isCancelled && res) {
-          setLiveAudience(res.properties);
+          setLiveAudience(res.properties || []);
+          setTotalAudienceCount(res.totalCount || 0);
+          if (res.totalDueFormatted) setTotalAudienceDueFormatted(res.totalDueFormatted);
+          setHasMoreAudience((res.page || 1) < (res.totalPages || 1));
         }
       } catch (err) {
         console.error("Failed to query rollout audience:", err);
       } finally {
-        if (!isCancelled) setIsLoadingAudience(false);
+        if (!isCancelled) {
+          setIsLoadingAudience(false);
+        }
       }
-    };
+    }, 350);
 
-    fetchAudience();
     return () => {
       isCancelled = true;
+      clearTimeout(timer);
     };
-  }, [targetMunicipality, targetClassification, targetStatus]);
+  }, [targetMunicipality, targetClassification, targetStatus, requiredFields, accountSearchQuery]);
 
-  // Target list strictly adheres to audience scope
+  const checkScrollEdges = () => {
+    const el = tableContainerRef.current;
+    if (!el) return;
+    const { scrollLeft, scrollWidth, clientWidth } = el;
+    setCanScrollLeft(scrollLeft > 4);
+    setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 4);
+  };
+
+  const handleCombinedAudienceScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    handleAudienceTableScroll(e);
+    checkScrollEdges();
+  };
+
+  const checkLogsScrollEdges = () => {
+    const el = logsTableContainerRef.current;
+    if (!el) return;
+    const { scrollLeft, scrollWidth, clientWidth } = el;
+    setCanLogsScrollLeft(scrollLeft > 4);
+    setCanLogsScrollRight(scrollLeft < scrollWidth - clientWidth - 4);
+  };
+
+  const handleCombinedLogsScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    handleLogsTableScroll(e);
+    checkLogsScrollEdges();
+  };
+
+  useEffect(() => {
+    const el = tableContainerRef.current;
+    if (!el) return;
+    checkScrollEdges();
+    const ro = new ResizeObserver(() => checkScrollEdges());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [liveAudience, isHierarchicalView]);
+
+  useEffect(() => {
+    const el = logsTableContainerRef.current;
+    if (!el) return;
+    checkLogsScrollEdges();
+    const ro = new ResizeObserver(() => checkLogsScrollEdges());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [logsList]);
+
+  // Proactive pagination loader for Audience (Cadastre & Property Roll pattern)
+  const loadNextAudiencePage = async () => {
+    if (isLoadingMoreAudience || !hasMoreAudience || isLoadingAudience) return;
+    setIsLoadingMoreAudience(true);
+    const nextPage = audiencePage + 1;
+    try {
+      const res = await getSmsRolloutAudience({
+        municipality: targetMunicipality,
+        classification: targetClassification,
+        balanceStatus: targetStatus,
+        requiredFields,
+        searchQuery: accountSearchQuery.trim() || undefined,
+        page: nextPage,
+        limit: 50,
+      });
+
+      if (res && res.properties && res.properties.length > 0) {
+        setLiveAudience((prev) => {
+          const existingIds = new Set(prev.map((p) => p.id || p.accountNumber));
+          const newItems = res.properties.filter((p) => !existingIds.has(p.id || p.accountNumber));
+          return [...prev, ...newItems];
+        });
+        setAudiencePage(nextPage);
+        setHasMoreAudience(nextPage < (res.totalPages || 1));
+      } else {
+        setHasMoreAudience(false);
+      }
+    } catch (err) {
+      console.error("Error loading next audience batch:", err);
+    } finally {
+      setIsLoadingMoreAudience(false);
+    }
+  };
+
+  // Fallback scroll handler for audience table container
+  const handleAudienceTableScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.currentTarget;
+    if (target.scrollTop + target.clientHeight >= target.scrollHeight - 100) {
+      loadNextAudiencePage();
+    }
+  };
+
+  // IntersectionObserver for audience table endless scroll
+  useEffect(() => {
+    const sentinel = audienceSentinelRef.current;
+    if (!sentinel || !hasMoreAudience || isLoadingMoreAudience || isLoadingAudience) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          loadNextAudiencePage();
+        }
+      },
+      { rootMargin: "300px" }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMoreAudience, isLoadingMoreAudience, isLoadingAudience, audiencePage, targetMunicipality, targetClassification, targetStatus, requiredFields, accountSearchQuery]);
+
+  // Proactive pagination loader for Delivery Logs
+  const loadNextLogsPage = async () => {
+    if (isLoadingMoreLogs || !hasMoreLogs) return;
+    setIsLoadingMoreLogs(true);
+    const nextPage = logsPage + 1;
+    try {
+      const nextLogs = await getSmsRolloutLogs(nextPage, 50);
+      if (nextLogs && nextLogs.length > 0) {
+        setLogsList((prev) => {
+          const existing = new Set(prev.map((l: SmsRolloutLogItem) => l.id));
+          const newItems = nextLogs.filter((l: SmsRolloutLogItem) => !existing.has(l.id));
+          return [...prev, ...newItems];
+        });
+        setLogsPage(nextPage);
+        setHasMoreLogs(nextLogs.length === 50);
+      } else {
+        setHasMoreLogs(false);
+      }
+    } catch (err) {
+      console.error("Error loading next logs page:", err);
+    } finally {
+      setIsLoadingMoreLogs(false);
+    }
+  };
+
+  const handleLogsTableScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.currentTarget;
+    if (target.scrollTop + target.clientHeight >= target.scrollHeight - 100) {
+      loadNextLogsPage();
+    }
+  };
+
+  useEffect(() => {
+    const sentinel = logsSentinelRef.current;
+    if (!sentinel || !hasMoreLogs || isLoadingMoreLogs) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          loadNextLogsPage();
+        }
+      },
+      { rootMargin: "300px" }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMoreLogs, isLoadingMoreLogs, logsPage]);
+
   const eligibleProperties = audienceScope === "SELECTED" && selectedSpecificAccounts.length > 0
     ? selectedSpecificAccounts
     : liveAudience;
 
-  const selectedAccountNumbers = useMemo(
-    () => new Set(selectedSpecificAccounts.map((p) => p.accountNumber)),
-    [selectedSpecificAccounts]
-  );
-
   const unpaidTargets = useMemo(() => {
-    return eligibleProperties.filter(
-      (p) => p.status !== "PAID" && p.totalAmountDue > 0
-    );
-  }, [eligibleProperties]);
+    if (targetStatus === "OVERPAID") {
+      return eligibleProperties.filter((p) => p.totalAmountDue < 0);
+    }
+    if (targetStatus === "PAID") {
+      return eligibleProperties.filter((p) => p.totalAmountDue === 0);
+    }
+    if (targetStatus === "ALL") {
+      return eligibleProperties;
+    }
+    return eligibleProperties.filter((p) => p.status !== "PAID" && p.totalAmountDue > 0);
+  }, [eligibleProperties, targetStatus]);
 
   const totalOutstandingDueSum = useMemo(() => {
     return unpaidTargets.reduce((acc, curr) => acc + (curr.totalAmountDue || 0), 0);
   }, [unpaidTargets]);
 
-  const previewProp = eligibleProperties[previewAccountIndex] || eligibleProperties[0] || properties[0] || null;
+  const effectiveRolloutCount = audienceScope === "SELECTED" && selectedSpecificAccounts.length > 0
+    ? selectedSpecificAccounts.length
+    : totalAudienceCount;
 
-  // Render preview message with dual links or direct receipt link
-  const previewData = useMemo(() => {
-    let host = (process.env.NEXT_PUBLIC_APP_URL || "https://property-rate-app.vercel.app").replace(/\/$/, "");
-    if (host.includes("-projects.vercel.app") || host.includes("kzz98dclv")) {
-      host = "https://property-rate-app.vercel.app";
+  const effectiveRolloutTotalDueFormatted = audienceScope === "SELECTED" && selectedSpecificAccounts.length > 0
+    ? `GH₵ ${selectedSpecificAccounts.reduce((sum, p) => sum + Number(p.totalAmountDue || 0), 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`
+    : (totalAudienceDueFormatted || "GH₵ 0.00");
+
+  const ratepayerGroups = useMemo(() => {
+    const groupsMap = new Map<
+      string,
+      {
+        key: string;
+        ownerName: string;
+        phone: string;
+        totalAmountDue: number;
+        totalArrears: number;
+        properties: AdminProperty[];
+      }
+    >();
+
+    for (const prop of liveAudience) {
+      const rawPhone = (prop.ownerPhone || (prop as any).telephone || "").trim();
+      const normPhone = rawPhone.replace(/[^\d+]/g, "");
+      const hasValidPhone = Boolean(normPhone && normPhone !== "0" && normPhone.length >= 7);
+      const rawName = (prop.ownerName || (prop as any).name || "Municipal Ratepayer").trim();
+      const accNo = prop.accountNumber || "";
+
+      let groupKey: string;
+      if (!hasValidPhone) {
+        groupKey = `NO_PHONE::${accNo}`;
+      } else {
+        const upper = rawName.toUpperCase();
+        if (!upper || upper.includes("NO NAME")) {
+          groupKey = `${normPhone}::UNNAMED::${accNo}`;
+        } else {
+          const cleanName = upper
+            .replace(/\b(MR|MRS|MS|DR|ING|ALHAJI|HAJIA|HON|CHIEF|NII|NANA|REV|PASTOR|ELDER|MADAM)\b\.?/gi, "")
+            .replace(/[^\w\s]/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+          groupKey = `${normPhone}::${cleanName}`;
+        }
+      }
+
+      if (!groupsMap.has(groupKey)) {
+        groupsMap.set(groupKey, {
+          key: groupKey,
+          ownerName: rawName,
+          phone: hasValidPhone ? rawPhone : "—",
+          totalAmountDue: 0,
+          totalArrears: 0,
+          properties: [],
+        });
+      }
+      const g = groupsMap.get(groupKey)!;
+      g.properties.push(prop);
+      g.totalAmountDue += Number(prop.totalAmountDue || 0);
+      g.totalArrears += Number(prop.arrears || 0);
     }
 
-    if (!previewProp) {
-      return {
-        message: activeTemplateType === "BILLING"
-          ? "Select an active property account to preview the SMS rollout notice."
-          : "Select an active property account to preview the payment receipt notice.",
-        billLink: `${host}/dashboard?accountNumber=DEMO`,
-        paymentLink: `${host}/checkout?propertyId=DEMO`,
-        receiptLink: `${host}/receipts/verify?code=GCR-KKMA-2026-0001`,
-        recipientPhone: "+233 24 000 0000",
-        recipientName: "Municipal Citizen",
-      };
-    }
+    return Array.from(groupsMap.values()).map((g) => ({
+      ...g,
+      isMultiProperty: g.properties.length > 1,
+    }));
+  }, [liveAudience]);
 
-    const billLink = `${host}/dashboard?accountNumber=${encodeURIComponent(previewProp.accountNumber)}`;
-    const paymentLink = `${host}/checkout?propertyId=${encodeURIComponent(previewProp.accountNumber)}`;
-    const sampleReceiptNo = `GCR-KKMA-2026-${(previewProp.accountNumber || "0000").slice(-4)}`;
-    const receiptLink = `${host}/receipts/verify?code=${encodeURIComponent(sampleReceiptNo)}`;
+  const multiPropertyRatepayersCount = useMemo(
+    () => ratepayerGroups.filter((g) => g.isMultiProperty).length,
+    [ratepayerGroups]
+  );
 
-    const cleanMunicipality = (previewProp.municipality || "Kpone-Katamanso (KKMA)").replace(/\s*\([^)]*\)/, '').trim() || "Municipal";
-    const billYear = previewProp.billYear || 2026;
-    const sampleAmount = (previewProp.totalAmountDueFormatted || "437.50").replace("GH₵ ", "");
-
-    let rendered = "";
-    if (activeTemplateType === "BILLING") {
-      rendered = messageTemplate
-        .replace(/{{municipality}}/g, cleanMunicipality)
-        .replace(/{{billYear}}/g, String(billYear))
-        .replace(/{{accountNumber}}/g, previewProp.accountNumber)
-        .replace(/{{ownerName}}/g, previewProp.ownerName)
-        .replace(/{{totalAmountDue}}/g, previewProp.totalAmountDueFormatted.replace("GH₵ ", ""))
-        .replace(/{{arrears}}/g, previewProp.arrearsFormatted.replace("GH₵ ", ""))
-        .replace(/{{currentFee}}/g, previewProp.currentFeeFormatted.replace("GH₵ ", ""))
-        .replace(/{{dueDate}}/g, dueDate)
-        .replace(/{{billLink}}/g, billLink)
-        .replace(/{{paymentLink}}/g, paymentLink);
+  const handleToggleCollapseAll = () => {
+    if (collapsedGroupKeys.size > 0) {
+      setCollapsedGroupKeys(new Set());
     } else {
-      rendered = receiptTemplate
-        .replace(/{{receiptNumber}}/g, sampleReceiptNo)
-        .replace(/{{amount}}/g, sampleAmount)
-        .replace(/{{accountNumber}}/g, previewProp.accountNumber)
-        .replace(/{{ownerName}}/g, previewProp.ownerName)
-        .replace(/{{paymentMethod}}/g, "Paystack MoMo")
-        .replace(/{{datePaid}}/g, new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }))
-        .replace(/{{receiptLink}}/g, receiptLink);
+      const multiKeys = ratepayerGroups.filter((g) => g.isMultiProperty).map((g) => g.key);
+      setCollapsedGroupKeys(new Set(multiKeys));
     }
-
-    return {
-      message: rendered,
-      billLink,
-      paymentLink,
-      receiptLink,
-      recipientPhone: previewProp.ownerPhone,
-      recipientName: previewProp.ownerName,
-    };
-  }, [previewProp, messageTemplate, receiptTemplate, activeTemplateType, dueDate]);
-
-  const handleOpenTemplateModal = (type?: "BILLING" | "RECEIPT") => {
-    const targetType = type || activeTemplateType;
-    if (type) setActiveTemplateType(type);
-    setDraftTemplate(targetType === "BILLING" ? messageTemplate : receiptTemplate);
-    setShowTemplateModal(true);
   };
 
-  const handleSwitchModalTab = (type: "BILLING" | "RECEIPT") => {
-    setActiveTemplateType(type);
-    setDraftTemplate(type === "BILLING" ? messageTemplate : receiptTemplate);
+  const renderPreviewSnippet = (tpl: string, prop: AdminProperty, groupProps?: AdminProperty[]) => {
+    const isMulti = groupProps && groupProps.length > 1;
+    const totalDueNum = isMulti
+      ? groupProps.reduce((sum, p) => sum + Number(p.totalAmountDue || 0), 0)
+      : Number(prop.totalAmountDue || 0);
+    const arrearsNum = isMulti
+      ? groupProps.reduce((sum, p) => sum + Number(p.arrears || p.totalAmountDue || 0), 0)
+      : Number(prop.arrears || prop.totalAmountDue || 0);
+    const currentFeeNum = isMulti
+      ? groupProps.reduce((sum, p) => sum + Number(p.currentFee || 0), 0)
+      : Number(prop.currentFee || 0);
+
+    const arrearsStr = arrearsNum.toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    const totalStr = totalDueNum.toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    const currentFeeStr = currentFeeNum.toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
+    const primaryAcc = prop.accountNumber || "KKMA-ACC";
+    const propertyAccounts = isMulti ? groupProps.map((p) => p.accountNumber).join(", ") : primaryAcc;
+
+    const publicAppUrl = (
+      typeof window !== "undefined" && window.location.origin
+        ? window.location.origin
+        : process.env.NEXT_PUBLIC_APP_URL || "https://property-rate-app.vercel.app"
+    ).replace(/\/+$/, "");
+
+    const assessmentLink = `${publicAppUrl}/dashboard?accountNumber=${encodeURIComponent(primaryAcc)}`;
+    const checkoutLink = isMulti
+      ? `${publicAppUrl}/checkout?propertyId=ALL&accountNumber=${encodeURIComponent(primaryAcc)}`
+      : `${publicAppUrl}/checkout?propertyId=${encodeURIComponent(primaryAcc)}`;
+
+    const gpsAddresses = isMulti
+      ? Array.from(new Set(groupProps.map((p) => p.ownerDigitalAddress?.trim()).filter(Boolean))).join(", ")
+      : prop.ownerDigitalAddress || "KKMA-MUNICIPAL";
+
+    return tpl
+      .replace(/{{ownerName}}/g, prop.ownerName || "Ratepayer")
+      .replace(/{{accountNumber}}/g, isMulti ? propertyAccounts : primaryAcc)
+      .replace(/{{propertyAccounts}}/g, propertyAccounts)
+      .replace(/{{arrears}}/g, arrearsStr)
+      .replace(/{{totalAmountDue}}/g, totalStr)
+      .replace(/{{currentFee}}/g, currentFeeStr)
+      .replace(/{{propertyGpsAddress}}/g, gpsAddresses || "KKMA-MUNICIPAL")
+      .replace(/{{billYear}}/g, String(prop.billYear || 2026))
+      .replace(/{{municipality}}/g, prop.municipality || "Kpone-Katamanso (KKMA)")
+      .replace(/{{dueDate}}/g, prop.settlementDeadlineFormatted || "30-Jun-2025")
+      .replace(/{{paymentLink}}/g, checkoutLink)
+      .replace(/{{billLink}}/g, assessmentLink)
+      .replace(/{{link_assessment}}/g, assessmentLink)
+      .replace(/{{link_checkout}}/g, checkoutLink);
   };
 
-  const handleSaveTemplateModal = async () => {
+
+  const handleSaveTemplate = async () => {
     setIsSavingTemplate(true);
     try {
       const fallback = activeTemplateType === "BILLING" ? defaultTemplate : defaultReceiptTemplate;
-      const templateToSave = draftTemplate.trim() || fallback;
+      const templateToSave = currentTemplate.trim() || fallback;
+
       if (activeTemplateType === "BILLING") {
         setMessageTemplate(templateToSave);
-        try {
-          localStorage.setItem("kkma_sms_message_template", templateToSave);
-        } catch { }
+        // Save for the currently active filter type so switching retains custom edits
+        localStorage.setItem(`kkma_sms_template_${targetStatus}`, templateToSave);
+        localStorage.setItem("kkma_sms_message_template", templateToSave);
+
+        // Update the in-memory and local storage presets list
+        setSavedTemplates((prev) =>
+          prev.map((t) =>
+            t.type === "BILLING" && (t as any).filterKey === targetStatus
+              ? { ...t, content: templateToSave }
+              : t
+          )
+        );
       } else {
         setReceiptTemplate(templateToSave);
-        try {
-          localStorage.setItem("kkma_sms_receipt_template", templateToSave);
-        } catch { }
+        localStorage.setItem("kkma_sms_receipt_template", templateToSave);
+        setSavedTemplates((prev) =>
+          prev.map((t) =>
+            t.type === "RECEIPT"
+              ? { ...t, content: templateToSave }
+              : t
+          )
+        );
       }
 
       await saveSmsTemplate(templateToSave, activeTemplateType);
-      onNotify?.(`${activeTemplateType === "BILLING" ? "Billing notice" : "Payment receipt notice"} template saved successfully and audit logged.`, "success");
-      setShowTemplateModal(false);
+      onNotify?.(
+        `${activeTemplateType === "BILLING" ? `${targetStatus} notice` : "Payment receipt notice"} template saved.`,
+        "success"
+      );
     } catch (err) {
-      console.error("Failed to save template to server:", err);
-      onNotify?.("Template saved locally for this terminal session.", "info");
-      setShowTemplateModal(false);
+      onNotify?.("Template saved locally.", "info");
     } finally {
       setIsSavingTemplate(false);
     }
   };
 
-  const handleResetDefaultTemplate = async () => {
-    if (activeTemplateType === "BILLING") {
-      setDraftTemplate(defaultTemplate);
-      setMessageTemplate(defaultTemplate);
-      try {
-        localStorage.removeItem("kkma_sms_message_template");
-      } catch { }
-      try {
-        await saveSmsTemplate(defaultTemplate, "BILLING");
-      } catch { }
-      onNotify?.("Billing SMS template reset to statutory standard.", "info");
-    } else {
-      setDraftTemplate(defaultReceiptTemplate);
-      setReceiptTemplate(defaultReceiptTemplate);
-      try {
-        localStorage.removeItem("kkma_sms_receipt_template");
-      } catch { }
-      try {
-        await saveSmsTemplate(defaultReceiptTemplate, "RECEIPT");
-      } catch { }
-      onNotify?.("Payment receipt SMS template reset to official standard.", "info");
-    }
-  };
-
-  const insertVariableTag = (tag: string) => {
-    if (activeTemplateType === "BILLING") {
-      setMessageTemplate((prev) => prev + " " + tag);
-    } else {
-      setReceiptTemplate((prev) => prev + " " + tag);
-    }
-  };
-
-  const insertVariableTagInDraft = (tag: string) => {
-    if (modalTextareaRef.current) {
-      const textarea = modalTextareaRef.current;
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const text = draftTemplate;
-      const before = text.substring(0, start);
-      const after = text.substring(end, text.length);
-      const newText = before + tag + after;
-      setDraftTemplate(newText);
-      setTimeout(() => {
-        textarea.focus();
-        textarea.setSelectionRange(start + tag.length, start + tag.length);
-      }, 0);
-    } else {
-      setDraftTemplate((prev) => prev + " " + tag);
-    }
-  };
-
-  const modalRenderedPreview = useMemo(() => {
-    const prop = previewProp || properties[0] || {
-      accountNumber: "KKDA03991001",
-      ownerName: "Heinz",
-      ownerPhone: "0209067556",
-      municipality: "Kpone-Katamanso (KKMA)",
-      billYear: 2026,
-      totalAmountDueFormatted: "GH₵ 437.50",
-      arrearsFormatted: "GH₵ 0.00",
-      currentFeeFormatted: "GH₵ 437.50",
-    };
-    let host = (process.env.NEXT_PUBLIC_APP_URL || "https://property-rate-app.vercel.app").replace(/\/$/, "");
-    if (host.includes("-projects.vercel.app") || host.includes("kzz98dclv")) {
-      host = "https://property-rate-app.vercel.app";
-    }
-    const billLink = `${host}/dashboard?accountNumber=${encodeURIComponent(prop.accountNumber)}`;
-    const paymentLink = `${host}/checkout?propertyId=${encodeURIComponent(prop.accountNumber)}`;
-    const sampleReceiptNo = `GCR-KKMA-2026-${(prop.accountNumber || "0000").slice(-4)}`;
-    const receiptLink = `${host}/receipts/verify?code=${encodeURIComponent(sampleReceiptNo)}`;
-
-    const cleanMunicipality = (prop.municipality || "Kpone-Katamanso (KKMA)").replace(/\s*\([^)]*\)/, '').trim() || "Municipal";
-    const billYear = prop.billYear || 2026;
-    const sampleAmount = (prop.totalAmountDueFormatted || "437.50").replace("GH₵ ", "");
-
-    if (activeTemplateType === "BILLING") {
-      return draftTemplate
-        .replace(/{{municipality}}/g, cleanMunicipality)
-        .replace(/{{billYear}}/g, String(billYear))
-        .replace(/{{accountNumber}}/g, prop.accountNumber)
-        .replace(/{{ownerName}}/g, prop.ownerName)
-        .replace(/{{totalAmountDue}}/g, sampleAmount)
-        .replace(/{{arrears}}/g, (prop.arrearsFormatted || "0.00").replace("GH₵ ", ""))
-        .replace(/{{currentFee}}/g, (prop.currentFeeFormatted || "437.50").replace("GH₵ ", ""))
-        .replace(/{{dueDate}}/g, dueDate)
-        .replace(/{{billLink}}/g, billLink)
-        .replace(/{{paymentLink}}/g, paymentLink);
-    } else {
-      return draftTemplate
-        .replace(/{{receiptNumber}}/g, sampleReceiptNo)
-        .replace(/{{amount}}/g, sampleAmount)
-        .replace(/{{accountNumber}}/g, prop.accountNumber)
-        .replace(/{{ownerName}}/g, prop.ownerName)
-        .replace(/{{paymentMethod}}/g, "Paystack MoMo")
-        .replace(/{{datePaid}}/g, new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }))
-        .replace(/{{receiptLink}}/g, receiptLink);
-    }
-  }, [draftTemplate, activeTemplateType, previewProp, properties, dueDate]);
-
-  const handleOpenAuthModal = () => {
+  const handleOpenAuthModal = async () => {
     setAdminPassword("");
     setAuthError(null);
     setShowAuthModal(true);
+    setIsFetchingBalance(true);
+    try {
+      const balance = await getArkeselBalance();
+      setGatewayBalance(balance);
+    } catch (err) {
+      console.error("Failed to fetch balance:", err);
+    } finally {
+      setIsFetchingBalance(false);
+    }
   };
 
   const handleConfirmAuthorization = async () => {
@@ -528,9 +805,24 @@ export function SmsRolloutSimulator({
     setAuthError(null);
 
     try {
-      const targetAccounts = unpaidTargets.map((p) => p.accountNumber);
       const clientMode = typeof window !== "undefined" ? (localStorage.getItem("kkma_sms_dispatch_mode") as any) : undefined;
-      const res = await onTriggerBatchRollout(targetAccounts, messageTemplate, adminPassword, clientMode);
+      
+      let dispatchPayload: any;
+      if (audienceScope === "SELECTED" && selectedSpecificAccounts.length > 0) {
+        dispatchPayload = selectedSpecificAccounts.map((p) => p.accountNumber);
+      } else {
+        dispatchPayload = {
+          filters: {
+            municipality: targetMunicipality,
+            classification: targetClassification,
+            balanceStatus: targetStatus,
+            requiredFields,
+            searchQuery: accountSearchQuery.trim() || undefined,
+          },
+        };
+      }
+
+      const res = await onTriggerBatchRollout(dispatchPayload, messageTemplate, adminPassword, clientMode);
       if (res && !res.success) {
         setAuthError(res.error || "Password verification failed.");
       } else {
@@ -543,1105 +835,1217 @@ export function SmsRolloutSimulator({
     }
   };
 
-  // Desktop Swiping Gestures (Trackpad 2-finger swipe & Mouse drag swipe)
-  const lastWheelSwipeRef = useRef<number>(0);
-
-  const handleWheelSwipe = (e: React.WheelEvent<HTMLDivElement>) => {
-    const now = Date.now();
-    if (now - lastWheelSwipeRef.current < 450) return;
-
-    // Check if horizontal delta dominates vertical delta and exceeds threshold
-    if (Math.abs(e.deltaX) > 40 && Math.abs(e.deltaX) > Math.abs(e.deltaY) * 1.5) {
-      if (e.deltaX > 40 && activeView === "SIMULATOR") {
-        setActiveView("LOGS");
-        lastWheelSwipeRef.current = now;
-      } else if (e.deltaX < -40 && activeView === "LOGS") {
-        setActiveView("SIMULATOR");
-        lastWheelSwipeRef.current = now;
-      }
-    }
-  };
-
   return (
-    <div
-      onWheel={handleWheelSwipe}
-      className="relative w-full h-full flex-1 min-h-0 overflow-hidden flex flex-col font-sans"
-    >
-      {/* Synchronized Dual-Pane Motion Slider Track */}
+    <div className="relative w-full h-full flex-1 min-h-0 overflow-hidden flex flex-col font-sans bg-[#181A20] text-[#EAECEF]">
       <motion.div
         className="w-[200%] h-full flex flex-row flex-1 min-h-0"
         animate={{ x: activeView === "SIMULATOR" ? "0%" : "-50%" }}
         transition={{ type: "spring", damping: 26, stiffness: 220, mass: 0.8 }}
       >
-        {/* PANE 1: SMS ROLLOUT ENGINE & DEVICE SIMULATOR (50% of track = 100% viewport) */}
-        <div className="w-1/2 h-full flex flex-col min-h-0 p-3 overflow-hidden relative">
-          {/* Main Two-Column Layout: Controls & Full-Height Live Preview Simulator */}
-          <div className="w-full h-full min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-3 overflow-hidden items-stretch">
-            {/* Left Column: Streamlined Header + Campaign Controls + Template Editor (7 cols / ~58%) */}
-            <div className="lg:col-span-7 h-full flex flex-col min-h-0 space-y-2.5 overflow-y-auto">
-              {/* Streamlined Enterprise Top Header (High Density, Clean Typography) */}
-              <div className="bg-white border border-[#DADCE0] rounded-xl px-3.5 py-2.5 shadow-2xs shrink-0 flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h2 className="text-xs font-semibold text-[#2C2C2C] tracking-tight">
-                      SMS Rollout &amp; Demand Notice Engine
-                    </h2>
-                    <span className="text-[#DADCE0]">&bull;</span>
-                    <span className="text-[11px] text-[#137333] font-medium flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#137333]" />
-                      Arkesel Gateway (Arnold)
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-[#717171] truncate mt-0.5">
-                    Statutory billing broadcasts with instant in-app checkout link.
-                  </p>
-                </div>
+        {/* PANE 1: SMS ROLLOUT ENGINE */}
+        <div className="w-1/2 h-full flex flex-col min-h-0 p-0 overflow-hidden relative bg-[#181A20]">
+          <div className="w-full h-full min-h-0 flex flex-col overflow-hidden">
 
-                <button
-                  type="button"
-                  onClick={() => setActiveView("LOGS")}
-                  className="shrink-0 h-7 px-2.5 rounded-lg border border-[#DADCE0] bg-[#F8F9FA] text-[#612D53] hover:bg-[#F6ECF2] hover:border-[#612D53] text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer"
-                >
-                  <span>Delivery Logs</span>
-                  <span className="text-[10px] text-[#717171]">({smsLogs.length})</span>
-                  <ChevronRight className="w-3 h-3 text-[#612D53]" />
-                </button>
-              </div>
-
-              {/* Section 1: Audience Selection (Compact Productivity Layout) */}
-              <div className="bg-white border border-[#DADCE0] rounded-xl p-3 shadow-2xs space-y-2.5 shrink-0">
-                <div className="flex items-center justify-between border-b border-[#F1F3F4] pb-1.5">
-                  <h3 className="text-xs font-semibold text-[#2C2C2C]">
-                    1. Target Ratepayer Audience
+            {/* Audience & Field Selection */}
+            <div className="bg-[#181A20] border-0 rounded-none shadow-none flex-1 min-h-0 flex flex-col">
+              <div className="p-3.5 border-b border-[#2B3139] shrink-0 space-y-2.5 bg-[#1E2329] relative z-20">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-semibold text-[#EAECEF] flex items-center gap-1.5">
+                    <Filter className="w-3.5 h-3.5 text-[#FCD535]" />
+                    <span className="text-[#EAECEF] font-bold">Target Ratepayer Audience</span>
                   </h3>
-                  <div className="flex items-center gap-2">
-                    {isLoadingAudience && <Loader2 className="w-3 h-3 animate-spin text-[#612D53]" />}
-                    <span className="text-[11px] text-[#717171] font-medium">
-                      {eligibleProperties.length} {audienceScope === "SELECTED" ? "selected" : "dynamic"} {eligibleProperties.length === 1 ? "property" : "properties"} matched
+                  <div className="flex items-center gap-2.5">
+                    {isLoadingAudience && <Loader2 className="w-3 h-3 animate-spin text-[#FCD535]" />}
+                    <span className="text-[11px] text-[#848E9C] font-medium">
+                      {(totalAudienceCount || eligibleProperties.length).toLocaleString()} active properties matched
                     </span>
-                  </div>
-                </div>
 
-                {/* Specific Account Search & Multi-Account Selection Bar */}
-                <div className="space-y-1.5">
-                  <div className="relative">
-                    <Search className="w-3.5 h-3.5 text-[#717171] absolute left-2.5 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      value={accountSearchQuery}
-                      onChange={(e) => setAccountSearchQuery(e.target.value)}
-                      aria-label="Search accounts for SMS rollout"
-                      onKeyDown={(e) => {
-                        if (e.key === "Escape") {
-                          searchRequestIdRef.current += 1;
-                          setAccountSearchQuery("");
-                          setSearchResults([]);
-                          setIsSearchingSpecificAccounts(false);
-                        }
-                      }}
-                      placeholder="Search Valuation ID, Ratepayer, Phone, GPS (e.g. GK-0010), Landmark, Class..."
-                      className="w-full h-8 pl-8 pr-7 rounded-lg border border-[#DADCE0] bg-white text-xs text-[#2C2C2C] focus:outline-none focus:border-[#612D53]"
-                    />
-                    {accountSearchQuery && (
+                    <div className="h-3.5 w-px bg-[#2B3139]" />
+
+                    {/* Delivery Logs Action Button with Floating Metric Tooltip on Hover */}
+                    <div className="relative group shrink-0">
                       <button
                         type="button"
-                        onClick={() => {
-                          searchRequestIdRef.current += 1;
-                          setAccountSearchQuery("");
-                          setSearchResults([]);
-                          setIsSearchingSpecificAccounts(false);
-                        }}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-[#717171] hover:text-[#2C2C2C] p-1 cursor-pointer"
+                        onClick={() => setActiveView("LOGS")}
+                        aria-label="View SMS Delivery Logs"
+                        className="w-7 h-7 rounded-full border border-[#2B3139] bg-[#2B313A] hover:bg-[#363D47] hover:border-[#FCD535] text-[#EAECEF] shadow-xs flex items-center justify-center transition-all cursor-pointer focus:outline-none"
                       >
-                        <X className="w-3 h-3" />
+                        <ChevronRight className="w-3.5 h-3.5 text-[#848E9C] group-hover:text-[#FCD535] group-hover:translate-x-0.5 transition-transform" />
                       </button>
-                    )}
-                    {isSearchingSpecificAccounts && (
-                      <Loader2 className="w-3 h-3 animate-spin text-[#612D53] absolute right-7 top-1/2 -translate-y-1/2" />
-                    )}
-                  </div>
 
-                  {/* Instant Search Results Dropdown List */}
-                  {searchResults.length > 0 && (
-                    <div className="max-h-48 overflow-y-auto rounded-lg border border-[#DADCE0] bg-white divide-y divide-[#F1F3F4] shadow-lg">
-                      {searchResults.map((acc) => {
-                        const isSelected = selectedAccountNumbers.has(acc.accountNumber);
-                        return (
-                          <div
-                            key={acc.id}
-                            onClick={() => handleToggleSpecificAccount(acc)}
-                            className={`p-2 flex items-center justify-between text-xs cursor-pointer hover:bg-[#F8F9FA] transition-colors ${isSelected ? "bg-[#F6ECF2]/60" : ""
-                              }`}
-                          >
-                            <div className="min-w-0 pr-2">
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono font-semibold text-[#2C2C2C] text-[11px]">{acc.accountNumber}</span>
-                                <span className="text-[#717171] text-[11px] truncate">{acc.ownerName}</span>
-                              </div>
-                              <div className="text-[10px] text-[#717171] flex items-center gap-1.5 mt-0.5">
-                                <span>Phone: {acc.ownerPhone}</span>
-                                <span>&bull;</span>
-                                <span className="font-medium text-[#2C2C2C]">{acc.totalAmountDueFormatted}</span>
-                                <span>&bull;</span>
-                                <span className={acc.status === "PAID" ? "text-[#137333]" : "text-[#D93025]"}>
-                                  {acc.status}
-                                </span>
-                              </div>
-                            </div>
-
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleToggleSpecificAccount(acc);
-                              }}
-                              className={`h-6 px-2 rounded text-[11px] font-medium shrink-0 flex items-center gap-1 transition-colors cursor-pointer ${isSelected
-                                  ? "bg-[#612D53] text-white"
-                                  : "border border-[#DADCE0] text-[#2C2C2C] hover:bg-[#F1F3F4]"
-                                }`}
-                            >
-                              {isSelected ? (
-                                <>
-                                  <CheckCircle2 className="w-2.5 h-2.5" />
-                                  <span>Selected</span>
-                                </>
-                              ) : (
-                                <span>+ Select</span>
-                              )}
-                            </button>
-                          </div>
-                        );
-                      })}
+                      {/* Floating Tooltip Card (Appears on Hover) - iOS Liquid Glass */}
+                      <div className="absolute right-0 top-full mt-2 hidden group-hover:flex flex-col items-end pointer-events-none z-50 animate-in fade-in zoom-in-95 duration-150">
+                        {/* Tooltip Caret Arrow */}
+                        <div className="w-2.5 h-2.5 bg-[#0B0E11]/95 backdrop-blur-xl border-l border-t border-[#2B3139] rotate-45 -mb-1 mr-2.5" />
+                        <div className="bg-[#0B0E11]/95 backdrop-blur-xl border border-[#2B3139] text-[#EAECEF] text-xs px-3 py-1.5 rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.5)] whitespace-nowrap flex items-center gap-2">
+                          <span className="font-semibold text-[#EAECEF]">Delivery Logs</span>
+                          <span className="text-[#848E9C] text-[10px]">&bull;</span>
+                          <span className="text-[#EAECEF] text-[11px] font-mono tabular-nums">
+                            {smsLogs.length.toLocaleString()} records
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                  )}
+                  </div>
+                </div>
 
-                  {/* Selected Specific Accounts Compact Drawer */}
-                  {selectedSpecificAccounts.length > 0 && (
-                    <div className="space-y-1.5 p-2 rounded-lg bg-[#F8F9FA] border border-[#DADCE0]">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-medium text-[#2C2C2C] text-[11px]">
-                          Targeting {selectedSpecificAccounts.length} Selected Account{selectedSpecificAccounts.length > 1 ? "s" : ""}:
-                        </span>
+                {/* Search, Classification, Fields Filter & Action Toolbar */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="relative flex-1 min-w-[180px]">
+                    <Search className="w-3.5 h-3.5 text-[#848E9C] absolute left-2.5 top-1/2 -translate-y-1/2 z-10" />
+
+                  <input
+                    type="text"
+                    value={accountSearchQuery}
+                    onChange={(e) => setAccountSearchQuery(e.target.value)}
+                    placeholder="Search Valuation ID, Ratepayer, Phone, GPS, Class..."
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck="false"
+                    className="w-full h-8 pl-8 pr-8 rounded-lg border border-[#2B3139] bg-[#0B0E11] text-xs text-[#EAECEF] focus:outline-none focus:border-[#FCD535] placeholder-[#848E9C]"
+                  />
+
+                  {accountSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setAccountSearchQuery("")}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-[#848E9C] p-1 cursor-pointer z-10 hover:text-[#EAECEF]"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+
+                {/* FIELDS FILTER TRIGGER & CONTAINER POPOVER */}
+                <div className="relative shrink-0">
+                  <button
+                    ref={fieldsFilterBtnRef}
+                    type="button"
+                    onClick={handleOpenFieldsFilter}
+                    className={`h-8 px-3 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${requiredFields.length > 0
+                      ? "bg-[#FCD535] text-[#181A20] font-bold border-[#FCD535] shadow-xs"
+                      : "bg-[#2B313A] text-[#EAECEF] border-[#2B3139] hover:bg-[#363D47]"
+                      }`}
+                  >
+                    <SlidersHorizontal className="w-3.5 h-3.5" />
+                    <span>Fields Filter</span>
+                    {requiredFields.length > 0 && (
+                      <span className="ml-0.5 text-[11px] font-bold opacity-90">
+                        ({requiredFields.length})
+                      </span>
+                    )}
+                    <ChevronDown className={`w-3 h-3 transition-transform ${showFieldsFilter ? "rotate-180" : ""}`} />
+                  </button>
+
+                  {/* FIELDS SELECTION POPOVER (FITS VIEWPORT & FULLY RESPONSIVE) */}
+                  {showFieldsFilter && (
+                    <div
+                      ref={fieldsFilterRef}
+                      className="absolute right-0 top-full mt-1.5 w-[340px] sm:w-[380px] max-w-[calc(100vw-32px)] z-50 rounded-xl border border-[#2B3139] bg-[#1E2329] shadow-2xl p-3 flex flex-col font-sans max-h-[340px] overflow-hidden"
+                    >
+                      <div className="flex items-center justify-between border-b border-[#2B3139] pb-2 shrink-0">
+                        <div className="flex items-center gap-1.5">
+                          <SlidersHorizontal className="w-3.5 h-3.5 text-[#FCD535]" />
+                          <span className="text-xs font-bold text-[#EAECEF]">Required Field Criteria</span>
+                          <span className="text-[10px] text-[#848E9C]">({availableFieldFilters.length} fields)</span>
+                        </div>
                         <button
                           type="button"
-                          onClick={handleClearSpecificAccounts}
-                          className="text-[10px] text-[#D93025] hover:underline font-medium cursor-pointer"
+                          onClick={() => setShowFieldsFilter(false)}
+                          className="text-[#848E9C] hover:text-[#EAECEF] p-0.5 rounded cursor-pointer"
                         >
-                          Clear Selection
+                          <X className="w-3.5 h-3.5" />
                         </button>
                       </div>
 
-                      <div className="max-h-24 overflow-y-auto space-y-1 pr-1">
-                        {selectedSpecificAccounts.map((acc) => (
-                          <div
-                            key={acc.id}
-                            className="p-1.5 rounded bg-white border border-[#DADCE0] flex items-center justify-between text-xs"
-                          >
-                            <div className="min-w-0 pr-2">
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono font-semibold text-[#2C2C2C] text-[11px]">{acc.accountNumber}</span>
-                                <span className="text-[#717171] text-[11px] truncate">{acc.ownerName}</span>
-                              </div>
-                              <div className="text-[10px] text-[#717171] flex items-center gap-1.5 mt-0.2">
-                                <span>Phone: {acc.ownerPhone}</span>
-                                <span>&bull;</span>
-                                <span className="font-medium text-[#612D53]">Due: {acc.totalAmountDueFormatted}</span>
-                              </div>
-                            </div>
+                      <div className="relative shrink-0 pt-2">
+                        <Search className="w-3 h-3 text-[#848E9C] absolute left-2 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          value={fieldsSearchQuery}
+                          onChange={(e) => setFieldsSearchQuery(e.target.value)}
+                          placeholder="Search fields (e.g. Phone, GPS, Name)..."
+                          autoComplete="off"
+                          autoCorrect="off"
+                          spellCheck="false"
+                          className="w-full h-7 pl-7 pr-2 rounded-md border border-[#2B3139] bg-[#0B0E11] text-[11px] text-[#EAECEF] focus:outline-none focus:border-[#FCD535]"
+                        />
+                      </div>
 
-                            <button
-                              type="button"
-                              onClick={() => handleToggleSpecificAccount(acc)}
-                              className="text-[#717171] hover:text-[#D93025] p-0.5 rounded transition-colors cursor-pointer"
-                              title="Remove from target list"
+                      <div className="flex items-center justify-between text-[10px] shrink-0 py-1.5">
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={handleSelectAllFields}
+                            className="text-[#FCD535] hover:underline font-semibold cursor-pointer"
+                          >
+                            Select All
+                          </button>
+                          <span className="text-[#2B3139]">&bull;</span>
+                          <button
+                            type="button"
+                            onClick={handleClearAllFields}
+                            className="text-[#848E9C] hover:underline font-medium cursor-pointer"
+                          >
+                            Clear
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleResetDefaultFields}
+                          className="text-[#0ECB81] hover:underline font-semibold cursor-pointer flex items-center gap-1"
+                        >
+                          <span>Recommended for SMS</span>
+                        </button>
+                      </div>
+
+                      <div className="flex-1 min-h-[140px] overflow-y-auto divide-y divide-[#2B3139] rounded-lg border border-[#2B3139] bg-[#0B0E11]">
+                        {filteredAvailableFields.map((field) => {
+                          const isChecked = draftRequiredFields.includes(field.key);
+                          return (
+                            <label
+                              key={field.key}
+                              onClick={() => handleToggleDraftField(field.key)}
+                              className={`px-2.5 py-1.5 flex items-center justify-between text-xs cursor-pointer hover:bg-[#2B313A]/50 transition-colors ${
+                                isChecked ? "bg-[#2B313A]/60 font-medium text-[#FCD535]" : "text-[#EAECEF]"
+                              }`}
                             >
-                              <X className="w-3 h-3" />
-                            </button>
-                          </div>
-                        ))}
+                              <div className="flex items-center gap-2 min-w-0 pr-2">
+                                <div
+                                  className={`w-3.5 h-3.5 rounded shrink-0 flex items-center justify-center border transition-colors ${
+                                    isChecked
+                                      ? "bg-[#FCD535] border-[#FCD535] text-[#181A20]"
+                                      : "border-[#2B3139] bg-[#1E2329]"
+                                  }`}
+                                >
+                                  {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                                </div>
+                                <span className="text-[11px] text-[#EAECEF] truncate">
+                                  {field.label}
+                                </span>
+                              </div>
+                              <span className="text-[9px] text-[#848E9C] uppercase tracking-wide shrink-0">
+                                {field.category}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+
+                      <div className="pt-2 border-t border-[#2B3139] flex items-center justify-between text-[10px] text-[#848E9C] shrink-0">
+                        <span>{draftRequiredFields.length} field{draftRequiredFields.length === 1 ? "" : "s"} required</span>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setShowFieldsFilter(false)}
+                            className="h-6 px-2 rounded border border-[#2B3139] text-[#848E9C] hover:bg-[#2B313A] font-medium cursor-pointer transition-colors"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleApplyFieldsFilter}
+                            className="h-6 px-2.5 rounded bg-[#FCD535] text-[#181A20] font-bold cursor-pointer hover:bg-[#FCD535]/90 transition-colors"
+                          >
+                            Apply Filter
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}
                 </div>
 
-                {/* Scope Switcher when selections exist (Clean Typographic Standard) */}
-                {selectedSpecificAccounts.length > 0 && (
-                  <div className="p-1.5 rounded-lg bg-[#F8F9FA] border border-[#DADCE0] flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[#717171] text-[11px] font-medium">Scope:</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAudienceScope("SELECTED");
-                          setPreviewAccountIndex(0);
-                        }}
-                        className={`text-[11px] font-medium transition-colors cursor-pointer ${audienceScope === "SELECTED"
-                            ? "text-[#612D53] font-semibold underline"
-                            : "text-[#717171] hover:text-[#2C2C2C]"
-                          }`}
-                      >
-                        Selected Accounts ({selectedSpecificAccounts.length})
-                      </button>
-                      <span className="text-[#DADCE0]">&bull;</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAudienceScope("DATABASE_FILTER");
-                          setPreviewAccountIndex(0);
-                        }}
-                        className={`text-[11px] font-medium transition-colors cursor-pointer ${audienceScope === "DATABASE_FILTER"
-                            ? "text-[#612D53] font-semibold underline"
-                            : "text-[#717171] hover:text-[#2C2C2C]"
-                          }`}
-                      >
-                        All Filtered Records ({liveAudience.length})
-                      </button>
-                    </div>
+                <select
+                  value={targetStatus}
+                  onChange={(e) => handleStatusChange(e.target.value as any)}
+                  className="shrink-0 h-8 px-2 rounded-lg border border-[#2B3139] bg-[#0B0E11] text-[11px] text-[#EAECEF] focus:outline-none focus:border-[#FCD535] cursor-pointer font-medium"
+                >
+                  <option value="UNPAID">Unpaid Balances Only</option>
+                  <option value="PAID">Paid / Settled</option>
+                  <option value="OVERPAID">Overpaid (Credit Balance)</option>
+                  <option value="ALL">All Records</option>
+                </select>
 
-                    <button
-                      type="button"
-                      onClick={handleClearSpecificAccounts}
-                      className="text-[10px] text-[#717171] hover:text-[#D93025] underline cursor-pointer"
-                    >
-                      Clear
-                    </button>
-                  </div>
-                )}
+                {/* Edit Message Template Modal Trigger Button */}
+                <button
+                  type="button"
+                  onClick={() => setShowTemplateModal(true)}
+                  className="h-8 px-2.5 rounded-lg border border-[#2B3139] bg-[#2B313A] hover:bg-[#363D47] hover:border-[#FCD535] text-xs font-semibold text-[#EAECEF] flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
+                  title="Configure SMS Message Template"
+                >
+                  <FileText className="w-3.5 h-3.5 text-[#848E9C]" />
+                  <span>Message Template</span>
+                  <span className="text-[10px] text-[#848E9C]">({currentTemplate.length} chars)</span>
+                </button>
 
-                {/* Broader Municipal Filters (Ultra Compact 3-Column Grid) */}
-                <div className="pt-1.5 border-t border-[#F1F3F4]">
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-                    <div className="space-y-0.5">
-                      <label className="text-[#717171] text-[10px] font-medium block">Municipality (MMDA)</label>
-                      <select
-                        value={targetMunicipality}
-                        onChange={(e) => {
-                          setTargetMunicipality(e.target.value);
-                          setPreviewAccountIndex(0);
-                        }}
-                        aria-label="Filter rollout by municipality"
-                        className="w-full h-7.5 px-2 rounded-md border border-[#DADCE0] bg-white text-[11px] text-[#2C2C2C] focus:outline-none focus:border-[#612D53]"
-                      >
-                        <option value="Kpone-Katamanso (KKMA)">Kpone-Katamanso (KKMA)</option>
-                      </select>
-                    </div>
-
-                    <div className="space-y-0.5">
-                      <label className="text-[#717171] text-[10px] font-medium block">Zoning Classification</label>
-                      <select
-                        value={targetClassification}
-                        onChange={(e) => {
-                          setTargetClassification(e.target.value);
-                          setPreviewAccountIndex(0);
-                        }}
-                        aria-label="Filter rollout by property classification"
-                        className="w-full h-7.5 px-2 rounded-md border border-[#DADCE0] bg-white text-[11px] text-[#2C2C2C] focus:outline-none focus:border-[#612D53]"
-                      >
-                        <option value="ALL">All Classifications</option>
-                        <option value="COMMERCIAL MIXED USE">Commercial Mixed Use</option>
-                        <option value="PRIVATE THIRD CLASS RESIDENTIAL">Third Class Residential</option>
-                        <option value="FIRST CLASS RESIDENTIAL">First Class Residential</option>
-                      </select>
-                    </div>
-
-                    <div className="space-y-0.5">
-                      <label className="text-[#717171] text-[10px] font-medium block">Assessment Status</label>
-                      <select
-                        value={targetStatus}
-                        onChange={(e) => {
-                          setTargetStatus(e.target.value as any);
-                          setPreviewAccountIndex(0);
-                        }}
-                        aria-label="Filter rollout by assessment status"
-                        className="w-full h-7.5 px-2 rounded-md border border-[#DADCE0] bg-white text-[11px] text-[#2C2C2C] focus:outline-none focus:border-[#612D53]"
-                      >
-                        <option value="UNPAID">Unpaid Balances Only</option>
-                        <option value="DEFAULTER">Statutory Defaulters (Arrears)</option>
-                        <option value="ALL">All Records</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Section 2: Template Editor with Category Filter (Statutory Billing vs Payment Receipt) */}
-              <div className="bg-white border border-[#DADCE0] rounded-xl p-3 shadow-2xs space-y-2 shrink-0">
-                <div className="flex items-center justify-between border-b border-[#F1F3F4] pb-1.5">
-                  <div className="flex items-center gap-2.5">
-                    <h3 className="text-xs font-semibold text-[#2C2C2C]">
-                      2. SMS Template Engine
-                    </h3>
-                    <div className="flex items-center gap-2 text-xs">
-                      <button
-                        type="button"
-                        onClick={() => setActiveTemplateType("BILLING")}
-                        className={`transition-colors cursor-pointer text-[11px] font-medium ${activeTemplateType === "BILLING"
-                            ? "text-[#612D53] font-semibold underline underline-offset-4"
-                            : "text-[#717171] hover:text-[#2C2C2C]"
-                          }`}
-                      >
-                        Billing Notice
-                      </button>
-                      <span className="text-[#DADCE0]">&bull;</span>
-                      <button
-                        type="button"
-                        onClick={() => setActiveTemplateType("RECEIPT")}
-                        className={`transition-colors cursor-pointer text-[11px] font-medium ${activeTemplateType === "RECEIPT"
-                            ? "text-[#612D53] font-semibold underline underline-offset-4"
-                            : "text-[#717171] hover:text-[#2C2C2C]"
-                          }`}
-                      >
-                        Payment Receipt Notice
-                      </button>
-                    </div>
-                  </div>
-
+                {/* Rollout Action Button with Floating Metric Tooltip on Hover */}
+                <div className="relative group shrink-0">
                   <button
                     type="button"
-                    onClick={handleResetDefaultTemplate}
-                    className="text-[11px] text-[#612D53] hover:underline font-medium cursor-pointer"
+                    onClick={handleOpenAuthModal}
+                    disabled={isProcessing || effectiveRolloutCount === 0}
+                    className="h-8 px-3.5 rounded-lg font-bold text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all shadow-xs bg-[#FCD535] hover:bg-[#FCD535]/90 text-[#181A20]"
                   >
-                    Reset Default
+                    <Send className="w-3.5 h-3.5" />
+                    <span>
+                      {isProcessing ? "Dispatching..." : "Rollout"}
+                    </span>
+                  </button>
+
+                  {/* Floating Tooltip Card (Appears on Hover) - iOS Liquid Glass */}
+                  <div className="absolute right-0 bottom-full mb-2 hidden group-hover:flex flex-col items-center pointer-events-none z-50 animate-in fade-in zoom-in-95 duration-150">
+                    <div className="bg-[#0B0E11]/95 backdrop-blur-xl border border-[#2B3139] text-[#EAECEF] text-xs px-3 py-1.5 rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.5)] whitespace-nowrap flex items-center gap-2">
+                      <span className="font-semibold text-[#FCD535]">
+                        {effectiveRolloutCount.toLocaleString()}
+                      </span>
+                      <span className="text-[#848E9C] text-[11px]">
+                        {audienceScope === "SELECTED" ? "accounts selected" : "accounts matching filter criteria"}
+                      </span>
+                      <span className="text-[#2B3139] text-[10px]">&bull;</span>
+                      <span className="text-[#EAECEF] text-[11px] font-mono tabular-nums">
+                        {effectiveRolloutTotalDueFormatted}
+                      </span>
+                    </div>
+                    {/* Tooltip Caret Arrow */}
+                    <div className="w-2.5 h-2.5 bg-[#0B0E11]/95 backdrop-blur-xl border-r border-b border-[#2B3139] rotate-45 -mt-1" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Matched Audience Rollout Queue Table (Consumes All Vertical Space) */}
+            <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-[#181A20]">
+              <div className="px-3.5 py-2 border-b border-[#2B3139] bg-[#1E2329] flex items-center justify-between gap-3 shrink-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-bold text-[#EAECEF]">Matched Audience Rollout Queue</span>
+                  <span className="text-[11px] text-[#848E9C]">
+                    ({ratepayerGroups.length.toLocaleString()} ratepayers &bull; {liveAudience.length.toLocaleString()} properties
+                    {multiPropertyRatepayersCount > 0 && ` &bull; ${multiPropertyRatepayersCount} multi-account portfolios`})
+                  </span>
+                </div>
+                <div className="flex items-center gap-2.5 shrink-0">
+                  {multiPropertyRatepayersCount > 0 && isHierarchicalView && (
+                    <button
+                      type="button"
+                      onClick={handleToggleCollapseAll}
+                      className="text-[11px] text-[#848E9C] hover:text-[#EAECEF] cursor-pointer"
+                    >
+                      {collapsedGroupKeys.size > 0 ? "Expand All" : "Collapse All"}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setIsHierarchicalView(!isHierarchicalView)}
+                    className={`h-6.5 px-2 rounded-md border text-[11px] font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                      isHierarchicalView
+                        ? "border-[#FCD535] bg-[#FCD535]/15 text-[#FCD535]"
+                        : "border-[#2B3139] bg-[#2B313A] text-[#848E9C] hover:text-[#EAECEF]"
+                    }`}
+                    title="Toggle between Ratepayer Portfolio Grouping and Flat Property rows"
+                  >
+                    <Users className="w-3 h-3" />
+                    <span>{isHierarchicalView ? "Hierarchical View" : "Flat View"}</span>
+                  </button>
+                  <div className="h-3 w-px bg-[#2B3139]" />
+                  <button
+                    type="button"
+                    onClick={() => setShowTemplateModal(true)}
+                    className="text-[11px] font-semibold text-[#FCD535] hover:underline cursor-pointer flex items-center gap-1"
+                  >
+                    <Edit3 className="w-3 h-3" />
+                    <span>Edit Template Body</span>
                   </button>
                 </div>
-
-                {/* Variable Tags Palette (Zero Pills - Clean typographic monospace tokens) */}
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] text-[#717171] font-medium">
-                      Insert {activeTemplateType === "BILLING" ? "Billing" : "Receipt"} Tokens:
-                    </span>
-                    <span className="text-[10px] text-[#717171]">
-                      {activeTemplateType === "BILLING" ? "Act 936 Compliant" : "Official GCR Standard"}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap gap-1">
-                    {dynamicTokens.map((item) => (
-                      <button
-                        key={item.tag}
-                        type="button"
-                        onClick={() => insertVariableTag(item.tag)}
-                        className="px-1.5 py-0.5 text-[10px] font-mono font-medium text-[#612D53] bg-[#F6ECF2]/60 border border-[#E8D4E2] rounded hover:bg-[#EAD6E4] transition-colors cursor-pointer"
-                        title={`Click to insert ${item.tag}`}
-                      >
-                        + {item.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <textarea
-                    value={currentTemplate}
-                    onClick={() => handleOpenTemplateModal(activeTemplateType)}
-                    onFocus={() => handleOpenTemplateModal(activeTemplateType)}
-                    readOnly
-                    rows={3}
-                    className="w-full p-2.5 rounded-lg border border-[#DADCE0] bg-[#FDFDFD] text-xs text-[#2C2C2C] focus:outline-none focus:border-[#612D53] resize-none leading-relaxed font-sans cursor-pointer hover:border-[#612D53]/60 transition-all"
-                  />
-                  <div className="flex items-center justify-between text-[10px] text-[#717171]">
-                    <span>
-                      Character Count: {currentTemplate.length} chars (approx. {Math.ceil(currentTemplate.length / 160)} SMS segment{Math.ceil(currentTemplate.length / 160) === 1 ? "" : "s"})
-                    </span>
-                    <span>
-                      {activeTemplateType === "BILLING" ? "Direct Payment Link Standard" : "Direct Scanned Leaf Link Standard"}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Statutory Due Date Setting & Action */}
-                {activeTemplateType === "BILLING" ? (
-                  <div className="pt-1.5 border-t border-[#F1F3F4] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5">
-                      <label className="text-[#717171] font-medium text-[11px] whitespace-nowrap">Due Date:</label>
-                      <input
-                        type="text"
-                        value={dueDate}
-                        onChange={(e) => setDueDate(e.target.value)}
-                        aria-label="Statutory bill due date"
-                        className="w-28 h-7.5 px-2 rounded-md border border-[#DADCE0] bg-white text-[11px] text-[#2C2C2C] focus:outline-none focus:border-[#612D53]"
-                        placeholder="30-Jun-2025"
-                      />
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={handleOpenAuthModal}
-                      disabled={isProcessing || unpaidTargets.length === 0}
-                      className="btn-3d-primary h-8 px-3.5 rounded-lg font-medium text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0"
-                    >
-                      <Send className="w-3.5 h-3.5" />
-                      <span>
-                        {isProcessing
-                          ? "Dispatching SMS..."
-                          : `Queue Rollout Notice (${unpaidTargets.length})`}
-                      </span>
-                    </button>
-                  </div>
-                ) : (
-                  <div className="pt-1.5 border-t border-[#F1F3F4] flex items-center justify-between text-xs">
-                    <span className="text-[11px] text-[#717171]">
-                      Dispatched automatically upon payment verification or via Ratepayer Dossier.
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleOpenTemplateModal("RECEIPT")}
-                      className="text-[11px] font-semibold text-[#612D53] hover:underline cursor-pointer"
-                    >
-                      Customize Receipt Notice &rarr;
-                    </button>
-                  </div>
-                )}
               </div>
-            </div>
 
-            {/* Right Column: Full-Height Standalone Smartphone Simulator (5 cols / ~42%) */}
-            <div className="lg:col-span-5 h-full flex flex-col justify-center items-center min-h-0 py-0 overflow-hidden">
-              {/* Standalone Smartphone Device Frame (Consumes available vertical height cleanly) */}
-              <div className="bg-[#1F1F1F] border-[4px] border-[#2C2C2C] rounded-[32px] shadow-2xl text-white max-w-[330px] w-full h-full max-h-full flex flex-col justify-between overflow-hidden relative font-sans ring-1 ring-black/40">
-                {/* Top Status Bar & Notch */}
-                <div className="bg-[#2C2C2C] px-3.5 pt-1.5 pb-1 flex items-center justify-between text-[10px] text-[#9AA0A6] shrink-0 border-b border-white/5">
-                  <span className="font-semibold text-white">9:41</span>
-                  {/* Dynamic Island / Speaker Pill */}
-                  <div className="w-14 h-3 bg-black rounded-full flex items-center justify-center">
-                    <div className="w-1.5 h-1.5 rounded-full bg-[#1A1A1A] mr-1" />
-                  </div>
-                  <span className="font-medium text-[#BDC1C6]">5G • 100%</span>
-                </div>
+              {/* Carousel Edge Fade Horizontal Scroll Container with Depth */}
+              <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
+                {/* Left Edge Fade Overlay with Depth */}
+                <div
+                  className={`pointer-events-none absolute left-0 top-0 bottom-0 w-8 z-30 transition-opacity duration-300 bg-gradient-to-r from-[#181A20] via-[#181A20]/50 to-transparent shadow-[inset_12px_0_16px_-6px_rgba(0,0,0,0.65)] ${
+                    canScrollLeft ? "opacity-100" : "opacity-0"
+                  }`}
+                />
 
-                {/* Baked-In Contact Bar & Interactive Account Switcher */}
-                <div className="bg-[#26282B] px-3 py-1.5 border-b border-white/10 shrink-0 space-y-1">
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-full bg-[#612D53] text-white flex items-center justify-center text-[11px] font-bold shrink-0 border border-white/20 shadow-inner">
-                      A
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold text-white truncate">Arnold (KKMA Revenue)</span>
-                        <span className="text-[10px] text-[#34A853] font-medium">&bull; Verified SMS</span>
-                      </div>
-                      <div className="text-[10px] text-[#9AA0A6] truncate">
-                        To: <strong className="text-[#E8EAED]">{previewData.recipientName}</strong> &bull; {previewData.recipientPhone}
-                      </div>
-                    </div>
-                  </div>
+                {/* Right Edge Fade Overlay with Depth */}
+                <div
+                  className={`pointer-events-none absolute right-0 top-0 bottom-0 w-10 z-30 transition-opacity duration-300 bg-gradient-to-l from-[#181A20] via-[#181A20]/50 to-transparent shadow-[inset_-12px_0_16px_-6px_rgba(0,0,0,0.65)] ${
+                    canScrollRight ? "opacity-100" : "opacity-0"
+                  }`}
+                />
 
-                  {/* Embedded Account Selector Switcher */}
-                  {eligibleProperties.length > 0 && (
-                    <div className="flex items-center gap-1 bg-[#1C1D1F] p-0.5 px-1.5 rounded border border-white/10">
-                      <span className="text-[9px] text-[#9AA0A6] shrink-0 font-medium">Previewing:</span>
-                      <select
-                        value={previewAccountIndex}
-                        onChange={(e) => setPreviewAccountIndex(Number(e.target.value))}
-                        aria-label="Select account to preview in handset"
-                        className="w-full text-[10px] font-semibold text-[#8AB4F8] bg-transparent border-none focus:outline-none cursor-pointer truncate"
-                      >
-                        {eligibleProperties.slice(0, 100).map((p, idx) => (
-                          <option key={p.id} value={idx} className="bg-[#2C2C2C] text-white">
-                            {p.accountNumber} — {p.ownerName} ({p.totalAmountDueFormatted})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                </div>
+                <div
+                  ref={tableContainerRef}
+                  onScroll={handleCombinedAudienceScroll}
+                  className="flex-1 min-h-0 overflow-y-auto overflow-x-auto"
+                >
+                  <table className="w-full text-left text-xs border-collapse">
+                  <thead className="bg-[#1E2329] border-b border-[#2B3139] text-[#848E9C] font-semibold text-[11px] sticky top-0 z-20 shadow-xs">
+                    <tr>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#1E2329] w-10 text-center border-l-4 border-[#1E2329]">
+                        <input
+                          type="checkbox"
+                          checked={audienceScope === "SELECTED" && liveAudience.length > 0 && selectedSpecificAccounts.length === liveAudience.length}
+                          ref={(el) => {
+                            if (el) {
+                              el.indeterminate = selectedSpecificAccounts.length > 0 && selectedSpecificAccounts.length < liveAudience.length;
+                            }
+                          }}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedSpecificAccounts(liveAudience);
+                              setAudienceScope("SELECTED");
+                            } else {
+                              setSelectedSpecificAccounts([]);
+                              setAudienceScope("DATABASE_FILTER");
+                            }
+                          }}
+                          className="w-3.5 h-3.5 rounded border-[#2B3139] text-[#FCD535] focus:ring-[#FCD535] accent-[#FCD535] cursor-pointer"
+                        />
+                      </th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#1E2329]">Account No</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#1E2329]">Name</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#1E2329]">Telephone</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#1E2329]">ID</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#1E2329]">Owner Digital Address</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#1E2329]">House No</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#1E2329]">Plot No</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#1E2329]">Valuation No</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#1E2329]">Municipality</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#1E2329]">Property Cat</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#1E2329]">Bill Year</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#1E2329]">Bill Date</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#1E2329]">Rateable Value</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#1E2329]">Rate Imposed</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#1E2329]">Previous Year Bill</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#1E2329]">Amount Paid</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#1E2329]">Arrears</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#1E2329]">Current Bill</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#1E2329]">Bill Amount</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#1E2329]">Electoral Area</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#1E2329]">Outstanding Amt</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#2B3139] bg-[#181A20]">
+                    {liveAudience.length === 0 ? (
+                      <tr>
+                        <td colSpan={22} className="py-12 text-center text-[#848E9C] italic text-xs">
+                          No properties match the selected audience filters.
+                        </td>
+                      </tr>
+                    ) : isHierarchicalView ? (
+                      ratepayerGroups.map((group) => {
+                        const groupPropIds = group.properties.map((p) => p.id || p.accountNumber);
+                        const selectedInGroup = group.properties.filter((p) =>
+                          selectedSpecificAccounts.some((sel) => (sel.id || sel.accountNumber) === (p.id || p.accountNumber))
+                        );
+                        const isAllGroupSelected =
+                          selectedInGroup.length === group.properties.length && group.properties.length > 0;
+                        const isSomeGroupSelected = selectedInGroup.length > 0 && !isAllGroupSelected;
+                        const isExpanded = !collapsedGroupKeys.has(group.key);
 
-                {/* Fluid SMS Thread Body */}
-                <div className="flex-1 min-h-0 p-2.5 overflow-y-auto space-y-2 bg-[#121314]">
-                  <div className="text-center text-[9px] text-[#80868B] py-0.5">
-                    <span>Statutory Notice &bull; Today 9:41 AM</span>
-                  </div>
+                        if (group.isMultiProperty) {
+                          return (
+                            <Fragment key={`group-frag-${group.key}`}>
+                              {/* Ratepayer Portfolio Group Header */}
+                              <tr
+                                className="bg-[#1E2329] border-t border-b border-[#2B3139] transition-colors select-none hover:bg-[#2B313A]/50"
+                              >
+                                <td className="py-2.5 px-3 text-center w-10 border-l-4 border-[#FCD535]">
+                                  <input
+                                    type="checkbox"
+                                    checked={isAllGroupSelected}
+                                    ref={(el) => {
+                                      if (el) el.indeterminate = isSomeGroupSelected;
+                                    }}
+                                    onChange={(e) => {
+                                      e.stopPropagation();
+                                      if (isAllGroupSelected) {
+                                        setSelectedSpecificAccounts((prev) => {
+                                          const idSet = new Set(groupPropIds);
+                                          const remaining = prev.filter(
+                                            (p) => !idSet.has(p.id || p.accountNumber)
+                                          );
+                                          if (remaining.length === 0) setAudienceScope("DATABASE_FILTER");
+                                          return remaining;
+                                        });
+                                      } else {
+                                        setSelectedSpecificAccounts((prev) => {
+                                          const prevIds = new Set(prev.map((p) => p.id || p.accountNumber));
+                                          const toAdd = group.properties.filter(
+                                            (p) => !prevIds.has(p.id || p.accountNumber)
+                                          );
+                                          return [...prev, ...toAdd];
+                                        });
+                                        setAudienceScope("SELECTED");
+                                      }
+                                    }}
+                                    className="w-3.5 h-3.5 rounded border-[#2B3139] text-[#FCD535] focus:ring-[#FCD535] accent-[#FCD535] cursor-pointer"
+                                  />
+                                </td>
+                                <td colSpan={20} className="py-2 px-3">
+                                  <div
+                                    onClick={() => toggleGroupCollapse(group.key)}
+                                    className="flex items-center gap-2 flex-wrap cursor-pointer"
+                                  >
+                                    <div className="relative">
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              toggleGroupCollapse(group.key);
+                                            }}
+                                            className="w-5 h-5 rounded border border-[#2B3139] bg-[#1E2329] text-[#EAECEF] hover:bg-[#2B313A] hover:border-[#FCD535] flex items-center justify-center transition-colors shrink-0 shadow-2xs cursor-pointer"
+                                          >
+                                            <motion.div
+                                              animate={{ rotate: isExpanded ? 0 : -90 }}
+                                              transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                                              className="flex items-center justify-center"
+                                            >
+                                              <ChevronDown className="w-3.5 h-3.5 text-[#EAECEF]" />
+                                            </motion.div>
+                                          </button>
+                                          {isExpanded && (
+                                            <div className="absolute left-[9.5px] top-full h-2.5 w-px border-l border-dashed border-[#2B3139]" />
+                                          )}
+                                        </div>
+                                      <span className="font-bold text-xs text-[#EAECEF]">
+                                        {group.ownerName}
+                                      </span>
+                                      <span className="text-[11px] font-mono text-[#848E9C]">
+                                        &bull; {cleanDash(group.phone)}
+                                      </span>
 
-                  {/* SMS Bubble */}
-                  <div className="bg-[#2B2D30] text-white p-2.5 rounded-2xl rounded-tl-xs text-xs leading-relaxed space-y-2 shadow-lg border border-white/10">
-                    <p className="whitespace-pre-line text-[#F1F3F4] text-[11px] leading-relaxed">
-                      {previewData.message}
-                    </p>
+                                      <span className="text-[#2B3139] mx-0.5">|</span>
+                                      <span className="text-[11px] font-semibold text-[#EAECEF]">
+                                        {group.properties.length} Accounts
+                                      </span>
 
-                    {/* Highlighted Direct Payment Action Card */}
-                    {/* Highlighted Citizen Touchpoint Action Card */}
-                    <div className="space-y-1 pt-1.5 border-t border-white/10">
-                      <span className="text-[9px] uppercase text-[#9AA0A6] font-semibold tracking-wider block">
-                        Citizen Touchpoint:
-                      </span>
+                                      {group.totalArrears > 0 && (
+                                        <>
+                                          <span className="text-[#2B3139] mx-0.5">|</span>
+                                          <span className="text-[11px] font-semibold text-[#F6465D]">
+                                            Arrears: GH₵{" "}
+                                            {group.totalArrears.toLocaleString("en-US", {
+                                              minimumFractionDigits: 2,
+                                            })}
+                                          </span>
+                                        </>
+                                      )}
+                                  </div>
+                                </td>
+                                <td
+                                  onClick={() => toggleGroupCollapse(group.key)}
+                                  className="py-2.5 px-3 text-right whitespace-nowrap font-bold text-xs text-[#EAECEF] tabular-nums cursor-pointer relative"
+                                >
+                                  {isExpanded && (
+                                    <div className="absolute left-3 bottom-0 h-2.5 w-px border-l border-dashed border-[#2B3139]" />
+                                  )}
+                                  GH₵{" "}
+                                  {group.totalAmountDue.toLocaleString("en-US", {
+                                    minimumFractionDigits: 2,
+                                  })}
+                                </td>
+                              </tr>
 
-                      {activeTemplateType === "BILLING" ? (
-                        <>
-                          {/* Direct In-App Payment Gateway */}
-                          <a
-                            href={previewData.paymentLink}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="block p-1.5 rounded-md bg-[#81C995]/20 hover:bg-[#81C995]/30 transition-colors text-[10px] text-[#81C995] flex items-center justify-between font-medium cursor-pointer"
+                              {/* Child Property Rows with Smooth Apple-like Drawer Animation */}
+                              <AnimatePresence initial={false}>
+                                {isExpanded &&
+                                  group.properties.map((prop, idx) => {
+                                    const isSelected = selectedSpecificAccounts.some(
+                                      (p) =>
+                                        (p.id || p.accountNumber) ===
+                                        (prop.id || prop.accountNumber)
+                                    );
+                                    const isLast = idx === group.properties.length - 1;
+
+                                    return (
+                                      <motion.tr
+                                        key={prop.id || prop.accountNumber}
+                                        initial={{ opacity: 0, y: -4 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -4 }}
+                                        transition={{
+                                          duration: 0.2,
+                                          ease: [0.16, 1, 0.3, 1],
+                                          delay: idx * 0.02,
+                                        }}
+                                        onClick={() => {
+                                          if (isSelected) {
+                                            setSelectedSpecificAccounts((prev) => {
+                                              const newSelection = prev.filter(
+                                                (p) =>
+                                                  (p.id || p.accountNumber) !==
+                                                  (prop.id || prop.accountNumber)
+                                              );
+                                              if (newSelection.length === 0)
+                                                setAudienceScope("DATABASE_FILTER");
+                                              return newSelection;
+                                            });
+                                          } else {
+                                            setSelectedSpecificAccounts((prev) => [...prev, prop]);
+                                            setAudienceScope("SELECTED");
+                                          }
+                                        }}
+                                        className={`transition-colors cursor-pointer border-b border-[#2B3139] ${
+                                          isSelected ? "bg-[#2B313A]" : "bg-[#0B0E11] hover:bg-[#2B313A]/40"
+                                        }`}
+                                      >
+                                      <td className="py-2.5 px-3 text-center w-10 border-l-4 border-transparent">
+                                        <input
+                                          type="checkbox"
+                                          checked={isSelected}
+                                          readOnly
+                                          className="w-3.5 h-3.5 rounded border-[#2B3139] text-[#FCD535] focus:ring-[#FCD535] accent-[#FCD535] cursor-pointer pointer-events-none"
+                                        />
+                                      </td>
+                                      <td className="py-2.5 px-3 whitespace-nowrap font-mono font-bold text-[#FCD535] text-[11px] relative">
+                                        {/* Tree Guide Lines: Continuous Vertical Line & Horizontal Branch */}
+                                        <div
+                                          className={`absolute left-[22px] w-px border-l border-dashed border-[#2B3139] ${
+                                            isLast ? "top-0 h-1/2" : "top-0 h-full"
+                                          }`}
+                                        />
+                                        <div className="absolute left-[22px] top-1/2 w-4 border-t border-dashed border-[#2B3139]" />
+                                        <span className="pl-8 inline-block font-mono font-bold text-[#FCD535] text-[11px]">
+                                          {cleanDash(prop.accountNumber)}
+                                        </span>
+                                      </td>
+                                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] max-w-[150px] truncate">{cleanDash(prop.ownerName)}</td>
+                                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.ownerPhone)}</td>
+                                      <td className="py-2.5 px-3 whitespace-nowrap font-mono font-medium text-[11px] text-[#EAECEF]">{cleanDash(prop.id)}</td>
+                                      <td className="py-2.5 px-3 whitespace-nowrap font-mono font-medium text-[11px] text-[#EAECEF]">{cleanDash(prop.ownerDigitalAddress)}</td>
+                                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.houseNo)}</td>
+                                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.plotNo)}</td>
+                                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.valuationNo)}</td>
+                                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.municipality)}</td>
+                                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.propertyClassification)}</td>
+                                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{prop.billYear || "—"}</td>
+                                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{prop.billDateFormatted || "—"}</td>
+                                      <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums">{prop.rateableValueFormatted || "—"}</td>
+                                      <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums">{prop.rateImposed ?? "—"}</td>
+                                      <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums">{prop.previousYearBillFormatted || "—"}</td>
+                                      <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums">GH₵ {(Number(prop.amountPaidLastYear || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                                      <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums"><span className={prop.arrears > 0 ? "text-[#F6465D] font-semibold" : ""}>{prop.arrearsFormatted || "—"}</span></td>
+                                      <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums">GH₵ {(Number(prop.currentFee || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                                      <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums">GH₵ {(Number(prop.totalAmountDue || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.electoralArea)}</td>
+                                      <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] text-[#848E9C] tabular-nums font-normal relative">
+                                        {/* Tree Guide Lines for Outstanding Amt */}
+                                        <div
+                                          className={`absolute left-3 w-px border-l border-dashed border-[#2B3139] ${
+                                            isLast ? "top-0 h-1/2" : "top-0 h-full"
+                                          }`}
+                                        />
+                                        <div className="absolute left-3 top-1/2 w-3 border-t border-dashed border-[#2B3139]" />
+                                        <span>
+                                          GH₵ {(Number(prop.totalAmountDue || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                                        </span>
+                                      </td>
+                                    </motion.tr>
+                                      );
+                                    })}
+                              </AnimatePresence>
+                            </Fragment>
+                          );
+                        }
+
+                        // Single property ratepayer (standard row)
+                        const prop = group.properties[0];
+                        if (!prop) return null;
+                        const isSelected = selectedSpecificAccounts.some(
+                          (p) => (p.id || p.accountNumber) === (prop.id || prop.accountNumber)
+                        );
+
+                        return (
+                          <tr
+                            key={prop.id || prop.accountNumber}
+                            onClick={() => {
+                              if (isSelected) {
+                                setSelectedSpecificAccounts((prev) => {
+                                  const newSelection = prev.filter(
+                                    (p) =>
+                                      (p.id || p.accountNumber) !==
+                                      (prop.id || prop.accountNumber)
+                                  );
+                                  if (newSelection.length === 0) setAudienceScope("DATABASE_FILTER");
+                                  return newSelection;
+                                });
+                              } else {
+                                setSelectedSpecificAccounts((prev) => [...prev, prop]);
+                                setAudienceScope("SELECTED");
+                              }
+                            }}
+                            className={`transition-colors cursor-pointer ${isSelected ? "bg-[#2B313A]" : "bg-[#181A20] hover:bg-[#2B313A]/40"}`}
                           >
-                            <span className="flex items-center gap-1.5">
-                              <CreditCard className="w-3 h-3 text-[#81C995]" />
-                              <span>Direct In-App Payment Gateway</span>
-                            </span>
-                            <ExternalLink className="w-2.5 h-2.5 text-[#81C995]" />
-                          </a>
+                            <td className="py-2.5 px-3 text-center w-10 border-l-4 border-transparent">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                readOnly
+                                className="w-3.5 h-3.5 rounded border-[#2B3139] text-[#FCD535] focus:ring-[#FCD535] accent-[#FCD535] cursor-pointer pointer-events-none"
+                              />
+                            </td>
+                            <td className="py-2.5 px-3 whitespace-nowrap font-mono font-bold text-[#FCD535] text-[11px]">{cleanDash(prop.accountNumber)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] max-w-[150px] truncate">{cleanDash(prop.ownerName)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.ownerPhone)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap font-mono font-medium text-[11px] text-[#EAECEF]">{cleanDash(prop.id)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap font-mono font-medium text-[11px] text-[#EAECEF]">{cleanDash(prop.ownerDigitalAddress)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.houseNo)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.plotNo)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.valuationNo)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.municipality)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.propertyClassification)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.billYear)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.billDateFormatted)}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums">{prop.rateableValueFormatted || "—"}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums">{prop.rateImposed ?? "—"}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums">{prop.previousYearBillFormatted || "—"}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums">GH₵ {(Number(prop.amountPaidLastYear || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums"><span className={prop.arrears > 0 ? "text-[#F6465D] font-semibold" : ""}>{prop.arrearsFormatted || "—"}</span></td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums">GH₵ {(Number(prop.currentFee || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums">GH₵ {(Number(prop.totalAmountDue || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.electoralArea)}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap font-bold text-[#EAECEF] text-[11px] tabular-nums">GH₵ {(Number(prop.totalAmountDue || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                          </tr>
+                        );
+                      })
+                    ) : (
+                      liveAudience.map((prop) => {
+                        const isSelected = selectedSpecificAccounts.some(
+                          (p) => (p.id || p.accountNumber) === (prop.id || prop.accountNumber)
+                        );
 
-                          {/* Optional View Digital Assessment (if included in custom template) */}
-                          {previewData.message.includes(previewData.billLink) && (
-                            <a
-                              href={previewData.billLink}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="block p-1.5 rounded-md bg-white/10 hover:bg-white/15 transition-colors text-[10px] text-[#8AB4F8] flex items-center justify-between font-medium cursor-pointer"
-                            >
-                              <span className="flex items-center gap-1.5">
-                                <FileText className="w-3 h-3 text-[#8AB4F8]" />
-                                <span>View Digital Assessment</span>
-                              </span>
-                              <ExternalLink className="w-2.5 h-2.5 text-[#8AB4F8]" />
-                            </a>
-                          )}
-                        </>
-                      ) : (
-                        /* Direct Official Receipt & Scanned Copy Gateway */
-                        <a
-                          href={previewData.receiptLink}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="block p-1.5 rounded-md bg-[#81C995]/20 hover:bg-[#81C995]/30 transition-colors text-[10px] text-[#81C995] flex items-center justify-between font-medium cursor-pointer"
-                        >
-                          <span className="flex items-center gap-1.5">
-                            <FileText className="w-3 h-3 text-[#81C995]" />
-                            <span>View Official Stamped Receipt &amp; Scanned Leaf</span>
-                          </span>
-                          <ExternalLink className="w-2.5 h-2.5 text-[#81C995]" />
-                        </a>
-                      )}
-                    </div>
-                  </div>
+                        return (
+                          <tr 
+                            key={prop.id || prop.accountNumber} 
+                            onClick={() => {
+                              if (isSelected) {
+                                setSelectedSpecificAccounts((prev) => {
+                                  const newSelection = prev.filter(p => (p.id || p.accountNumber) !== (prop.id || prop.accountNumber));
+                                  if (newSelection.length === 0) setAudienceScope("DATABASE_FILTER");
+                                  return newSelection;
+                                });
+                              } else {
+                                setSelectedSpecificAccounts((prev) => [...prev, prop]);
+                                setAudienceScope("SELECTED");
+                              }
+                            }}
+                            className={`transition-colors cursor-pointer ${isSelected ? 'bg-[#2B313A] text-[#EAECEF]' : 'hover:bg-[#2B313A]/60'}`}
+                          >
+                            <td className="py-2.5 px-3 text-center w-10 border-l-4 border-transparent">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                readOnly
+                                className="w-3.5 h-3.5 rounded border-[#2B3139] text-[#FCD535] focus:ring-[#FCD535] accent-[#FCD535] cursor-pointer pointer-events-none"
+                              />
+                            </td>
+                            <td className="py-2.5 px-3 whitespace-nowrap font-mono font-bold text-[#FCD535] text-[11px]">{cleanDash(prop.accountNumber)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] max-w-[150px] truncate">{cleanDash(prop.ownerName)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.ownerPhone)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap font-mono font-medium text-[11px] text-[#EAECEF]">{cleanDash(prop.id)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap font-mono font-medium text-[11px] text-[#EAECEF]">{cleanDash(prop.ownerDigitalAddress)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.houseNo)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.plotNo)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.valuationNo)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.municipality)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.propertyClassification)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.billYear)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.billDateFormatted)}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums">{prop.rateableValueFormatted || "—"}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums">{prop.rateImposed ?? "—"}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums">{prop.previousYearBillFormatted || "—"}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums">GH₵ {(Number(prop.amountPaidLastYear || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums"><span className={prop.arrears > 0 ? "text-[#F6465D] font-semibold" : ""}>{prop.arrearsFormatted || "—"}</span></td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums">GH₵ {(Number(prop.currentFee || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums">GH₵ {(Number(prop.totalAmountDue || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.electoralArea)}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap font-bold text-[#EAECEF] text-[11px] tabular-nums">GH₵ {(Number(prop.totalAmountDue || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                          </tr>
+                        );
+                      })
+                    )}
 
-                  <div className="text-right text-[9px] text-[#80868B] pr-1">
-                    <span>Delivered &bull; Encrypted Token</span>
-                  </div>
-                </div>
+                    {/* Endless Scroll Loading Skeleton Rows — matches Cadastre table pattern */}
+                    {isLoadingMoreAudience && (
+                      <>
+                        {[...Array(6)].map((_, i) => (
+                          <tr key={`sms-skel-${i}`} className="animate-pulse border-b border-[#2B3139]">
+                            <td className="py-2.5 px-3">
+                              <div className="w-4 h-4 rounded bg-[#2B3139] mx-auto" />
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <div className="h-3 bg-[#2B3139] rounded w-28" />
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <div className="h-3 bg-[#2B3139] rounded w-32" />
+                              <div className="h-2.5 bg-[#2B313A] rounded w-24 mt-1" />
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <div className="h-3 bg-[#2B3139] rounded w-24" />
+                            </td>
+                            {[...Array(18)].map((_, j) => (
+                              <td key={j} className="py-2.5 px-3">
+                                <div className="h-3 bg-[#2B313A] rounded w-16" />
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </>
+                    )}
 
-                {/* Bottom Native Mobile Bar & Home Indicator */}
-                <div className="bg-[#26282B] px-3 pt-1.5 pb-1 border-t border-white/10 shrink-0 space-y-0.5">
-                  <div className="flex items-center justify-between bg-[#1C1D1F] px-2.5 py-1 rounded-full border border-white/10 text-[9px] text-[#9AA0A6]">
-                    <span>Text Message &bull; SMS Delivery</span>
-                    <div className="w-3.5 h-3.5 rounded-full bg-[#612D53] flex items-center justify-center text-white">
-                      <Send className="w-2 h-2" />
-                    </div>
-                  </div>
-                  {/* iOS/Android Home Indicator Bar */}
-                  <div className="w-20 h-1 bg-white/30 rounded-full mx-auto mt-1" />
-                </div>
+                    {/* Endless Scroll Sentinel Row */}
+                    <tr ref={audienceSentinelRef} className="h-2 pointer-events-none" />
+
+                    {/* Clean End-of-Roll Marker */}
+                    {!hasMoreAudience && liveAudience.length > 0 && (
+                      <tr className="border-t border-[#2B3139] bg-[#1E2329]">
+                        <td colSpan={22} className="py-3 text-center text-[11px] font-medium text-[#848E9C]">
+                          &bull; End of audience roll ({(totalAudienceCount || liveAudience.length).toLocaleString()} properties loaded)
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
-            </div>
-          </div>
-
-          {/* Persistent Floating Edge Arrow Tab for Logs (Desktop Only) */}
-          <div className="hidden lg:flex absolute right-0 top-1/2 -translate-y-1/2 z-30">
-            <div className="relative group flex items-center justify-end">
-              {/* Hover Tooltip Label (Positioned absolutely so it takes 0 layout space) */}
-              <div className="absolute right-full mr-2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-[#2C2C2C] text-white text-[11px] font-medium px-2.5 py-1.5 rounded-lg shadow-xl border border-white/10 whitespace-nowrap z-40">
-                SMS Delivery Logs ({smsLogs.length})
-              </div>
-
-              {/* Pure Arrow Button */}
-              <button
-                type="button"
-                onClick={() => setActiveView("LOGS")}
-                className="bg-[#612D53] text-white p-3 rounded-l-xl shadow-xl flex items-center justify-center hover:bg-[#4E2442] active:scale-95 transition-all cursor-pointer border-y border-l border-white/20"
-                aria-label={`View SMS Delivery Logs (${smsLogs.length})`}
-              >
-                <ChevronRight className="w-4 h-4 text-white group-hover:translate-x-0.5 transition-transform" />
-              </button>
             </div>
           </div>
         </div>
+      </div>
+    </div>
 
-        {/* PANE 2: TRANSACTIONAL SMS DISPATCH & DELIVERY LOG (50% of track = 100% viewport) */}
-        <div className="w-1/2 h-full flex flex-col min-h-0 p-3 overflow-hidden relative">
-          <div className="h-full flex flex-col bg-white border border-[#DADCE0] rounded-xl overflow-hidden shadow-sm">
-            {/* Header */}
-            <div className="p-3 border-b border-[#DADCE0] flex items-center justify-between gap-3 shrink-0">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <button
-                  type="button"
-                  onClick={() => setActiveView("SIMULATOR")}
-                  className="h-7.5 px-2.5 rounded-lg border border-[#DADCE0] text-xs font-semibold text-[#612D53] hover:bg-[#F6ECF2] transition-colors flex items-center gap-1 cursor-pointer shrink-0 whitespace-nowrap"
-                >
-                  <ChevronLeft className="w-3.5 h-3.5" />
-                  <span>Back to Engine</span>
-                </button>
-                <div className="min-w-0">
-                  <h3 className="text-xs font-semibold text-[#2C2C2C] truncate">
-                    Transactional SMS Dispatch &amp; Delivery Ledger
-                  </h3>
-                  <p className="text-[11px] text-[#717171] truncate">
-                    Historical record of all billing notifications &amp; demand notices dispatched via Arkesel Gateway.
-                  </p>
-                </div>
-              </div>
-
-              <span className="text-[11px] text-[#717171] font-medium shrink-0 whitespace-nowrap">
-                {smsLogs.length} total transmission{smsLogs.length === 1 ? "" : "s"}
-              </span>
-            </div>
-
-            {/* Table Container - Fixed 100% Viewport, Zero Horizontal Scroll */}
-            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
-              <table className="table-fixed w-full text-left text-xs border-collapse">
-                <thead className="bg-[#F8F9FA] border-b border-[#DADCE0] text-[#717171] font-semibold text-[11px] sticky top-0 z-10">
-                  <tr>
-                    <th className="py-2.5 px-3 w-[18%]">Timestamp</th>
-                    <th className="py-2.5 px-3 w-[26%]">Recipient Particulars</th>
-                    <th className="py-2.5 px-3 w-[18%]">Notice Type</th>
-                    <th className="py-2.5 px-3 w-[24%]">Message Preview</th>
-                    <th className="py-2.5 px-3 w-[14%] text-center">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#E8EAED] bg-white">
-                  {smsLogs.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="py-12 text-center text-[#717171] italic font-normal">
-                        No SMS dispatches queued or sent yet. Trigger a rollout above to populate logs.
-                      </td>
-                    </tr>
-                  ) : (
-                    smsLogs.map((log) => (
-                      <tr key={log.id} className="hover:bg-[#F8F9FA] transition-colors">
-                        <td className="py-2.5 px-3 text-[#717171] text-[11px] align-top">
-                          <span className="font-medium text-[#2C2C2C] block">
-                            {log.createdAtFormatted.split(",")[0]}
-                          </span>
-                          <span className="text-[10px] text-[#717171]">
-                            {log.createdAtFormatted.split(",")[1] || ""}
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-3 align-top min-w-0">
-                          <span className="font-medium text-[#2C2C2C] text-[11px] block truncate" title={log.recipientName}>
-                            {log.recipientName}
-                          </span>
-                          <span className="text-[10px] text-[#717171] font-mono block truncate">
-                            {log.recipientPhone}
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-3 align-top min-w-0">
-                          <span className="font-medium text-[#2C2C2C] text-[11px] block truncate" title={log.title}>
-                            {log.title}
-                          </span>
-                          <span className="text-[10px] text-[#612D53] font-medium block">
-                            SMS Delivery
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-3 text-[#717171] text-[11px] align-top min-w-0">
-                          <p className="truncate" title={log.message}>
-                            {log.message.replace(/\n+/g, " ")}
-                          </p>
-                        </td>
-                        <td className="py-2.5 px-3 text-center align-top">
-                          <span
-                            className={`font-semibold text-[11px] block ${log.deliveryStatus === "DELIVERED"
-                                ? "text-[#188038]"
-                                : log.deliveryStatus === "PENDING"
-                                  ? "text-[#B45309]"
-                                  : "text-[#D93025]"
-                              }`}
-                          >
-                            {log.deliveryStatus === "DELIVERED" ? "Delivered" : log.deliveryStatus === "PENDING" ? "Queued" : "Failed"}
-                          </span>
-                          {log.externalMessageId && (
-                            <span
-                              className="text-[9px] text-[#717171] font-mono block truncate max-w-[100px] mx-auto mt-0.5"
-                              title={`Arkesel Gateway ID: ${log.externalMessageId}`}
-                            >
-                              {log.externalMessageId.substring(0, 10)}...
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Table Footer Status Bar */}
-            <div className="px-4 py-2 border-t border-[#DADCE0] bg-[#F8F9FA] flex items-center justify-between text-xs text-[#717171] shrink-0">
-              <span>Arkesel E.164 SMS Outbound Dispatch Service</span>
-              <span>{smsLogs.length} total entries</span>
-            </div>
-          </div>
-
-          {/* Persistent Floating Edge Arrow Tab to Switch back to Simulator (Desktop Only) */}
-          <div className="hidden lg:flex absolute left-0 top-1/2 -translate-y-1/2 z-30">
-            <div className="relative group flex items-center">
-              {/* Pure Arrow Button */}
+        {/* PANE 2: DELIVERY LOGS */}
+        <div className="w-1/2 h-full flex flex-col min-h-0 p-0 overflow-hidden relative">
+          <div className="h-full flex flex-col bg-[#181A20] border-0 rounded-none overflow-hidden shadow-none">
+            <div className="p-3 border-b border-[#2B3139] flex items-center justify-between gap-3 shrink-0">
               <button
                 type="button"
                 onClick={() => setActiveView("SIMULATOR")}
-                className="bg-[#612D53] text-white p-3 rounded-r-xl shadow-xl flex items-center justify-center hover:bg-[#4E2442] active:scale-95 transition-all cursor-pointer border-y border-r border-white/20"
-                aria-label="Back to SMS Rollout Engine"
+                className="h-7.5 px-2.5 rounded-lg border border-[#2B3139] text-xs font-semibold text-[#EAECEF] bg-[#1E2329] hover:bg-[#2B313A] transition-colors flex items-center gap-1 cursor-pointer"
               >
-                <ChevronLeft className="w-4 h-4 text-white group-hover:-translate-x-0.5 transition-transform" />
+                <ChevronLeft className="w-3.5 h-3.5" />
+                <span>Back to Engine</span>
               </button>
+              <span className="text-xs text-[#848E9C]">{logsList.length} total entries</span>
+            </div>
 
-              {/* Hover Tooltip Label (Positioned absolutely so it takes 0 layout space) */}
-              <div className="absolute left-full ml-2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-[#2C2C2C] text-white text-[11px] font-medium px-2.5 py-1.5 rounded-lg shadow-xl border border-white/10 whitespace-nowrap z-40">
-                Back to Rollout Engine
+            {/* Delivery Logs Carousel Edge Fade Container with Depth */}
+            <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
+              {/* Left Edge Fade Overlay with Depth */}
+              <div
+                className={`pointer-events-none absolute left-0 top-0 bottom-0 w-8 z-30 transition-opacity duration-300 bg-gradient-to-r from-[#181A20] via-[#181A20]/50 to-transparent shadow-[inset_12px_0_16px_-6px_rgba(0,0,0,0.65)] ${
+                  canLogsScrollLeft ? "opacity-100" : "opacity-0"
+                }`}
+              />
+
+              {/* Right Edge Fade Overlay with Depth */}
+              <div
+                className={`pointer-events-none absolute right-0 top-0 bottom-0 w-10 z-30 transition-opacity duration-300 bg-gradient-to-l from-[#181A20] via-[#181A20]/50 to-transparent shadow-[inset_-12px_0_16px_-6px_rgba(0,0,0,0.65)] ${
+                  canLogsScrollRight ? "opacity-100" : "opacity-0"
+                }`}
+              />
+
+              <div
+                ref={logsTableContainerRef}
+                onScroll={handleCombinedLogsScroll}
+                className="flex-1 min-h-0 overflow-y-auto overflow-x-auto"
+              >
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[#1E2329] border-b border-[#2B3139] text-[#848E9C] sticky top-0">
+                    <tr>
+                      <th className="py-2.5 px-3">Timestamp</th>
+                      <th className="py-2.5 px-3">Recipient</th>
+                      <th className="py-2.5 px-3">Notice</th>
+                      <th className="py-2.5 px-3 text-center">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#2B3139]">
+                    {logsList.map((log) => (
+                      <tr key={log.id}>
+                        <td className="py-2.5 px-3 text-xs font-medium text-[#EAECEF]">{log.createdAtFormatted}</td>
+                        <td className="py-2.5 px-3 text-xs font-semibold text-[#EAECEF]">{log.recipientName} ({log.recipientPhone})</td>
+                        <td className="py-2.5 px-3 text-xs text-[#EAECEF] font-medium truncate max-w-xs">{log.message}</td>
+                        <td className={`py-2.5 px-3 text-center text-xs font-bold ${log.deliveryStatus === "DELIVERED" ? "text-[#0ECB81]" : log.deliveryStatus === "FAILED" ? "text-[#F6465D]" : "text-[#FCD535]"}`}>{log.deliveryStatus}</td>
+                      </tr>
+                    ))}
+                    {/* Logs Loading Skeleton Rows — matches Cadastre table pattern */}
+                    {isLoadingMoreLogs && (
+                      <>
+                        {[...Array(4)].map((_, i) => (
+                          <tr key={`log-skel-${i}`} className="animate-pulse border-b border-[#2B3139]">
+                            <td className="py-2.5 px-3">
+                              <div className="h-3 bg-[#2B3139] rounded w-24" />
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <div className="h-3 bg-[#2B3139] rounded w-36" />
+                              <div className="h-2.5 bg-[#2B313A] rounded w-28 mt-1" />
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <div className="h-3 bg-[#2B313A] rounded w-48" />
+                            </td>
+                            <td className="py-2.5 px-3 text-center">
+                              <div className="h-3 bg-[#2B3139] rounded w-16 mx-auto" />
+                            </td>
+                          </tr>
+                        ))}
+                      </>
+                    )}
+                    <tr ref={logsSentinelRef} className="h-2 pointer-events-none" />
+                    {!hasMoreLogs && logsList.length > 0 && (
+                      <tr className="bg-[#1E2329] border-t border-[#2B3139]">
+                        <td colSpan={4} className="py-3 text-center text-[11px] font-medium text-[#848E9C]">
+                          &bull; End of dispatch delivery history ({logsList.length} entries loaded)
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
         </div>
       </motion.div>
 
-      {/* SMS MESSAGE TEMPLATE FOCUS & EDIT MODAL */}
-      <AnimatePresence>
-        {showTemplateModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs font-sans">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="bg-white rounded-2xl border border-[#DADCE0] shadow-2xl p-5 max-w-2xl w-full space-y-3.5 flex flex-col max-h-[92vh] overflow-hidden"
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between pb-2.5 border-b border-[#F1F3F4] shrink-0">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-[#F6ECF2] text-[#612D53] flex items-center justify-center shrink-0">
-                    <MessageSquare className="w-4 h-4 text-[#612D53]" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-semibold text-[#2C2C2C]">
-                      SMS Message Template Editor
-                    </h3>
-                    <p className="text-[11px] text-[#717171]">
-                      Customize statutory billing notice or official payment receipt template with live dynamic tokens.
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setShowTemplateModal(false)}
-                  className="w-7 h-7 rounded-lg text-[#717171] hover:text-[#2C2C2C] hover:bg-[#F1F3F4] flex items-center justify-center cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Template Category Switcher Tabs (Zero Pills - Clean Typographic Standard) */}
-              <div className="flex items-center gap-4 border-b border-[#F1F3F4] pb-2 text-xs shrink-0">
-                <span className="text-[#717171] text-[11px] font-medium">Select Template:</span>
-                <button
-                  type="button"
-                  onClick={() => handleSwitchModalTab("BILLING")}
-                  className={`text-xs font-semibold transition-colors cursor-pointer ${activeTemplateType === "BILLING"
-                      ? "text-[#612D53] underline underline-offset-4"
-                      : "text-[#717171] hover:text-[#2C2C2C]"
-                    }`}
-                >
-                  Statutory Billing Notice
-                </button>
-                <span className="text-[#DADCE0]">&bull;</span>
-                <button
-                  type="button"
-                  onClick={() => handleSwitchModalTab("RECEIPT")}
-                  className={`text-xs font-semibold transition-colors cursor-pointer ${activeTemplateType === "RECEIPT"
-                      ? "text-[#612D53] underline underline-offset-4"
-                      : "text-[#717171] hover:text-[#2C2C2C]"
-                    }`}
-                >
-                  Official Payment Receipt Notice
-                </button>
-              </div>
-
-              {/* Scrollable Modal Content */}
-              <div className="flex-1 min-h-0 overflow-y-auto space-y-3 pr-0.5">
-                {/* Dynamic Token Palette */}
-                <div className="space-y-1.5 bg-[#F8F9FA] p-2.5 rounded-xl border border-[#E8EAED]">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-medium text-[#2C2C2C]">
-                      Click Token to Insert ({activeTemplateType === "BILLING" ? "Billing Tokens" : "Receipt Tokens"}):
-                    </span>
-                    <span className="text-[10px] text-[#717171]">
-                      {activeTemplateType === "BILLING" ? "Act 936 Standard" : "Official GCR Standard"}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {dynamicTokens.map((item) => (
-                      <button
-                        key={item.tag}
-                        type="button"
-                        onClick={() => insertVariableTagInDraft(item.tag)}
-                        className="px-2 py-1 text-[11px] font-mono font-medium text-[#612D53] bg-white border border-[#E8D4E2] rounded-md hover:bg-[#F6ECF2] hover:border-[#612D53] transition-all cursor-pointer shadow-2xs active:scale-95"
-                        title={`Insert ${item.tag}`}
-                      >
-                        + {item.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Big Focused Textarea */}
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <label className="text-[11px] font-semibold text-[#2C2C2C]">
-                      Message Body ({activeTemplateType === "BILLING" ? "Statutory Bill Notice" : "Payment Receipt Notice"})
-                    </label>
-                    <span className="text-[10px] text-[#717171] font-mono">
-                      {draftTemplate.length} chars &bull; {Math.ceil(draftTemplate.length / 160)} SMS segment{Math.ceil(draftTemplate.length / 160) === 1 ? "" : "s"}
-                    </span>
-                  </div>
-                  <textarea
-                    ref={modalTextareaRef}
-                    autoFocus
-                    value={draftTemplate}
-                    onChange={(e) => setDraftTemplate(e.target.value)}
-                    rows={6}
-                    className="w-full p-3 rounded-xl border border-[#DADCE0] bg-white text-xs text-[#2C2C2C] focus:outline-none focus:border-[#612D53] focus:ring-1 focus:ring-[#612D53] leading-relaxed font-sans shadow-inner transition-colors resize-none"
-                    placeholder="Enter statutory message template..."
-                  />
-                </div>
-
-                {/* Real-Time Live Rendered Sample Preview Box */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-semibold text-[#2C2C2C] flex items-center gap-1">
-                      <Sparkles className="w-3.5 h-3.5 text-[#612D53]" />
-                      <span>Live Rendered Sample Preview</span>
-                    </span>
-                    <span className="text-[10px] text-[#717171]">
-                      Sample Target: {previewProp?.ownerName || "Heinz"} ({previewProp?.accountNumber || "KKDA03991001"})
-                    </span>
-                  </div>
-
-                  <div className="bg-[#F8F9FA] rounded-xl border border-[#DADCE0] p-3 text-xs space-y-2">
-                    <p className="whitespace-pre-line text-[#2C2C2C] text-[11px] leading-relaxed font-sans">
-                      {modalRenderedPreview}
-                    </p>
-
-                    <div className="pt-2 border-t border-[#E8EAED] flex flex-wrap gap-2 text-[10px]">
-                      {activeTemplateType === "BILLING" ? (
-                        <>
-                          <span className="text-[#137333] font-medium flex items-center gap-1">
-                            <CheckCircle2 className="w-3 h-3 text-[#137333]" />
-                            <span>Link 1 (Assessment Inspection): {(modalRenderedPreview.includes("/dashboard?accountNumber=") || modalRenderedPreview.includes("/properties?accountNumber=")) ? "Active" : "Missing"}</span>
-                          </span>
-                          <span className="text-[#DADCE0]">&bull;</span>
-                          <span className="text-[#137333] font-medium flex items-center gap-1">
-                            <CheckCircle2 className="w-3 h-3 text-[#137333]" />
-                            <span>Link 2 (Direct Checkout): {modalRenderedPreview.includes("&action=pay") ? "Active" : "Missing"}</span>
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <span className="text-[#137333] font-medium flex items-center gap-1">
-                            <CheckCircle2 className="w-3 h-3 text-[#137333]" />
-                            <span>Direct Receipt Link: {modalRenderedPreview.includes("/receipts/verify?code=") ? "Active" : "Missing"}</span>
-                          </span>
-                          <span className="text-[#DADCE0]">&bull;</span>
-                          <span className="text-[#188038] font-medium flex items-center gap-1">
-                            <ShieldCheck className="w-3 h-3 text-[#188038]" />
-                            <span>Public Verification &amp; Scanned Copy Linked</span>
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  </div>
+      {/* Message Template Configuration Modal Popup */}
+      {showTemplateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/45 backdrop-blur-xs font-sans">
+          <div className="bg-[#1E2329] rounded-2xl border border-[#2B3139] max-w-2xl w-full shadow-2xl flex flex-col overflow-hidden max-h-[90vh]">
+            {/* Modal Header */}
+            <div className="px-5 py-3.5 border-b border-[#2B3139] flex items-center justify-between shrink-0 bg-[#1E2329]">
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-[#FCD535]" />
+                <div>
+                  <h3 className="text-sm font-bold text-[#EAECEF]">
+                    Message Template &amp; Dynamic Tokens
+                  </h3>
+                  <p className="text-[11px] text-[#848E9C]">
+                    Customise the outbound notice text with dynamic property and balance tokens.
+                  </p>
                 </div>
               </div>
+              <button
+                type="button"
+                onClick={() => setShowTemplateModal(false)}
+                className="text-[#848E9C] hover:text-[#EAECEF] p-1 rounded-lg hover:bg-[#2B313A] cursor-pointer transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
 
-              {/* Modal Footer Actions */}
-              <div className="flex items-center justify-between pt-3 border-t border-[#F1F3F4] shrink-0">
-                <button
-                  type="button"
-                  onClick={handleResetDefaultTemplate}
-                  className="text-xs text-[#717171] hover:text-[#2C2C2C] hover:underline cursor-pointer font-medium"
-                >
-                  Reset Default ({activeTemplateType === "BILLING" ? "Billing Notice" : "Receipt Notice"})
-                </button>
+            {/* Modal Body */}
+            <div className="p-5 space-y-4 overflow-y-auto flex-1">
+              {/* Type and Presets Row */}
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#2B3139] pb-3">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-semibold text-[#EAECEF]">Template Type:</span>
+                  <div className="flex items-center gap-1">
+                    <select
+                      value={activeTemplateType === "RECEIPT" ? "RECEIPT" : targetStatus}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === "RECEIPT") {
+                          setActiveTemplateType("RECEIPT");
+                        } else {
+                          setActiveTemplateType("BILLING");
+                          handleStatusChange(val as any);
+                        }
+                      }}
+                      className="bg-[#0B0E11] text-[#FCD535] border border-[#2B3139] rounded-md px-2 py-1 text-xs font-medium focus:outline-none focus:border-[#FCD535] cursor-pointer"
+                    >
+                      <option value="UNPAID">Annual Bill (Unpaid)</option>
+                      <option value="ALL">General Notice (All)</option>
+                      <option value="PAID">Settlement Clearance (Paid)</option>
+                      <option value="OVERPAID">Credit Statement (Overpaid)</option>
+                      <option value="RECEIPT">Payment Receipt Notice</option>
+                    </select>
+                  </div>
+                </div>
 
                 <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowTemplateModal(false)}
-                    className="btn-3d-secondary h-8.5 px-3.5 rounded-lg text-xs font-medium cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSaveTemplateModal}
-                    disabled={isSavingTemplate}
-                    className="btn-3d-primary h-8.5 px-4 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                  >
-                    {isSavingTemplate ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <CheckCircle2 className="w-3.5 h-3.5" />
+                  {/* INSERT TOKENS BUTTON & POPOVER */}
+                  <div className="relative">
+                    <button
+                      ref={tokenInserterBtnRef}
+                      type="button"
+                      onClick={() => setShowTokenInserter((prev) => !prev)}
+                      className="h-6 px-2 rounded-md bg-[#2B313A] hover:bg-[#363D47] border border-[#2B3139] text-[10px] font-semibold text-[#EAECEF] flex items-center gap-1 transition-colors cursor-pointer"
+                    >
+                      <Code2 className="w-3 h-3 text-[#FCD535]" />
+                      <span>Insert Token</span>
+                      <ChevronDown className="w-2.5 h-2.5" />
+                    </button>
+
+                    {showTokenInserter && (
+                      <div
+                        ref={tokenInserterRef}
+                        className="absolute right-0 top-full mt-1 w-64 z-50 rounded-xl border border-[#2B3139] bg-[#1E2329] shadow-2xl p-2 space-y-1 font-sans text-xs"
+                      >
+                        <div className="text-[10px] font-bold text-[#848E9C] uppercase px-1 pb-1 border-b border-[#2B3139]">
+                          Insert Dynamic Token
+                        </div>
+                        <div className="max-h-48 overflow-y-auto space-y-0.5">
+                          {dynamicTokens.map((t) => (
+                            <button
+                              key={t.tag}
+                              type="button"
+                              onClick={() => {
+                                const el = templateTextareaRef.current;
+                                if (el) {
+                                  const start = el.selectionStart;
+                                  const end = el.selectionEnd;
+                                  const text = currentTemplate;
+                                  const updated = text.substring(0, start) + t.tag + text.substring(end);
+                                  if (activeTemplateType === "BILLING") {
+                                    setMessageTemplate(updated);
+                                  } else {
+                                    setReceiptTemplate(updated);
+                                  }
+                                  setShowTokenInserter(false);
+                                  setTimeout(() => {
+                                    el.focus();
+                                    el.setSelectionRange(start + t.tag.length, start + t.tag.length);
+                                  }, 50);
+                                }
+                              }}
+                              className="w-full text-left px-2 py-1 rounded hover:bg-[#2B313A] text-[11px] flex items-center justify-between group cursor-pointer"
+                            >
+                              <span className="font-mono text-[#FCD535] font-semibold text-[10px]">{t.tag}</span>
+                              <span className="text-[10px] text-[#848E9C] group-hover:text-[#EAECEF]">{t.label}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     )}
-                    <span>{isSavingTemplate ? "Saving..." : "Apply & Save Template"}</span>
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* HIGH-SECURITY SMS ROLLOUT AUTHORIZATION MODAL */}
-      <AnimatePresence>
-        {showAuthModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs font-sans">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="bg-white rounded-2xl border border-[#DADCE0] shadow-2xl p-6 max-w-lg w-full space-y-4"
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between pb-3 border-b border-[#F1F3F4]">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-lg bg-[#F6ECF2] text-[#612D53] flex items-center justify-center">
-                    <ShieldCheck className="w-5 h-5 text-[#612D53]" />
                   </div>
-                  <div>
-                    <h3 className="text-sm font-semibold text-[#2C2C2C]">
-                      Authorize SMS Rollout Transmission
-                    </h3>
-                    <p className="text-xs text-[#717171]">Communications Directorate &bull; Act 936</p>
+
+                  {/* SAVED TEMPLATES / PRESETS BUTTON & POPOVER */}
+                  <div className="relative">
+                    <button
+                      ref={savedTemplatesBtnRef}
+                      type="button"
+                      onClick={() => setShowSavedTemplates((prev) => !prev)}
+                      className="h-6 px-2 rounded-md bg-[#2B313A] hover:bg-[#363D47] border border-[#2B3139] text-[10px] font-medium text-[#EAECEF] flex items-center gap-1 transition-colors cursor-pointer"
+                    >
+                      <Bookmark className="w-3 h-3 text-[#FCD535]" />
+                      <span>Saved Presets</span>
+                      <ChevronDown className="w-2.5 h-2.5" />
+                    </button>
+
+                    {showSavedTemplates && (
+                      <div
+                        ref={savedTemplatesRef}
+                        className="absolute right-0 top-full mt-1 w-72 z-50 rounded-xl border border-[#2B3139] bg-[#1E2329] shadow-2xl p-2 space-y-1 font-sans text-xs"
+                      >
+                        <div className="text-[10px] font-bold text-[#848E9C] uppercase px-1 pb-1 border-b border-[#2B3139]">
+                          Load Template Preset
+                        </div>
+                        <div className="max-h-56 overflow-y-auto space-y-1">
+                          {savedTemplates
+                            .filter((st) => st.type === activeTemplateType)
+                            .map((st) => (
+                              <button
+                                key={st.id}
+                                type="button"
+                                onClick={() => {
+                                  if (activeTemplateType === "BILLING") {
+                                    setMessageTemplate(st.content);
+                                    if ((st as any).filterKey && (st as any).filterKey !== "RECEIPT") {
+                                      setTargetStatus((st as any).filterKey);
+                                    }
+                                  } else {
+                                    setReceiptTemplate(st.content);
+                                  }
+                                  setShowSavedTemplates(false);
+                                }}
+                                className="w-full text-left p-1.5 rounded hover:bg-[#2B313A] border border-[#2B3139] cursor-pointer transition-colors"
+                              >
+                                <span className="font-semibold text-[#FCD535] text-[11px] block">{st.name}</span>
+                                <span className="text-[10px] text-[#848E9C] line-clamp-1 font-mono">{st.content}</span>
+                              </button>
+                            ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
 
-                <button
-                  type="button"
-                  onClick={() => setShowAuthModal(false)}
-                  className="w-7 h-7 rounded-lg text-[#717171] hover:text-[#2C2C2C] hover:bg-[#F1F3F4] flex items-center justify-center cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Target Audience Summary */}
-              <div className="bg-[#F8F9FA] rounded-xl p-3.5 border border-[#E8EAED] space-y-2 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="text-[#717171] font-medium">Target Recipients:</span>
-                  <span className="font-semibold text-[#2C2C2C]">
-                    {unpaidTargets.length} Taxpayer Account{unpaidTargets.length === 1 ? "" : "s"}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[#717171] font-medium">Total Balance to Notify:</span>
-                  <span className="font-semibold text-[#D93025]">
-                    GH₵ {totalOutstandingDueSum.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[#717171] font-medium">Outbound Gateway:</span>
-                  <span className="font-medium text-[#188038]">Arkesel SMS Gateway (Sender ID: Arnold)</span>
+                  <span className="text-[11px] text-[#848E9C] font-mono">{currentTemplate.length} chars</span>
                 </div>
               </div>
 
-              {/* Recipient Details List */}
+              {/* Textarea */}
+              <div>
+                <textarea
+                  ref={templateTextareaRef}
+                  value={currentTemplate}
+                  onChange={(e) =>
+                    activeTemplateType === "BILLING"
+                      ? setMessageTemplate(e.target.value)
+                      : setReceiptTemplate(e.target.value)
+                  }
+                  rows={6}
+                  className="w-full p-3 rounded-lg border border-[#2B3139] bg-[#0B0E11] text-xs text-[#EAECEF] focus:outline-none focus:border-[#FCD535] resize-y font-mono leading-relaxed"
+                  placeholder="Type or customize your SMS message template here..."
+                />
+              </div>
+
+              {/* Dynamic Tokens Guide Strip */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-[#2C2C2C] block">
-                  Recipient Roster ({unpaidTargets.length})
-                </label>
-                <div className="max-h-36 overflow-y-auto rounded-lg border border-[#DADCE0] divide-y divide-[#F1F3F4] bg-white text-xs">
-                  {unpaidTargets.map((t) => (
-                    <div key={t.id} className="p-2.5 flex items-center justify-between hover:bg-[#F8F9FA]">
-                      <div>
-                        <span className="font-semibold text-[#2C2C2C]">{t.ownerName}</span>
-                        <p className="text-[11px] text-[#717171] font-mono">{t.accountNumber} &bull; {t.ownerPhone}</p>
-                      </div>
-                      <div className="text-right">
-                        <span className="font-semibold text-[#2C2C2C]">{t.totalAmountDueFormatted}</span>
-                        <p className="text-[10px] text-[#D93025]">Due</p>
-                      </div>
-                    </div>
+                <span className="text-[10px] font-semibold text-[#848E9C] uppercase tracking-wider block">
+                  Click token below to insert into template:
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {dynamicTokens.map((t) => (
+                    <button
+                      key={t.tag}
+                      type="button"
+                      onClick={() => {
+                        const el = templateTextareaRef.current;
+                        if (el) {
+                          const start = el.selectionStart;
+                          const end = el.selectionEnd;
+                          const text = currentTemplate;
+                          const updated = text.substring(0, start) + t.tag + text.substring(end);
+                          if (activeTemplateType === "BILLING") {
+                            setMessageTemplate(updated);
+                          } else {
+                            setReceiptTemplate(updated);
+                          }
+                          setTimeout(() => {
+                            el.focus();
+                            el.setSelectionRange(start + t.tag.length, start + t.tag.length);
+                          }, 50);
+                        }
+                      }}
+                      className="text-[10px] font-mono px-2 py-0.5 rounded border border-[#2B3139] bg-[#0B0E11] hover:bg-[#2B313A] hover:border-[#FCD535] text-[#FCD535] font-medium cursor-pointer transition-colors"
+                      title={t.label}
+                    >
+                      {t.tag}
+                    </button>
                   ))}
                 </div>
               </div>
+            </div>
 
-              {/* Password Challenge Field */}
-              <div className="space-y-1.5 pt-2 border-t border-[#F1F3F4]">
-                <label className="text-xs font-semibold text-[#2C2C2C] flex items-center justify-between">
-                  <span>Enter Administrator Security Password</span>
-                  <span className="text-[10px] text-[#717171] font-normal">Required for authorization</span>
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#717171]">
-                    <Lock className="w-3.5 h-3.5" />
-                  </div>
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    value={adminPassword}
-                    onChange={(e) => {
-                      setAdminPassword(e.target.value);
-                      if (authError) setAuthError(null);
-                    }}
-                    aria-label="Administrator security authorization password"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !isAuthorizing && adminPassword.trim()) {
-                        handleConfirmAuthorization();
-                      }
-                    }}
-                    placeholder="Enter admin password (e.g. admin123)"
-                    className="w-full h-10 pl-9 pr-10 rounded-lg border border-[#DADCE0] text-xs text-[#2C2C2C] focus:outline-none focus:border-[#612D53] transition-colors"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-[#717171] hover:text-[#2C2C2C] cursor-pointer"
-                  >
-                    {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                  </button>
-                </div>
-
-                {authError && (
-                  <motion.p
-                    initial={{ opacity: 0, y: -4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="text-xs text-[#D93025] font-medium flex items-center gap-1 mt-1"
-                  >
-                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                    <span>{authError}</span>
-                  </motion.p>
-                )}
-              </div>
-
-              {/* Modal Actions */}
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[#F1F3F4]">
-                <button
-                  type="button"
-                  onClick={() => setShowAuthModal(false)}
-                  disabled={isAuthorizing}
-                  className="btn-3d-secondary h-9 px-4 rounded-lg text-xs font-medium cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleConfirmAuthorization}
-                  disabled={isAuthorizing || !adminPassword.trim()}
-                  className="btn-3d-primary h-9 px-4 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                >
-                  {isAuthorizing ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      <span>Verifying &amp; Sending...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Send className="w-3.5 h-3.5" />
-                      <span>Authorize &amp; Dispatch SMS</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </motion.div>
+            {/* Modal Footer */}
+            <div className="px-5 py-3 border-t border-[#2B3139] bg-[#1E2329] flex items-center justify-between shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowTemplateModal(false)}
+                className="border border-[#2B3139] bg-[#2B313A] text-[#EAECEF] hover:bg-[#363D47] font-medium h-8 px-3.5 rounded-lg text-xs font-semibold cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  await handleSaveTemplate();
+                  setShowTemplateModal(false);
+                }}
+                disabled={isSavingTemplate}
+                className="bg-[#FCD535] hover:bg-[#FCD535]/90 text-[#181A20] font-bold shadow-xs h-8 px-4 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>{isSavingTemplate ? "Saving..." : "Save & Apply Template"}</span>
+              </button>
+            </div>
           </div>
-        )}
-      </AnimatePresence>
+        </div>
+      )}
+
+      {/* Security Modal */}
+      {showAuthModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs font-sans">
+          <div className="bg-[#1E2329] rounded-2xl border border-[#2B3139] p-6 max-w-md w-full space-y-4 shadow-2xl">
+            <h3 className="text-sm font-semibold text-[#EAECEF]">Authorize Rollout Dispatch</h3>
+            <p className="text-xs text-[#848E9C]">
+              Targeting <span className="font-bold text-[#EAECEF]">{effectiveRolloutCount.toLocaleString()}</span> properties {audienceScope === "SELECTED" ? "(manually selected)" : "matching active filter criteria"} with total outstanding due of <span className="font-bold text-[#EAECEF]">{effectiveRolloutTotalDueFormatted}</span>.
+            </p>
+            
+            {(() => {
+              const estCreditsNeeded = unpaidTargets.length * (Math.ceil((currentTemplate.length + 50) / 160) || 1);
+              const hasEnoughBalance = gatewayBalance ? gatewayBalance.smsBalance >= estCreditsNeeded : false;
+              const isInsufficient = !!(gatewayBalance && !hasEnoughBalance);
+              const isButtonDisabled = Boolean(isAuthorizing || !adminPassword.trim() || isFetchingBalance || isInsufficient);
+
+              return (
+                <>
+                  <div className="bg-[#1E2329] rounded-xl p-3.5 border border-[#2B3139] space-y-2.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-[#848E9C] font-medium">Gateway Balance (Arkesel):</span>
+                      {isFetchingBalance ? (
+                        <span className="text-[#FCD535] flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" /> Fetching...</span>
+                      ) : gatewayBalance ? (
+                        <span className="font-semibold text-[#0ECB81]">
+                          {gatewayBalance.smsBalance} SMS ({gatewayBalance.mainBalance})
+                        </span>
+                      ) : (
+                        <span className="text-[#F6465D] font-semibold">Unavailable</span>
+                      )}
+                    </div>
+                    
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-[#848E9C] font-medium">Est. Credits Needed:</span>
+                      <span className={`font-semibold ${isInsufficient ? "text-[#F6465D]" : "text-[#EAECEF]"}`}>
+                        {estCreditsNeeded.toLocaleString()} SMS
+                      </span>
+                    </div>
+                    
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-[#848E9C] font-medium">Est. Dispatch Cost:</span>
+                      <span className="font-bold text-[#FCD535]">
+                        GH₵ {(estCreditsNeeded * 0.035).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+
+                  {isInsufficient && (
+                    <div className="bg-[#F6465D]/10 border border-[#F6465D]/30 text-[#F6465D] px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-2 mt-4">
+                      <span>⚠️</span>
+                      Insufficient Arkesel gateway balance for this rollout.
+                    </div>
+                  )}
+
+                  <div className="mt-4 space-y-4">
+                    <input
+                      type="password"
+                      value={adminPassword}
+                      onChange={(e) => setAdminPassword(e.target.value)}
+                      placeholder="Enter administrator password"
+                      autoComplete="new-password"
+                      data-lpignore="true"
+                      data-form-type="other"
+                      className="w-full h-9 px-3 rounded-lg border border-[#2B3139] bg-[#0B0E11] text-xs text-[#EAECEF] focus:outline-none focus:border-[#FCD535]"
+                    />
+                    {authError && <p className="text-xs text-[#F6465D]">{authError}</p>}
+                    
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowAuthModal(false)}
+                        className="border border-[#2B3139] bg-[#2B313A] text-[#EAECEF] hover:bg-[#363D47] font-medium h-8 px-3 rounded-lg text-xs cursor-pointer"
+                        disabled={isAuthorizing}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleConfirmAuthorization}
+                        disabled={isButtonDisabled}
+                        className="bg-[#FCD535] hover:bg-[#FCD535]/90 text-[#181A20] font-bold shadow-xs h-8 px-4 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isAuthorizing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Lock className="w-3.5 h-3.5" />}
+                        <span>Dispatch SMS</span>
+                      </button>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-
+export default SmsRolloutSimulator;

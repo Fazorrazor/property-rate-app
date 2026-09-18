@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useMemo, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
@@ -54,6 +54,16 @@ interface CheckoutState {
   verifiedSubscriberName?: string | null;
   isHubtelVerified?: boolean;
   preferredDisplayName?: string;
+  portfolioProperties?: Array<{
+    id: string;
+    accountNumber: string;
+    ownerDigitalAddress: string;
+    propertyClassification: string;
+    arrears: number;
+    currentFee: number;
+    totalAmountDue: number;
+    status: string;
+  }>;
   user: {
     id: string;
     name: string | null;
@@ -64,7 +74,7 @@ interface CheckoutState {
 function CheckoutContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const propertyId = searchParams.get("propertyId") || "ALL";
+  const propertyId = searchParams.get("propertyId") || searchParams.get("accountNumber") || "ALL";
   const settlementTypeParam = (searchParams.get("type") as SettlementType) || "TOTAL";
   const amountParamStr = searchParams.get("amount");
   const customAmount = amountParamStr ? parseFloat(amountParamStr) : undefined;
@@ -100,16 +110,33 @@ function CheckoutContent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
+  const rawAccountNumber = searchParams.get("accountNumber") || undefined;
+  const [selectedPropertyIds, setSelectedPropertyIds] = useState<string[]>([]);
 
   const showToast = (message: string, type: "success" | "error" | "info" = "error") => {
     setToast({ message, type });
   };
 
-  const actualBill = checkoutData?.actualAmountDue ?? checkoutData?.subtotal ?? 0;
+  const isMultiPropertyMode = Boolean(checkoutData?.portfolioProperties && checkoutData.portfolioProperties.length > 1);
+
+  const selectedPropertiesSum = useMemo(() => {
+    if (!isMultiPropertyMode || !checkoutData?.portfolioProperties) return 0;
+    return checkoutData.portfolioProperties
+      .filter((p) => selectedPropertyIds.includes(p.id))
+      .reduce((sum, p) => sum + p.totalAmountDue, 0);
+  }, [isMultiPropertyMode, checkoutData, selectedPropertyIds]);
+
+  const actualBill = isMultiPropertyMode 
+    ? (selectedPropertiesSum || checkoutData?.actualAmountDue || 0)
+    : (checkoutData?.actualAmountDue ?? checkoutData?.subtotal ?? 0);
+
   const minPartialAmount = checkoutData?.minPartialAmount ?? Number((actualBill * 0.4).toFixed(2));
   const maxPartialAmount = checkoutData?.maxPartialAmount ?? actualBill;
 
-  const activeSubtotal = paymentMode === "FULL" ? (checkoutData?.subtotal || 0) : (parseFloat(customSubtotal) || checkoutData?.subtotal || 0);
+  const activeSubtotal = paymentMode === "FULL" 
+    ? (isMultiPropertyMode ? selectedPropertiesSum : (checkoutData?.subtotal || 0))
+    : (parseFloat(customSubtotal) || checkoutData?.subtotal || 0);
+
   const activeTotalAmount = Math.ceil(activeSubtotal / 0.98);
   const activeProcessingFee = Number((activeTotalAmount - activeSubtotal).toFixed(2));
 
@@ -159,9 +186,12 @@ function CheckoutContent() {
   useEffect(() => {
     async function load() {
       try {
-        const data = await getCheckoutData(propertyId, settlementTypeParam, customAmount);
+        const data = await getCheckoutData(propertyId, settlementTypeParam, customAmount, rawAccountNumber);
         if (data) {
           setCheckoutData(data);
+          if (data.portfolioProperties && data.portfolioProperties.length > 0) {
+            setSelectedPropertyIds(data.portfolioProperties.map((p) => p.id));
+          }
           if (customAmount && data.minPartialAmount && data.maxPartialAmount) {
             const clamped = Math.min(Math.max(customAmount, data.minPartialAmount), data.maxPartialAmount);
             setCustomSubtotal(clamped.toString());
@@ -287,6 +317,10 @@ function CheckoutContent() {
   };
 
   const handleProceedToDetails = () => {
+    if (isMultiPropertyMode && selectedPropertyIds.length === 0) {
+      showToast("Please select at least one property to pay.", "error");
+      return;
+    }
     if (paymentMode === "PARTIAL") {
       if (activeSubtotal < minPartialAmount || activeSubtotal > maxPartialAmount) {
         showToast(`Partial payment must be between GH₵ ${minPartialAmount.toFixed(2)} and GH₵ ${maxPartialAmount.toFixed(2)}`, "error");
@@ -315,7 +349,9 @@ function CheckoutContent() {
         subtotal: subtotal,
         processingFee: processingFee,
         phone: phoneNumber,
-        network: network
+        network: network,
+        targetPropertyIds: isMultiPropertyMode && selectedPropertyIds.length > 0 ? selectedPropertyIds : undefined,
+        accountNumberOverride: rawAccountNumber,
       });
 
       if (res.success && res.reference) {
@@ -544,6 +580,72 @@ function CheckoutContent() {
                   <span className="font-medium text-foreground">{checkoutData.annualRateFormatted || "GH₵ 0.00"}</span>
                 </div>
               </div>
+
+              {/* Multi-Property Portfolio Selection List */}
+              {isMultiPropertyMode && checkoutData.portfolioProperties && (
+                <div className="pt-2 border-t border-border-light space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-foreground">Select Properties to Pay:</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (selectedPropertyIds.length === checkoutData.portfolioProperties!.length) {
+                          setSelectedPropertyIds([]);
+                        } else {
+                          setSelectedPropertyIds(checkoutData.portfolioProperties!.map((p) => p.id));
+                        }
+                      }}
+                      className="text-[11px] font-semibold text-primary hover:underline cursor-pointer"
+                    >
+                      {selectedPropertyIds.length === checkoutData.portfolioProperties.length ? "Deselect All" : "Select All"}
+                    </button>
+                  </div>
+
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                    {checkoutData.portfolioProperties.map((prop) => {
+                      const isChecked = selectedPropertyIds.includes(prop.id);
+                      return (
+                        <div
+                          key={prop.id}
+                          onClick={() => {
+                            setSelectedPropertyIds((prev) =>
+                              prev.includes(prop.id)
+                                ? prev.filter((id) => id !== prop.id)
+                                : [...prev, prop.id]
+                            );
+                          }}
+                          className={`p-2.5 rounded-lg border transition-all cursor-pointer flex items-center justify-between ${
+                            isChecked
+                              ? "bg-surface border-foreground/30 shadow-2xs"
+                              : "bg-surface-subtle/50 border-border-light opacity-60 hover:opacity-100"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              readOnly
+                              className="w-4 h-4 rounded border-border-light text-[#4B1426] focus:ring-0 cursor-pointer pointer-events-none"
+                            />
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-mono font-bold text-foreground text-xs">{prop.accountNumber}</span>
+                                <span className="text-[10px] text-on-surface-muted truncate">({prop.ownerDigitalAddress})</span>
+                              </div>
+                              <div className="text-[10px] text-on-surface-muted">
+                                {prop.arrears > 0 ? `Arrears: GH₵ ${prop.arrears.toFixed(2)} | ` : ""}Rate: GH₵ {prop.currentFee.toFixed(2)}
+                              </div>
+                            </div>
+                          </div>
+                          <span className="text-xs font-bold text-foreground tabular-nums shrink-0 ml-2">
+                            GH₵ {prop.totalAmountDue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className="pt-3 border-t border-border-light flex flex-col gap-2">
                 <div className="flex items-center justify-between">

@@ -1,12 +1,82 @@
 import { supabase } from './supabase';
 
-/**
- * Enterprise Admin DB Client
- * Provides complete administrative access to municipal back-office tables, master cadastre,
- * audit trails, value books, GCR pools, staff mobilizations, and SMS campaign rollouts.
- */
-// Helper to resolve multi-entity, multi-token property search
-async function resolvePropertySearchIds(searchStr: string): Promise<string[] | null> {
+export function mapPropertyRow(p: any) {
+  if (!p) return null;
+  const arrears = Number(p.arrears || 0);
+  const currentFee = Number(p.current_bill !== undefined ? p.current_bill : p.currentFee || 0);
+  const amountPaidLastYear = Number(p.amount_paid !== undefined ? p.amount_paid : p.amountPaidLastYear || 0);
+  // Prefer the DB-computed outstanding_amt column; fall back to derived arithmetic
+  const totalAmountDue = Number(
+    p.outstanding_amt !== undefined && p.outstanding_amt !== null
+      ? p.outstanding_amt
+      : p.totalAmountDue !== undefined
+        ? p.totalAmountDue
+        : arrears + currentFee
+  );
+
+  let status: 'PAID' | 'PARTIALLY_PAID' | 'UNPAID' = p.status;
+  if (!status) {
+    if (totalAmountDue <= 0) {
+      status = 'PAID';
+    } else if (amountPaidLastYear > 0) {
+      status = 'PARTIALLY_PAID';
+    } else {
+      status = 'UNPAID';
+    }
+  }
+
+  return {
+    ...p,
+    accountNumber: p.account_no || p.accountNumber || '',
+    // Expose direct Property.name and Property.telephone (legacy ratepayer fields)
+    ownerNameDirect: p.name || null,
+    ownerPhoneDirect: p.telephone || null,
+    name: p.name || null,
+    telephone: p.telephone || null,
+    houseNo: p.houseNo || '',
+    plotNo: p.plotNo || '',
+    electoral_area: p.electoral_area || '',
+    valuationNo: p.valuationNo || '',
+    propertyClassification: p.property_cat || p.propertyClassification || 'RESIDENTIAL',
+    currentFee,
+    amountPaidLastYear,
+    arrears,
+    totalAmountDue,
+    status,
+  };
+}
+
+function preparePropertyWritePayload(data: any) {
+  const { users, receipts, bills, owner, ...cleanData } = data;
+  const row: any = {
+    ...cleanData,
+    updatedAt: new Date().toISOString(),
+  };
+
+  if (cleanData.accountNumber !== undefined) {
+    row.account_no = cleanData.accountNumber;
+    delete row.accountNumber;
+  }
+  if (cleanData.propertyClassification !== undefined) {
+    row.property_cat = cleanData.propertyClassification;
+    delete row.propertyClassification;
+  }
+  if (cleanData.currentFee !== undefined) {
+    row.current_bill = cleanData.currentFee;
+    delete row.currentFee;
+  }
+  if (cleanData.amountPaidLastYear !== undefined) {
+    row.amount_paid = cleanData.amountPaidLastYear;
+    delete row.amountPaidLastYear;
+  }
+
+  delete row.totalAmountDue;
+  delete row.status;
+
+  return { row, users, receipts, bills, owner };
+}
+
+export async function resolvePropertySearchIds(searchStr: string): Promise<string[] | null> {
   const q = searchStr.trim();
   if (!q) return null;
 
@@ -18,7 +88,8 @@ async function resolvePropertySearchIds(searchStr: string): Promise<string[] | n
       supabase.from('User').select('id').or(`name.ilike.%${token}%,phoneNumber.ilike.%${token}%`).limit(5000),
       supabase.from('PropertyOwner').select('ownerId').or(`name.ilike.%${token}%,tel.ilike.%${token}%,mobileNumber.ilike.%${token}%,address.ilike.%${token}%,streetAddress.ilike.%${token}%,corporationPartnership.ilike.%${token}%,email.ilike.%${token}%`).limit(5000),
       supabase.from('Receipt').select('propertyId').or(`receiptNumber.ilike.%${token}%,paymentPhoneNumber.ilike.%${token}%`).limit(5000),
-      supabase.from('Property').select('id').or(`accountNumber.ilike.%${token}%,valuationNo.ilike.%${token}%,ownerDigitalAddress.ilike.%${token}%,physicalAddress.ilike.%${token}%,houseNo.ilike.%${token}%,plotNo.ilike.%${token}%,propertyClassification.ilike.%${token}%,municipality.ilike.%${token}%`).limit(5000)
+      // Include direct Property.name and Property.telephone (legacy ratepayer fields confirmed in DB)
+      supabase.from('Property').select('id').or(`account_no.ilike.%${token}%,valuationNo.ilike.%${token}%,ownerDigitalAddress.ilike.%${token}%,houseNo.ilike.%${token}%,plotNo.ilike.%${token}%,property_cat.ilike.%${token}%,municipality.ilike.%${token}%,name.ilike.%${token}%,telephone.ilike.%${token}%`).limit(5000)
     ]);
 
     const userIds = (matchedUsersRes.data || []).map((u: any) => u.id);
@@ -65,7 +136,6 @@ async function resolvePropertySearchIds(searchStr: string): Promise<string[] | n
   return finalMatchingPropIds ? Array.from(finalMatchingPropIds) : [];
 }
 
-// Helper to resolve multi-entity, multi-token ratepayer user search
 async function resolveUserSearchIds(searchStr: string): Promise<string[] | null> {
   const q = searchStr.trim();
   if (!q) return null;
@@ -76,7 +146,7 @@ async function resolveUserSearchIds(searchStr: string): Promise<string[] | null>
   for (const token of tokens) {
     const [matchedUsersRes, matchedPropsRes] = await Promise.all([
       supabase.from('User').select('id').or(`name.ilike.%${token}%,phoneNumber.ilike.%${token}%`).limit(5000),
-      supabase.from('Property').select('id').or(`accountNumber.ilike.%${token}%,valuationNo.ilike.%${token}%,ownerDigitalAddress.ilike.%${token}%,physicalAddress.ilike.%${token}%`).limit(5000)
+      supabase.from('Property').select('id').or(`account_no.ilike.%${token}%,valuationNo.ilike.%${token}%,ownerDigitalAddress.ilike.%${token}%,physicalAddress.ilike.%${token}%`).limit(5000)
     ]);
 
     const directUserIds = (matchedUsersRes.data || []).map((u: any) => u.id);
@@ -112,6 +182,49 @@ function chunkArray<T>(array: T[], size = 60): T[][] {
     chunks.push(array.slice(i, i + size));
   }
   return chunks;
+}
+
+export function applyRequiredFieldsFilter(query: any, requiredFields?: string[]) {
+  if (!requiredFields || !Array.isArray(requiredFields) || requiredFields.length === 0) {
+    return query;
+  }
+  for (const field of requiredFields) {
+    const f = field?.trim();
+    if (!f || f === 'ALL') continue;
+
+    if (f === 'telephone' || f === 'ownerPhone') {
+      query = query.not('telephone', 'is', null).neq('telephone', '').neq('telephone', '0');
+    } else if (f === 'name' || f === 'ownerName') {
+      query = query.not('name', 'is', null).neq('name', '').not('name', 'ilike', '%NO NAME%');
+    } else if (f === 'ownerDigitalAddress') {
+      query = query.not('ownerDigitalAddress', 'is', null).neq('ownerDigitalAddress', '').neq('ownerDigitalAddress', 'N/A');
+    } else if (f === 'houseNo') {
+      query = query.not('houseNo', 'is', null).neq('houseNo', '');
+    } else if (f === 'plotNo') {
+      query = query.not('plotNo', 'is', null).neq('plotNo', '');
+    } else if (f === 'valuationNo') {
+      query = query.not('valuationNo', 'is', null).neq('valuationNo', '');
+    } else if (f === 'property_cat' || f === 'propertyClassification') {
+      query = query.not('property_cat', 'is', null).neq('property_cat', '');
+    } else if (f === 'electoral_area') {
+      query = query.not('electoral_area', 'is', null).neq('electoral_area', '');
+    } else if (f === 'account_no' || f === 'accountNumber') {
+      query = query.not('account_no', 'is', null).neq('account_no', '');
+    } else if (f === 'arrears') {
+      query = query.not('arrears', 'is', null).gt('arrears', 0);
+    } else if (f === 'current_bill' || f === 'currentFee') {
+      query = query.not('current_bill', 'is', null).gt('current_bill', 0);
+    } else if (f === 'outstanding_amt' || f === 'totalAmountDue') {
+      query = query.not('outstanding_amt', 'is', null).gt('outstanding_amt', 0);
+    } else if (f === 'rateableValue') {
+      query = query.not('rateableValue', 'is', null).gt('rateableValue', 0);
+    } else if (f === 'amount_paid' || f === 'amountPaidLastYear') {
+      query = query.not('amount_paid', 'is', null).gt('amount_paid', 0);
+    } else {
+      query = query.not(f, 'is', null);
+    }
+  }
+  return query;
 }
 
 export const adminDb = {
@@ -150,7 +263,7 @@ export const adminDb = {
       if (args.include?.properties) {
         const [linksRes, ownersRes] = await Promise.all([
           supabase.from('_PropertyToUser').select('A').eq('B', data.id),
-          data.phoneNumber 
+          data.phoneNumber
             ? supabase.from('PropertyOwner').select('ownerId').or(`tel.eq.${data.phoneNumber},mobileNumber.eq.${data.phoneNumber}`)
             : Promise.resolve({ data: [] } as any)
         ]);
@@ -165,10 +278,13 @@ export const adminDb = {
         if (ownerIds.length > 0) {
           propQueries.push(supabase.from('Property').select('*').in('ownerId', ownerIds));
         }
+        if (data.phoneNumber) {
+          propQueries.push(supabase.from('Property').select('*').eq('telephone', data.phoneNumber));
+        }
 
         if (propQueries.length > 0) {
           const propRes = await Promise.all(propQueries);
-          const allProps = propRes.flatMap((r) => r.data || []);
+          const allProps = propRes.flatMap((r) => (r.data || []).map(mapPropertyRow));
           const dedupedMap = new Map<string, any>();
           for (const p of allProps) {
             dedupedMap.set(p.id, p);
@@ -199,7 +315,7 @@ export const adminDb = {
           query = query.in('id', matchedIds);
         }
       }
-      
+
       if (args?.orderBy) {
         const field = Object.keys(args.orderBy)[0];
         const dir = args.orderBy[field] === 'desc' ? { ascending: false } : { ascending: true };
@@ -214,16 +330,14 @@ export const adminDb = {
 
       const userIds = data.map((u: any) => u.id);
 
-      // 1. Dual-source Batch fetch linked properties (via _PropertyToUser & PropertyOwner telephone match with safe batch chunking)
       if (args?.include?.properties) {
         const phoneNumbers = data.map((u: any) => u.phoneNumber).filter(Boolean);
-        
         const userChunks = chunkArray(userIds, 60);
         const phoneChunks = chunkArray(phoneNumbers, 40);
 
         const [linkResults, ownerResults] = await Promise.all([
           Promise.all(userChunks.map((chunk) => supabase.from('_PropertyToUser').select('A, B').in('B', chunk))),
-          Promise.all(phoneChunks.map((chunk) => 
+          Promise.all(phoneChunks.map((chunk) =>
             supabase.from('PropertyOwner').select('ownerId, tel, mobileNumber').or(chunk.map((p: string) => `tel.eq.${p},mobileNumber.eq.${p}`).join(','))
           )),
         ]);
@@ -251,15 +365,18 @@ export const adminDb = {
 
         const propQueries = [
           ...directPropChunks.map((chunk) =>
-            supabase.from('Property').select('id, accountNumber, ownerId, ownerDigitalAddress, propertyClassification, rateableValue, arrears, currentFee, totalAmountDue, status').in('id', chunk)
+            supabase.from('Property').select('id, account_no, valuationNo, ownerId, ownerDigitalAddress, property_cat, rateableValue, arrears, current_bill, amount_paid, billYear, municipality, telephone').in('id', chunk)
           ),
           ...ownerPropChunks.map((chunk) =>
-            supabase.from('Property').select('id, accountNumber, ownerId, ownerDigitalAddress, propertyClassification, rateableValue, arrears, currentFee, totalAmountDue, status').in('ownerId', chunk)
+            supabase.from('Property').select('id, account_no, valuationNo, ownerId, ownerDigitalAddress, property_cat, rateableValue, arrears, current_bill, amount_paid, billYear, municipality, telephone').in('ownerId', chunk)
+          ),
+          ...phoneChunks.map((chunk) =>
+            supabase.from('Property').select('id, account_no, valuationNo, ownerId, ownerDigitalAddress, property_cat, rateableValue, arrears, current_bill, amount_paid, billYear, municipality, telephone').in('telephone', chunk)
           ),
         ];
 
         const propResults = await Promise.all(propQueries);
-        const allProps = propResults.flatMap((r) => r.data || []);
+        const allProps = propResults.flatMap((r) => (r.data || []).map(mapPropertyRow));
 
         const propsById: Record<string, any> = {};
         const propsByOwnerId: Record<string, any[]> = {};
@@ -286,18 +403,22 @@ export const adminDb = {
               userPropMap.set(op.id, op);
             }
           }
+          for (const p of allProps) {
+            if (p.telephone && p.telephone === u.phoneNumber) {
+              userPropMap.set(p.id, p);
+            }
+          }
 
           u.properties = Array.from(userPropMap.values());
         }
       }
 
-      // 2. Batch fetch receipts for all users in a single query
       if (args?.include?.receipts) {
         const { data: allReceipts } = await supabase
           .from('Receipt')
           .select('id, receiptNumber, amount, datePaid, userId, propertyId, gcrNumber')
           .in('userId', userIds);
-        
+
         const receiptsByUserId = (allReceipts || []).reduce((acc: any, r: any) => {
           if (!acc[r.userId]) acc[r.userId] = [];
           acc[r.userId].push(r);
@@ -309,13 +430,12 @@ export const adminDb = {
         }
       }
 
-      // 3. Batch fetch notifications for all users in a single query
       if (args?.include?.notifications) {
         const { data: allNotifs } = await supabase
           .from('Notification')
           .select('id, title, message, type, deliveryMethod, deliveryStatus, createdAt, userId')
           .in('userId', userIds);
-        
+
         const notifsByUserId = (allNotifs || []).reduce((acc: any, n: any) => {
           if (!acc[n.userId]) acc[n.userId] = [];
           acc[n.userId].push(n);
@@ -370,45 +490,58 @@ export const adminDb = {
 
   property: {
     async findMany(args?: { where?: any; include?: any; orderBy?: any; take?: number; skip?: number }) {
+      // Inside adminDb.property.findMany
       const buildBaseQuery = (accountInChunk?: string[]) => {
-        let query = supabase.from('Property').select('id, accountNumber, valuationNo, ownerId, ownerDigitalAddress, propertyClassification, billYear, rateableValue, rateImposed, previousYearBill, amountPaidLastYear, arrears, currentFee, totalAmountDue, status, billDate, settlementDeadline, municipality');
-
+        let query = supabase
+          .from('Property')
+          // Fetch all columns directly from the Supabase DB to reflect the true schema
+          .select('*');
         if (args?.where) {
-          if (args.where.status) {
-            if (typeof args.where.status === 'object' && args.where.status.not) {
-              query = query.neq('status', args.where.status.not);
-            } else {
-              query = query.eq('status', args.where.status);
-            }
-          }
-          if (args.where.totalAmountDue) {
-            if (typeof args.where.totalAmountDue === 'object' && args.where.totalAmountDue.gt !== undefined) {
-              query = query.gt('totalAmountDue', args.where.totalAmountDue.gt);
-            }
-          }
-          if (args.where.arrears) {
-            if (typeof args.where.arrears === 'object' && args.where.arrears.gt !== undefined) {
-              query = query.gt('arrears', args.where.arrears.gt);
-            }
-          }
-          if (args.where.propertyClassification) {
-            query = query.eq('propertyClassification', args.where.propertyClassification);
+          if (args.where.propertyClassification && args.where.propertyClassification !== 'ALL') {
+            query = query.eq('property_cat', args.where.propertyClassification);
           }
           if (accountInChunk) {
-            query = query.in('accountNumber', accountInChunk);
+            query = query.in('account_no', accountInChunk);
           } else if (args.where.accountNumber) {
             if (args.where.accountNumber.in) {
-              query = query.in('accountNumber', args.where.accountNumber.in);
+              query = query.in('account_no', args.where.accountNumber.in);
             } else {
-              query = query.eq('accountNumber', args.where.accountNumber);
+              query = query.eq('account_no', args.where.accountNumber);
             }
           }
           if (args.where.ownerDigitalAddress) query = query.eq('ownerDigitalAddress', args.where.ownerDigitalAddress);
           if (args.where.municipality) query = query.eq('municipality', args.where.municipality);
+          // Status filter at DB level using actual columns (no 'status' column in DB)
+          if (args.where.status && args.where.status !== 'ALL') {
+            if (args.where.status === 'UNPAID') {
+              query = query.gt('outstanding_amt', 0);
+            } else if (args.where.status === 'DEFAULTER') {
+              query = query.gt('arrears', 0).gt('outstanding_amt', 0);
+            } else if (args.where.status === 'PAID') {
+              query = query.eq('outstanding_amt', 0);
+            } else if (args.where.status === 'OVERPAID') {
+              query = query.lt('outstanding_amt', 0);
+            } else if (args.where.status === 'PARTIALLY_PAID') {
+              query = query.gt('amount_paid', 0).gt('outstanding_amt', 0);
+            } else if (typeof args.where.status === 'object' && args.where.status.not === 'PAID') {
+              query = query.gt('outstanding_amt', 0);
+            }
+          }
+          if (args.where.arrears && typeof args.where.arrears === 'object' && args.where.arrears.gt !== undefined) {
+            query = query.gt('arrears', args.where.arrears.gt);
+          }
+          if (args.where.requiredFields) {
+            query = applyRequiredFieldsFilter(query, args.where.requiredFields);
+          }
         }
 
         if (args?.orderBy) {
-          const field = Object.keys(args.orderBy)[0];
+          let field = Object.keys(args.orderBy)[0];
+          if (field === 'accountNumber') field = 'account_no';
+          if (field === 'propertyClassification') field = 'property_cat';
+          if (field === 'currentFee') field = 'current_bill';
+          if (field === 'amountPaidLastYear') field = 'amount_paid';
+
           const dir = args.orderBy[field] === 'desc' ? { ascending: false } : { ascending: true };
           query = query.order(field, dir);
         }
@@ -424,7 +557,6 @@ export const adminDb = {
 
       let data: any[] = [];
 
-      // Case 1: Large list of explicit account numbers (e.g. batch rollout)
       if (args?.where?.accountNumber?.in && args.where.accountNumber.in.length > 80) {
         const accChunks = chunkArray(args.where.accountNumber.in as string[], 80);
         const chunkResults = await Promise.all(
@@ -437,15 +569,19 @@ export const adminDb = {
         );
         data = chunkResults.flat();
       } else if (args?.take !== undefined && args.take <= 1000) {
-        // Case 2: Fixed small limit requested
         let query = buildBaseQuery();
         if (matchedSearchIds !== null) query = query.in('id', matchedSearchIds);
         if (args?.take) query = query.limit(args.take);
         if (args?.skip) query = query.range(args.skip, (args.skip + (args.take || 10)) - 1);
-        const { data: resData } = (await query) as { data: any[] | null; error: any };
+        const { data: resData, error: resError } = (await query) as { data: any[] | null; error: any };
+
+
+        if (resError) {
+          console.error('ADMIN DB PROPERTY QUERY ERROR:', resError);
+        }
+
         data = resData || [];
       } else {
-        // Case 3: Full dataset (or take > 1000) - page across PostgREST 1000-row chunks
         let offset = args?.skip || 0;
         const targetTotal = args?.take !== undefined ? args.take : Infinity;
         while (data.length < targetTotal) {
@@ -455,6 +591,12 @@ export const adminDb = {
           pageQuery = pageQuery.range(offset, offset + fetchCount - 1);
 
           const { data: pageData, error } = (await pageQuery) as { data: any[] | null; error: any };
+
+
+          if (error) {
+            console.error('ADMIN DB PROPERTY PAGED QUERY ERROR:', error);
+          }
+
           if (error || !pageData || pageData.length === 0) break;
           data.push(...pageData);
           if (pageData.length < fetchCount) break;
@@ -464,9 +606,11 @@ export const adminDb = {
 
       if (data.length === 0) return [];
 
+      data = data.map(mapPropertyRow);
+
+      // Status is now filtered at DB level inside buildBaseQuery — no JS post-filter needed.
       const propIds = data.map((p: any) => p.id);
 
-      // 1. Batch fetch PropertyOwner for all properties safely in chunks
       const ownerIds = Array.from(new Set(data.map((p: any) => p.ownerId).filter(Boolean)));
       if (ownerIds.length > 0) {
         const ownerChunks = chunkArray(ownerIds, 80);
@@ -491,7 +635,6 @@ export const adminDb = {
         }
       }
 
-      // 2. Batch fetch receipts for all properties safely in chunks
       if (args?.include?.receipts && propIds.length > 0) {
         const propChunks = chunkArray(propIds, 80);
         const receiptResults = await Promise.all(
@@ -514,7 +657,6 @@ export const adminDb = {
         }
       }
 
-      // 3. Batch fetch linked users for all properties safely in chunks
       if (args?.include?.users && propIds.length > 0) {
         const propChunks = chunkArray(propIds, 80);
         const linkResults = await Promise.all(
@@ -562,10 +704,12 @@ export const adminDb = {
 
     async findUnique(args: { where: { accountNumber?: string; id?: string }; include?: any }) {
       let query = supabase.from('Property').select('*');
-      if (args.where.accountNumber) query = query.eq('accountNumber', args.where.accountNumber);
+      if (args.where.accountNumber) query = query.eq('account_no', args.where.accountNumber);
       if (args.where.id) query = query.eq('id', args.where.id);
-      const { data, error } = await query.maybeSingle();
-      if (error || !data) return null;
+      const { data: rawData, error } = await query.maybeSingle();
+      if (error || !rawData) return null;
+
+      const data = mapPropertyRow(rawData);
 
       if (data.ownerId) {
         const { data: owner } = await supabase
@@ -596,14 +740,11 @@ export const adminDb = {
     },
 
     async create(args: { data: any }) {
-      const { users, receipts, bills, ...cleanData } = args.data;
-      const id = cleanData.id || `prop_${Math.random().toString(36).substring(2, 12)}`;
-      const row = {
-        ...cleanData,
-        id,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
+      const { row, users } = preparePropertyWritePayload(args.data);
+      const id = row.id || `prop_${Math.random().toString(36).substring(2, 12)}`;
+      row.id = id;
+      row.createdAt = new Date().toISOString();
+
       const { data, error } = await supabase.from('Property').insert([row]).select().single();
       if (error) throw new Error(error.message);
 
@@ -611,19 +752,17 @@ export const adminDb = {
         for (const u of users.connect) {
           try {
             await supabase.from('_PropertyToUser').insert([{ A: id, B: u.id }]);
-          } catch (e) {
-            // non-fatal relation link
-          }
+          } catch (e) { }
         }
       }
-      return data;
+      return mapPropertyRow(data);
     },
 
     async update(args: { where: { id?: string; accountNumber?: string }; data: any }) {
-      const { users, receipts, bills, ...cleanData } = args.data;
-      let query = supabase.from('Property').update({ ...cleanData, updatedAt: new Date().toISOString() });
+      const { row, users } = preparePropertyWritePayload(args.data);
+      let query = supabase.from('Property').update(row);
       if (args.where.id) query = query.eq('id', args.where.id);
-      if (args.where.accountNumber) query = query.eq('accountNumber', args.where.accountNumber);
+      if (args.where.accountNumber) query = query.eq('account_no', args.where.accountNumber);
       const { data, error } = await query.select().single();
       if (error) throw new Error(error.message);
 
@@ -634,38 +773,50 @@ export const adminDb = {
           for (const u of users.set) {
             await supabase.from('_PropertyToUser').insert([{ A: propId, B: u.id }]);
           }
-        } catch (e) {
-          // non-fatal
-        }
+        } catch (e) { }
       }
 
-      return data;
+      return mapPropertyRow(data);
     },
 
     async count(args?: { where?: any }) {
       let query = supabase.from('Property').select('*', { count: 'exact', head: true });
       if (args?.where) {
-        if (args.where.status) {
-          if (typeof args.where.status === 'object' && args.where.status.not) {
-            query = query.neq('status', args.where.status.not);
-          } else {
-            query = query.eq('status', args.where.status);
+        if (args.where.status && args.where.status !== 'ALL') {
+          if (args.where.status === 'UNPAID') {
+            query = query.gt('outstanding_amt', 0);
+          } else if (args.where.status === 'DEFAULTER') {
+            query = query.gt('arrears', 0).gt('outstanding_amt', 0);
+          } else if (args.where.status === 'PAID') {
+            query = query.eq('outstanding_amt', 0);
+          } else if (args.where.status === 'OVERPAID') {
+            query = query.lt('outstanding_amt', 0);
+          } else if (args.where.status === 'PARTIALLY_PAID') {
+            query = query.gt('amount_paid', 0).gt('outstanding_amt', 0);
+          } else if (typeof args.where.status === 'object' && args.where.status.not === 'PAID') {
+            query = query.gt('outstanding_amt', 0);
           }
         }
-        if (args.where.totalAmountDue) {
-          if (typeof args.where.totalAmountDue === 'object' && args.where.totalAmountDue.gt !== undefined) {
-            query = query.gt('totalAmountDue', args.where.totalAmountDue.gt);
-          }
+        if (args.where.totalAmountDue && typeof args.where.totalAmountDue === 'object' && args.where.totalAmountDue.gt !== undefined) {
+          query = query.or('arrears.gt.0,current_bill.gt.0');
         }
-        if (args.where.arrears) {
-          if (typeof args.where.arrears === 'object' && args.where.arrears.gt !== undefined) {
-            query = query.gt('arrears', args.where.arrears.gt);
-          }
+        if (args.where.arrears && typeof args.where.arrears === 'object' && args.where.arrears.gt !== undefined) {
+          query = query.gt('arrears', args.where.arrears.gt);
         }
         if (args.where.propertyClassification) {
-          query = query.eq('propertyClassification', args.where.propertyClassification);
+          query = query.eq('property_cat', args.where.propertyClassification);
+        }
+        if (args.where.accountNumber) {
+          if (args.where.accountNumber.in) {
+            query = query.in('account_no', args.where.accountNumber.in);
+          } else {
+            query = query.eq('account_no', args.where.accountNumber);
+          }
         }
         if (args.where.municipality) query = query.eq('municipality', args.where.municipality);
+        if (args.where.requiredFields) {
+          query = applyRequiredFieldsFilter(query, args.where.requiredFields);
+        }
         if (args.where.search) {
           const matchedIds = await resolvePropertySearchIds(String(args.where.search));
           if (matchedIds !== null) {
@@ -680,27 +831,54 @@ export const adminDb = {
     },
 
     async aggregate(args?: { where?: any; _sum?: any }) {
-      let query = supabase.from('Property').select('arrears, currentFee, totalAmountDue');
+      let query = supabase.from('Property').select('arrears, current_bill');
       if (args?.where) {
-        if (args.where.status) {
-          if (typeof args.where.status === 'object' && args.where.status.not) {
-            query = query.neq('status', args.where.status.not);
-          } else {
-            query = query.eq('status', args.where.status);
+        if (args.where.status && args.where.status !== 'ALL') {
+          if (args.where.status === 'UNPAID') {
+            query = query.gt('outstanding_amt', 0);
+          } else if (args.where.status === 'DEFAULTER') {
+            query = query.gt('arrears', 0).gt('outstanding_amt', 0);
+          } else if (args.where.status === 'PAID') {
+            query = query.eq('outstanding_amt', 0);
+          } else if (args.where.status === 'OVERPAID') {
+            query = query.lt('outstanding_amt', 0);
+          } else if (args.where.status === 'PARTIALLY_PAID') {
+            query = query.gt('amount_paid', 0).gt('outstanding_amt', 0);
+          } else if (typeof args.where.status === 'object' && args.where.status.not === 'PAID') {
+            query = query.gt('outstanding_amt', 0);
           }
         }
-        if (args.where.municipality) query = query.eq('municipality', args.where.municipality);
+        if (args.where.propertyClassification && args.where.propertyClassification !== 'ALL') {
+          query = query.eq('property_cat', args.where.propertyClassification);
+        }
+        if (args.where.municipality && args.where.municipality !== 'ALL') {
+          query = query.eq('municipality', args.where.municipality);
+        }
+        if (args.where.requiredFields) {
+          query = applyRequiredFieldsFilter(query, args.where.requiredFields);
+        }
+        if (args.where.search) {
+          const matchedIds = await resolvePropertySearchIds(String(args.where.search));
+          if (matchedIds !== null) {
+            if (matchedIds.length === 0) return { _sum: { arrears: 0, currentFee: 0, totalAmountDue: 0 } };
+            query = query.in('id', matchedIds);
+          }
+        }
       }
 
       const { data, error } = await query;
       if (error || !data) return { _sum: { arrears: 0, currentFee: 0, totalAmountDue: 0 } };
-      
+
       const sum = data.reduce(
-        (acc: any, curr: any) => ({
-          arrears: acc.arrears + (curr.arrears || 0),
-          currentFee: acc.currentFee + (curr.currentFee || 0),
-          totalAmountDue: acc.totalAmountDue + (curr.totalAmountDue || 0),
-        }),
+        (acc: any, curr: any) => {
+          const arr = Number(curr.arrears || 0);
+          const currFee = Number(curr.current_bill || 0);
+          return {
+            arrears: acc.arrears + arr,
+            currentFee: acc.currentFee + currFee,
+            totalAmountDue: acc.totalAmountDue + arr + currFee,
+          };
+        },
         { arrears: 0, currentFee: 0, totalAmountDue: 0 }
       );
       return { _sum: sum };
@@ -958,6 +1136,69 @@ export const adminDb = {
     },
   },
 
+  smsRolloutJob: {
+    async create(args: { data: any }) {
+      const id = args.data.id || `job_${Math.random().toString(36).substring(2, 12)}`;
+      const row = {
+        ...args.data,
+        id,
+        status: args.data.status || 'QUEUED',
+        totalCount: args.data.totalCount || 0,
+        sentCount: args.data.sentCount || 0,
+        failedCount: args.data.failedCount || 0,
+        accountNumbers: args.data.accountNumbers || [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      try {
+        const { data, error } = await supabase.from('SmsRolloutJob').insert([row]).select().single();
+        if (error) {
+          console.error('[adminDb.smsRolloutJob.create] error:', error);
+          return row;
+        }
+        return data;
+      } catch (e) {
+        console.error('[adminDb.smsRolloutJob.create] exception:', e);
+        return row;
+      }
+    },
+    async update(args: { where: { id: string }; data: any }) {
+      const row = {
+        ...args.data,
+        updatedAt: new Date().toISOString(),
+      };
+      try {
+        const { data, error } = await supabase
+          .from('SmsRolloutJob')
+          .update(row)
+          .eq('id', args.where.id)
+          .select()
+          .single();
+        if (error) {
+          console.error('[adminDb.smsRolloutJob.update] error:', error);
+          return null;
+        }
+        return data;
+      } catch (e) {
+        console.error('[adminDb.smsRolloutJob.update] exception:', e);
+        return null;
+      }
+    },
+    async findUnique(args: { where: { id: string }; select?: any }) {
+      try {
+        const { data, error } = await supabase
+          .from('SmsRolloutJob')
+          .select('*')
+          .eq('id', args.where.id)
+          .maybeSingle();
+        if (error || !data) return null;
+        return data;
+      } catch (e) {
+        return null;
+      }
+    },
+  },
+
   async $transaction(promisesOrFn: any) {
     if (typeof promisesOrFn === 'function') {
       return await promisesOrFn(adminDb);
@@ -968,4 +1209,3 @@ export const adminDb = {
     return promisesOrFn;
   },
 };
-

@@ -322,23 +322,33 @@ export async function logoutUser() {
 
 export async function getDashboardData(accountNumberOverride?: string): Promise<DashboardData | null> {
   try {
-    let user = await getAuthenticatedSession();
-    if (!user && accountNumberOverride) {
-      const prop = await prisma.property.findUnique({
-        where: accountNumberOverride.startsWith('prop_') ? { id: accountNumberOverride } : { accountNumber: accountNumberOverride },
-        include: { users: { include: { properties: true } } }
+    let user: any = null;
+
+    if (accountNumberOverride) {
+      const cleanAcc = accountNumberOverride.trim();
+      const prop = await prisma.property.findFirst({
+        where: {
+          OR: [
+            { accountNumber: cleanAcc },
+            { id: cleanAcc },
+          ],
+        },
+        include: { users: { include: { properties: true } }, owner: true },
       });
-      if (prop?.users?.[0]) {
-        user = prop.users[0] as any;
-      } else if (prop) {
+
+      if (prop) {
         user = {
-          id: 'usr_direct',
-          name: 'Municipal Ratepayer',
-          phoneNumber: '0240000000',
+          id: prop.users?.[0]?.id || 'usr_direct',
+          name: prop.owner?.name || prop.users?.[0]?.name || 'Municipal Ratepayer',
+          phoneNumber: prop.owner?.mobileNumber || prop.owner?.tel || '0243756235',
           isVerified: true,
-          properties: [prop]
-        } as any;
+          properties: [prop],
+        };
       }
+    }
+
+    if (!user) {
+      user = await getAuthenticatedSession();
     }
     if (!user) return null;
 
@@ -347,7 +357,7 @@ export async function getDashboardData(accountNumberOverride?: string): Promise<
     let paidCount = 0;
     let unpaidCount = 0;
 
-    const formattedProperties: DashboardProperty[] = user.properties.map((p) => {
+    const formattedProperties: DashboardProperty[] = user.properties.map((p: any) => {
       totalValuation += p.rateableValue;
       totalOutstanding += p.status === 'PAID' ? 0 : p.totalAmountDue;
 
@@ -591,39 +601,101 @@ export async function verifySubscriberAction(phoneNumber: string) {
   }
 }
 
-export async function getCheckoutData(propertyId: string, settlementType: SettlementType = 'TOTAL', customAmount?: number) {
+export async function getCheckoutData(
+  propertyId: string,
+  settlementType: SettlementType = 'TOTAL',
+  customAmount?: number,
+  accountNumberOverride?: string
+) {
   try {
-    const user = await getAuthenticatedSession();
+    let user = await getAuthenticatedSession();
 
     let totalAmount = 0;
     let actualBill = 0;
     let title = '';
     let subtitle = '';
-    let fiscalYear = 2025;
+    let fiscalYear = 2026;
     let targetProp: any = null;
     let accountNumber = '';
     let ownerName = '';
     let arrears = 0;
     let annualRate = 0;
+    let portfolioProperties: Array<{
+      id: string;
+      accountNumber: string;
+      ownerDigitalAddress: string;
+      propertyClassification: string;
+      arrears: number;
+      currentFee: number;
+      totalAmountDue: number;
+      status: string;
+    }> = [];
+
+    // If propertyId === 'ALL' and we have an accountNumberOverride, resolve all properties under that owner/number
+    if (propertyId === 'ALL' && !user && accountNumberOverride) {
+      const cleanAcc = accountNumberOverride.trim();
+      const seedProp = await prisma.property.findFirst({
+        where: { OR: [{ accountNumber: cleanAcc }, { id: cleanAcc }] },
+        include: { users: { include: { properties: true } }, owner: true },
+      });
+
+      if (seedProp) {
+        const ownerPhone = seedProp.owner?.mobileNumber || seedProp.owner?.tel || seedProp.users?.[0]?.phoneNumber;
+        let allOwnerProps: any[] = [];
+        if (ownerPhone) {
+          const cleanDigits = ownerPhone.replace(/\D/g, '');
+          allOwnerProps = await prisma.property.findMany({
+            where: {
+              OR: [
+                { owner: { OR: [{ mobileNumber: ownerPhone }, { tel: ownerPhone }, { mobileNumber: cleanDigits }, { tel: cleanDigits }] } },
+                { users: { some: { phoneNumber: ownerPhone } } },
+              ],
+            },
+            include: { owner: true },
+          });
+        }
+        if (allOwnerProps.length === 0) {
+          allOwnerProps = [seedProp];
+        }
+
+        user = {
+          id: seedProp.users?.[0]?.id || 'usr_direct',
+          name: seedProp.owner?.name || seedProp.users?.[0]?.name || 'Municipal Ratepayer',
+          phoneNumber: ownerPhone || '0243756235',
+          isVerified: true,
+          properties: allOwnerProps,
+        } as any;
+      }
+    }
 
     if (propertyId === 'ALL') {
       if (!user) return null;
-      const unpaidProps = user.properties.filter((p) => p.status !== 'PAID');
-      actualBill = unpaidProps.reduce((sum, p) => sum + p.totalAmountDue, 0);
+      const unpaidProps = (user.properties || []).filter((p: any) => p.status !== 'PAID');
+      actualBill = unpaidProps.reduce((sum: number, p: any) => sum + p.totalAmountDue, 0);
       totalAmount = actualBill;
       title = 'All Municipal Property Rates';
       subtitle = `${unpaidProps.length} Account Head${unpaidProps.length === 1 ? '' : 's'} assessed under KKMA`;
-      accountNumber = 'All Accounts';
+      accountNumber = unpaidProps.map((p: any) => p.accountNumber).join(', ');
       ownerName = user.name || 'Municipal Ratepayer';
-      arrears = unpaidProps.reduce((sum, p) => sum + (p.arrears || 0), 0);
-      annualRate = unpaidProps.reduce((sum, p) => sum + (p.currentFee || 0), 0);
+      arrears = unpaidProps.reduce((sum: number, p: any) => sum + (p.arrears || 0), 0);
+      annualRate = unpaidProps.reduce((sum: number, p: any) => sum + (p.currentFee || 0), 0);
+      portfolioProperties = unpaidProps.map((p: any) => ({
+        id: p.id,
+        accountNumber: p.accountNumber,
+        ownerDigitalAddress: p.ownerDigitalAddress || 'KKMA',
+        propertyClassification: p.propertyClassification || 'RESIDENTIAL',
+        arrears: p.arrears || 0,
+        currentFee: p.currentFee || 0,
+        totalAmountDue: p.totalAmountDue || 0,
+        status: p.status || 'UNPAID',
+      }));
     } else {
       targetProp = await prisma.property.findUnique({
         where: propertyId.startsWith('prop_') ? { id: propertyId } : { accountNumber: propertyId },
         include: { users: true, owner: true }
       });
       if (!targetProp && user?.properties) {
-        const found = user.properties.find((p) => p.id === propertyId || p.accountNumber === propertyId);
+        const found = user.properties.find((p: any) => p.id === propertyId || p.accountNumber === propertyId);
         if (found) {
           targetProp = await prisma.property.findUnique({
             where: { id: found.id },
@@ -734,6 +806,7 @@ export async function getCheckoutData(propertyId: string, settlementType: Settle
       verifiedSubscriberName,
       isHubtelVerified,
       preferredDisplayName,
+      portfolioProperties,
       user: {
         id: deterministicUser?.id || targetProp?.users?.[0]?.id || 'usr_direct',
         name: preferredDisplayName,
@@ -940,21 +1013,28 @@ export async function chargeMobileMoneyAction(params: {
   processingFee: number;
   phone: string;
   network: NetworkProvider;
+  targetPropertyIds?: string[];
+  accountNumberOverride?: string;
 }) {
   try {
     let user = await getAuthenticatedSession();
-    if (!user && params.propertyId !== 'ALL') {
-      user = (await resolvePropertyUser(params.propertyId, null)) as any;
+    if (!user) {
+      const lookupAcc = params.accountNumberOverride || (params.propertyId !== 'ALL' ? params.propertyId : null);
+      if (lookupAcc) {
+        user = (await resolvePropertyUser(lookupAcc, null)) as any;
+      }
     }
     if (!user) return { success: false, error: 'User session or property record not found' };
 
     let propertyIds: string[] = [];
     let matchedProp: any = null;
 
-    if (params.propertyId === 'ALL') {
-      propertyIds = user.properties.filter(p => p.status !== 'PAID').map(p => p.id);
+    if (params.targetPropertyIds && params.targetPropertyIds.length > 0) {
+      propertyIds = params.targetPropertyIds;
+    } else if (params.propertyId === 'ALL') {
+      propertyIds = (user.properties || []).filter((p: any) => p.status !== 'PAID').map((p: any) => p.id);
     } else {
-      matchedProp = user.properties.find((p: any) => p.id === params.propertyId || p.accountNumber === params.propertyId);
+      matchedProp = user.properties?.find((p: any) => p.id === params.propertyId || p.accountNumber === params.propertyId);
       if (!matchedProp) {
         matchedProp = await prisma.property.findUnique({
           where: params.propertyId.startsWith('prop_') ? { id: params.propertyId } : { accountNumber: params.propertyId }
@@ -1088,7 +1168,11 @@ export async function processPayment(data: {
     let generatedReceiptNumber = '';
     let generatedReceiptId = '';
 
+    let remainingPaymentPool = data.amount;
+
     for (const propId of targetPropertyIds) {
+      if (remainingPaymentPool <= 0) break;
+
       let prop: any = user.properties.find((p: any) => p.id === propId || p.accountNumber === propId);
       if (!prop) {
         prop = await prisma.property.findUnique({
@@ -1097,26 +1181,32 @@ export async function processPayment(data: {
       }
       if (!prop) continue;
 
-      let paymentAmount = data.amount;
+      let paymentAmount = 0;
       let newArrears = prop.arrears;
       let newCurrentFee = prop.currentFee;
       let newStatus: 'PAID' | 'PARTIALLY_PAID' | 'UNPAID' = 'PAID';
 
       if (settlementType === 'ARREARS') {
-        paymentAmount = Math.min(data.amount, prop.arrears);
+        paymentAmount = Math.min(remainingPaymentPool, prop.arrears);
         newArrears = Math.max(0, prop.arrears - paymentAmount);
         newStatus = newArrears === 0 && newCurrentFee === 0 ? 'PAID' : 'PARTIALLY_PAID';
+        remainingPaymentPool -= paymentAmount;
       } else if (settlementType === 'CURRENT_FEE') {
-        paymentAmount = Math.min(data.amount, prop.currentFee);
+        paymentAmount = Math.min(remainingPaymentPool, prop.currentFee);
         newCurrentFee = Math.max(0, prop.currentFee - paymentAmount);
         newStatus = newArrears === 0 && newCurrentFee === 0 ? 'PAID' : 'PARTIALLY_PAID';
+        remainingPaymentPool -= paymentAmount;
       } else {
         // TOTAL or Partial with priority allocation (Arrears First)
-        if (paymentAmount >= prop.totalAmountDue) {
+        if (remainingPaymentPool >= prop.totalAmountDue) {
+          paymentAmount = prop.totalAmountDue;
           newArrears = 0;
           newCurrentFee = 0;
           newStatus = 'PAID';
+          remainingPaymentPool -= paymentAmount;
         } else {
+          paymentAmount = remainingPaymentPool;
+          remainingPaymentPool = 0;
           // Liquidate arrears first
           if (paymentAmount <= prop.arrears) {
             newArrears = prop.arrears - paymentAmount;

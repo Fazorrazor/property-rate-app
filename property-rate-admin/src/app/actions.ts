@@ -1,5 +1,5 @@
 'use server';
-
+import { adminDb } from '@/lib/adminDb';
 import { prisma } from '@/lib/db';
 import { supabase } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
@@ -13,8 +13,10 @@ const twilioServiceInstance = new TwilioProvider();
 
 let activeSmsConfig = {
   dispatchMode: (process.env.SMS_DISPATCH_MODE || 'LIVE') as 'TEST' | 'LIVE',
-  provider: (process.env.SMS_PROVIDER || 'arkesel').toLowerCase() as 'arkesel' | 'twilio',
-  arkeselApiKey: process.env.ARKESEL_API_KEY || 'YUlJRXNnTUdJaUdndHRNd2Zubms',
+  provider: (process.env.SMS_PROVIDER || 'arkesel').toLowerCase() as
+    | 'arkesel'
+    | 'twilio',
+  arkeselApiKey: process.env.ARKESEL_API_KEY || '',
   arkeselSenderId: process.env.ARKESEL_SENDER_ID || 'Arnold',
   messageTemplate: DEFAULT_SMS_NOTICE_TEMPLATE,
   receiptTemplate: DEFAULT_RECEIPT_NOTICE_TEMPLATE,
@@ -23,12 +25,19 @@ let activeSmsConfig = {
 arkeselService.setApiKey(activeSmsConfig.arkeselApiKey);
 arkeselService.setSenderId(activeSmsConfig.arkeselSenderId);
 
-const getActiveSmsProvider = () => {
-  return activeSmsConfig.provider === 'twilio' ? twilioServiceInstance : arkeselService;
-};
+const getActiveSmsProvider = () =>
+  activeSmsConfig.provider === 'twilio'
+    ? twilioServiceInstance
+    : arkeselService;
 
-const smsService = arkeselService;
-const twilioService = arkeselService;
+const smsFormatter = arkeselService;
+
+let arkeselBalanceCache: {
+  data: { smsBalance: number; mainBalance: string } | null;
+  timestamp: number;
+} | null = null;
+
+const BALANCE_CACHE_TTL_MS = 60 * 1000;
 
 export async function syncActiveSmsConfig() {
   try {
@@ -57,8 +66,6 @@ export async function syncActiveSmsConfig() {
   }
 }
 
-
-
 export interface AdminPropertyReceipt {
   id: string;
   receiptNumber: string;
@@ -80,6 +87,7 @@ export interface AdminProperty {
   physicalAddress?: string;
   houseNo?: string;
   plotNo?: string;
+  electoralArea?: string;
   municipality: string;
   ownerPhone: string;
   ownerName: string;
@@ -104,6 +112,15 @@ export interface AdminProperty {
   status: 'PAID' | 'PARTIALLY_PAID' | 'UNPAID';
   isDefaulter: boolean;
   receipts: AdminPropertyReceipt[];
+  
+  latitude?: number | null;
+  longitude?: number | null;
+  ownerId?: string | null;
+  propertyTypeCode?: string | null;
+  propertyCategoryCode?: string | null;
+  streetCode?: string | null;
+  communityCode?: string | null;
+  subMetroCode?: string | null;
 }
 
 export interface AdminDashboardData {
@@ -197,7 +214,7 @@ export async function verifyAdminSession() {
   if (!session?.value) {
     return null;
   }
-  
+
   const [adminId, sessionToken] = session.value.split(':');
 
   const admin = await prisma.adminUser.findUnique({
@@ -209,7 +226,6 @@ export async function verifyAdminSession() {
     return null;
   }
 
-  // Single-device active session verification
   if (sessionToken) {
     try {
       const latestSession = await prisma.auditLog.findFirst({
@@ -226,14 +242,11 @@ export async function verifyAdminSession() {
           return null;
         }
         if (latestSession.action === 'ADMIN_SESSION_ACTIVE' && latestSession.details !== sessionToken) {
-          // Superseded by a newer login from another device
           cookieStore.delete('admin_session');
           return null;
         }
       }
-    } catch (e) {
-      // transient query error non-fatal
-    }
+    } catch (e) { }
   }
 
   return admin;
@@ -250,24 +263,21 @@ export async function adminLogin(username: string, passwordHash: string, remembe
     const cleanUsername = (username || '').trim();
     const cleanPassword = (passwordHash || '').trim();
 
-    // Strict Input Validation
     if (!cleanUsername) {
       return { success: false, error: 'Officer username is required.' };
     }
 
-    // Explicit rejection of telephone numbers (must use username only)
     if (/^(\+?233|0)\d{8,10}$/.test(cleanUsername) || /^\d{10,}$/.test(cleanUsername)) {
-      return { 
-        success: false, 
-        error: 'Telephone numbers are not accepted for municipal console login. Please use your official username.' 
+      return {
+        success: false,
+        error: 'Telephone numbers are not accepted for municipal console login. Please use your official username.'
       };
     }
 
-    // Alphanumeric, dot, underscore, or hyphen validation
     if (!/^[a-zA-Z0-9_.-]{3,50}$/.test(cleanUsername)) {
-      return { 
-        success: false, 
-        error: 'Username must be between 3 and 50 characters and contain only letters, numbers, hyphens, or underscores.' 
+      return {
+        success: false,
+        error: 'Username must be between 3 and 50 characters and contain only letters, numbers, hyphens, or underscores.'
       };
     }
 
@@ -275,7 +285,6 @@ export async function adminLogin(username: string, passwordHash: string, remembe
       return { success: false, error: 'Authorization password must be at least 6 characters.' };
     }
 
-    // Query back-office AdminUser table (isolated from citizen account holders)
     const admin = await prisma.adminUser.findUnique({
       where: { username: cleanUsername }
     });
@@ -286,7 +295,6 @@ export async function adminLogin(username: string, passwordHash: string, remembe
 
     const sessionToken = `adm_${Math.random().toString(36).substring(2, 12)}_${Date.now()}`;
 
-    // Record this active session to invalidate all prior sessions on other devices
     try {
       await prisma.auditLog.create({
         data: {
@@ -305,7 +313,7 @@ export async function adminLogin(username: string, passwordHash: string, remembe
     cookieStore.set('admin_session', `${admin.id}:${sessionToken}`, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      maxAge: rememberMe ? 60 * 60 * 24 * 7 : 60 * 60 * 24, // 7 days or 24 hours
+      maxAge: rememberMe ? 60 * 60 * 24 * 7 : 60 * 60 * 24,
       path: '/',
       sameSite: 'lax'
     });
@@ -332,126 +340,14 @@ export async function adminLogout() {
           adminId: adminId,
         },
       });
-    } catch (e) {}
+    } catch (e) { }
   }
   cookieStore.delete('admin_session');
   revalidatePath('/');
 }
 
-// =========================================================================
-// DYNAMIC & CONTEXT-AWARE SEARCH QUERY BUILDERS
-// =========================================================================
-
-function buildPropertySearchCondition(query: string) {
-  const q = query.trim();
-  if (!q) return null;
-
-  const tokens = q.split(/\s+/).filter(Boolean);
-
-  const buildTokenCondition = (term: string) => ({
-    OR: [
-      { accountNumber: { contains: term, mode: 'insensitive' as const } },
-      { valuationNo: { contains: term, mode: 'insensitive' as const } },
-      { ownerDigitalAddress: { contains: term, mode: 'insensitive' as const } },
-      { physicalAddress: { contains: term, mode: 'insensitive' as const } },
-      { houseNo: { contains: term, mode: 'insensitive' as const } },
-      { plotNo: { contains: term, mode: 'insensitive' as const } },
-      { municipality: { contains: term, mode: 'insensitive' as const } },
-      { propertyClassification: { contains: term, mode: 'insensitive' as const } },
-      { owner: { name: { contains: term, mode: 'insensitive' as const } } },
-      { owner: { tel: { contains: term, mode: 'insensitive' as const } } },
-      { owner: { mobileNumber: { contains: term, mode: 'insensitive' as const } } },
-      { owner: { address: { contains: term, mode: 'insensitive' as const } } },
-      { owner: { streetAddress: { contains: term, mode: 'insensitive' as const } } },
-      { owner: { corporationPartnership: { contains: term, mode: 'insensitive' as const } } },
-      { users: { some: { name: { contains: term, mode: 'insensitive' as const } } } },
-      { users: { some: { phoneNumber: { contains: term, mode: 'insensitive' as const } } } },
-      { street: { street: { contains: term, mode: 'insensitive' as const } } },
-      { community: { community: { contains: term, mode: 'insensitive' as const } } },
-      { subMetro: { subMetro: { contains: term, mode: 'insensitive' as const } } },
-      { propertyType: { type: { contains: term, mode: 'insensitive' as const } } },
-      { propertyCategory: { category: { contains: term, mode: 'insensitive' as const } } },
-      { receipts: { some: { receiptNumber: { contains: term, mode: 'insensitive' as const } } } },
-      { feePayments: { some: { gcrNr: { contains: term, mode: 'insensitive' as const } } } },
-    ],
-  });
-
-  if (tokens.length === 1) {
-    return buildTokenCondition(tokens[0]);
-  }
-
-  return {
-    AND: tokens.map((t) => buildTokenCondition(t)),
-  };
-}
-
-function buildRatepayerSearchCondition(query: string) {
-  const q = query.trim();
-  if (!q) return null;
-
-  const tokens = q.split(/\s+/).filter(Boolean);
-
-  const buildTokenCondition = (term: string) => ({
-    OR: [
-      { name: { contains: term, mode: 'insensitive' as const } },
-      { phoneNumber: { contains: term, mode: 'insensitive' as const } },
-      { role: { contains: term, mode: 'insensitive' as const } },
-      {
-        properties: {
-          some: {
-            OR: [
-              { accountNumber: { contains: term, mode: 'insensitive' as const } },
-              { valuationNo: { contains: term, mode: 'insensitive' as const } },
-              { ownerDigitalAddress: { contains: term, mode: 'insensitive' as const } },
-              { physicalAddress: { contains: term, mode: 'insensitive' as const } },
-              { houseNo: { contains: term, mode: 'insensitive' as const } },
-              { plotNo: { contains: term, mode: 'insensitive' as const } },
-              { municipality: { contains: term, mode: 'insensitive' as const } },
-              { propertyClassification: { contains: term, mode: 'insensitive' as const } },
-            ],
-          },
-        },
-      },
-      {
-        receipts: {
-          some: {
-            OR: [
-              { receiptNumber: { contains: term, mode: 'insensitive' as const } },
-              { paymentPhoneNumber: { contains: term, mode: 'insensitive' as const } },
-              { paymentMethod: { contains: term, mode: 'insensitive' as const } },
-            ],
-          },
-        },
-      },
-      {
-        transactions: {
-          some: {
-            reference: { contains: term, mode: 'insensitive' as const },
-          },
-        },
-      },
-    ],
-  });
-
-  if (tokens.length === 1) {
-    return buildTokenCondition(tokens[0]);
-  }
-
-  return {
-    AND: tokens.map((t) => buildTokenCondition(t)),
-  };
-}
-
-interface GlobalMetricsCacheEntry {
-  timestamp: number;
-  globalPropsCount: number;
-  globalDefaultersCount: number;
-  globalPropertyAgg: any;
-  globalReceiptsAgg: any;
-}
-
-const METRICS_CACHE_TTL_MS = 60 * 1000; // 60 seconds TTL for heavy aggregations
-const metricsCache = new Map<string, GlobalMetricsCacheEntry>();
+const METRICS_CACHE_TTL_MS = 60 * 1000;
+const metricsCache = new Map<string, any>();
 
 export async function invalidateMetricsCache() {
   metricsCache.clear();
@@ -470,10 +366,7 @@ export async function getAdminOverview(
 
     const skip = (page - 1) * limit;
 
-    // 1. Global MMDA where clause for executive scorecards
     const globalWhereClause: any = municipality !== "ALL" ? { municipality } : {};
-
-    // 2. Active filter where clause for table records and exact filtered count
     const tableWhereClause: any = { ...globalWhereClause };
 
     if (classification !== "ALL") {
@@ -481,11 +374,11 @@ export async function getAdminOverview(
     }
 
     if (status === "UNPAID") {
-      tableWhereClause.status = { not: "PAID" };
+      tableWhereClause.status = "UNPAID";
     } else if (status === "PAID") {
       tableWhereClause.status = "PAID";
     } else if (status === "DEFAULTER") {
-      tableWhereClause.status = { not: "PAID" };
+      tableWhereClause.status = "DEFAULTER";
       tableWhereClause.arrears = { gt: 0 };
     }
 
@@ -493,8 +386,6 @@ export async function getAdminOverview(
       tableWhereClause.search = searchQuery.trim();
     }
 
-
-    // High performance conditional transaction: bypass global aggregations during infinite scroll (page > 1) or when metrics are cached
     let totalFilteredProps = 0;
     let globalPropsCount = 0;
     let globalDefaultersCount = 0;
@@ -567,7 +458,6 @@ export async function getAdminOverview(
           orderBy: { accountNumber: 'asc' },
         })
       ]);
-
       metricsCache.set(cacheKey, {
         timestamp: Date.now(),
         globalPropsCount,
@@ -588,8 +478,9 @@ export async function getAdminOverview(
       const billDateObj = new Date(p.billDate || Date.now());
       const deadlineObj = new Date(p.settlementDeadline || Date.now());
       const primaryUser = p.users?.[0];
-      const ownerName = p.owner?.name || primaryUser?.name || 'Municipal Ratepayer';
-      const ownerPhone = p.owner?.tel || p.owner?.mobileNumber || primaryUser?.phoneNumber || 'N/A';
+      // Prioritise direct Property.name / Property.telephone (legacy fields confirmed in live DB)
+      const ownerName = p.ownerNameDirect || p.owner?.name || primaryUser?.name || 'Municipal Ratepayer';
+      const ownerPhone = p.ownerPhoneDirect || p.owner?.tel || p.owner?.mobileNumber || primaryUser?.phoneNumber || '—';
 
       const muni = p.municipality || 'Kpone-Katamanso (KKMA)';
 
@@ -610,10 +501,14 @@ export async function getAdminOverview(
       return {
         id: p.id,
         accountNumber: p.accountNumber,
+        valuationNo: p.valuationNo,
+        physicalAddress: p.physicalAddress || '',
+        houseNo: p.houseNo || '',
+        plotNo: p.plotNo || '',
         municipality: muni,
         ownerPhone,
         ownerName,
-        ownerDigitalAddress: p.ownerDigitalAddress || 'N/A',
+        ownerDigitalAddress: p.ownerDigitalAddress || '—',
         propertyClassification: p.propertyClassification || 'RESIDENTIAL',
         billYear: p.billYear || 2025,
         billDateFormatted: billDateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
@@ -634,6 +529,14 @@ export async function getAdminOverview(
         status: (p.status || 'UNPAID') as 'PAID' | 'PARTIALLY_PAID' | 'UNPAID',
         isDefaulter,
         receipts: receiptsList,
+        latitude: p.latitude || null,
+        longitude: p.longitude || null,
+        ownerId: p.ownerId || null,
+        propertyTypeCode: p.propertyTypeCode || null,
+        propertyCategoryCode: p.propertyCategoryCode || null,
+        streetCode: p.streetCode || null,
+        communityCode: p.communityCode || null,
+        subMetroCode: p.subMetroCode || null,
       };
     });
 
@@ -727,7 +630,6 @@ export async function getRatepayersList(query = '', page = 1, limit = 50): Promi
   }
 }
 
-
 export async function getRatepayerHistory(userId: string): Promise<RatepayerHistoryDossier | null> {
   try {
     await verifyAdminSession();
@@ -784,6 +686,10 @@ export async function getRatepayerHistory(userId: string): Promise<RatepayerHist
       return {
         id: p.id,
         accountNumber: p.accountNumber,
+        valuationNo: p.valuationNo,
+        physicalAddress: p.physicalAddress || '',
+        houseNo: p.houseNo || '',
+        plotNo: p.plotNo || '',
         municipality: p.municipality || 'Kpone-Katamanso (KKMA)',
         ownerPhone: user.phoneNumber,
         ownerName: user.name || 'Municipal Ratepayer',
@@ -808,6 +714,14 @@ export async function getRatepayerHistory(userId: string): Promise<RatepayerHist
         status: (p.status || 'UNPAID') as 'PAID' | 'PARTIALLY_PAID' | 'UNPAID',
         isDefaulter,
         receipts: receiptsList,
+        latitude: p.latitude || null,
+        longitude: p.longitude || null,
+        ownerId: p.ownerId || null,
+        propertyTypeCode: p.propertyTypeCode || null,
+        propertyCategoryCode: p.propertyCategoryCode || null,
+        streetCode: p.streetCode || null,
+        communityCode: p.communityCode || null,
+        subMetroCode: p.subMetroCode || null,
       };
     });
 
@@ -850,11 +764,12 @@ export async function getRatepayerHistory(userId: string): Promise<RatepayerHist
       }),
     }));
 
-    const totalValuation = properties.reduce((acc, curr) => acc + curr.rateableValue, 0);
-    const totalArrears = properties.reduce((acc, curr) => acc + curr.arrears, 0);
-    const totalCurrentFee = properties.reduce((acc, curr) => acc + curr.currentFee, 0);
-    const totalOutstandingDue = properties.reduce((acc, curr) => acc + curr.totalAmountDue, 0);
-    const totalPaid = allReceipts.reduce((acc, curr) => acc + curr.amount, 0);
+    // Fix 2: Type reduce callbacks explicitly in getRatepayerHistory
+    const totalValuation = properties.reduce((acc: number, curr: AdminProperty) => acc + curr.rateableValue, 0);
+    const totalArrears = properties.reduce((acc: number, curr: AdminProperty) => acc + curr.arrears, 0);
+    const totalCurrentFee = properties.reduce((acc: number, curr: AdminProperty) => acc + curr.currentFee, 0);
+    const totalOutstandingDue = properties.reduce((acc: number, curr: AdminProperty) => acc + curr.totalAmountDue, 0);
+    const totalPaid = allReceipts.reduce((acc: number, curr: AdminPropertyReceipt) => acc + curr.amount, 0);
 
     const hasDefaulter = properties.some((p) => p.isDefaulter);
     const isSettled = properties.length > 0 && properties.every((p) => p.status === 'PAID');
@@ -862,8 +777,8 @@ export async function getRatepayerHistory(userId: string): Promise<RatepayerHist
     const status: 'SETTLED' | 'OUTSTANDING' | 'DEFAULTER' = hasDefaulter
       ? 'DEFAULTER'
       : isSettled
-      ? 'SETTLED'
-      : 'OUTSTANDING';
+        ? 'SETTLED'
+        : 'OUTSTANDING';
 
     return {
       user: {
@@ -924,7 +839,13 @@ export async function getAuditTrailList(
       whereClause.action = actionFilter;
     }
     if (query && query.trim()) {
-      whereClause.search = query.trim();
+      const q = query.trim();
+      whereClause.OR = [
+        { details: { contains: q, mode: 'insensitive' } },
+        { action: { contains: q, mode: 'insensitive' } },
+        { entityType: { contains: q, mode: 'insensitive' } },
+        { entityId: { contains: q, mode: 'insensitive' } },
+      ];
     }
 
     const skip = (page - 1) * limit;
@@ -939,7 +860,6 @@ export async function getAuditTrailList(
       prisma.auditLog.count({ where: whereClause }),
     ]);
 
-    // Batch resolve admin names
     const adminIds = Array.from(new Set(logs.map((l: any) => l.adminId).filter(Boolean)));
     const admins = adminIds.length > 0 ? await prisma.user.findMany({
       where: { id: { in: adminIds } },
@@ -1009,15 +929,17 @@ export async function getAuditTrailList(
   }
 }
 
-export async function getSmsRolloutLogs(): Promise<SmsRolloutLogItem[]> {
+export async function getSmsRolloutLogs(page = 1, limit = 50): Promise<SmsRolloutLogItem[]> {
   try {
     await verifyAdminSession();
 
+    const skip = (page - 1) * limit;
     const notifs = await prisma.notification.findMany({
       where: { deliveryMethod: 'SMS' },
       include: { user: true },
       orderBy: { createdAt: 'desc' },
-      take: 40,
+      skip,
+      take: limit,
     });
 
     return notifs.map((n: any) => ({
@@ -1048,7 +970,7 @@ export async function simulateSmsNoticeDispatch(accountNumber: string, customTem
 
     const property = await prisma.property.findUnique({
       where: { accountNumber },
-      include: { users: true },
+      include: { users: true, owner: true },
     });
 
     const primaryOwner = property?.users?.[0];
@@ -1056,27 +978,31 @@ export async function simulateSmsNoticeDispatch(accountNumber: string, customTem
       return { success: false, error: 'Property Account Head or linked taxpayer not found.' };
     }
 
-    const formattedSms = twilioService.formatBillRolloutMessage({
+    const ownerName = property.owner?.name || primaryOwner.name || 'Municipal Ratepayer';
+    const ownerPhone = property.owner?.tel || property.owner?.mobileNumber || primaryOwner.phoneNumber || '';
+
+    const formattedAnnualBill = smsFormatter.formatBillRolloutMessage({
       accountNumber: property.accountNumber,
-      ownerName: primaryOwner.name || 'Municipal Ratepayer',
-      phoneNumber: primaryOwner.phoneNumber,
-      totalAmountDue: property.totalAmountDue,
-      arrears: property.arrears,
-      currentFee: property.currentFee,
+      ownerName,
+      phoneNumber: ownerPhone,
+      totalAmountDue: property.totalAmountDue || 0,
+      arrears: property.arrears || 0,
+      currentFee: property.currentFee || 0,
       dueDate: '30-Jun-2025',
       baseUrl,
       customTemplate: customTemplate || activeSmsConfig.messageTemplate,
       municipality: property.municipality || 'Kpone-Katamanso (KKMA)',
       billYear: property.billYear || 2026,
+      ownerDigitalAddress: property.ownerDigitalAddress || '',
     });
 
     return {
       success: true,
-      recipientPhone: formattedSms.recipientPhone,
-      recipientName: formattedSms.recipientName,
-      messageText: formattedSms.messageText,
-      billLinkUrl: formattedSms.billLinkUrl,
-      paymentLinkUrl: formattedSms.paymentLinkUrl,
+      recipientPhone: formattedAnnualBill.recipientPhone,
+      recipientName: formattedAnnualBill.recipientName,
+      messageText: formattedAnnualBill.messageText,
+      billLinkUrl: formattedAnnualBill.billLinkUrl,
+      paymentLinkUrl: formattedAnnualBill.paymentLinkUrl,
       timestamp: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
     };
   } catch (error) {
@@ -1092,102 +1018,439 @@ export interface SmsAudienceResult {
   properties: AdminProperty[];
 }
 
-export async function getSmsRolloutAudience(params: {
+export interface SmsAudienceParams {
   municipality?: string;
   classification?: string;
   status?: 'ALL' | 'UNPAID' | 'DEFAULTER';
   searchQuery?: string;
   accountNumbers?: string[];
-}): Promise<SmsAudienceResult | null> {
+  requiredFields?: string[];
+}
+
+export async function searchSmsRolloutAccounts(params: {
+  municipality?: string;
+  searchQuery: string;
+}): Promise<{
+  properties: AdminProperty[];
+  count: number;
+} | null> {
   try {
     await verifyAdminSession();
 
-    const whereClause: any = {};
-    if (params.accountNumbers && params.accountNumbers.length > 0) {
-      whereClause.accountNumber = { in: params.accountNumbers };
-    } else {
-      if (params.municipality && params.municipality !== 'ALL') {
-        whereClause.municipality = params.municipality;
-      }
-      if (params.classification && params.classification !== 'ALL') {
-        whereClause.propertyClassification = params.classification;
-      }
-      if (params.status === 'UNPAID') {
-        whereClause.status = { not: 'PAID' };
-        whereClause.totalAmountDue = { gt: 0 };
-      } else if (params.status === 'DEFAULTER') {
-        whereClause.status = { not: 'PAID' };
-        whereClause.arrears = { gt: 0 };
-      }
-      if (params.searchQuery && params.searchQuery.trim()) {
-        whereClause.search = params.searchQuery.trim();
-      }
+    const searchQuery = params.searchQuery?.trim();
+    if (!searchQuery || searchQuery.length < 2) {
+      return { properties: [], count: 0 };
     }
 
-    const properties = await prisma.property.findMany({
-      where: whereClause,
-      include: {
-        users: true,
-        owner: true,
+    const municipality =
+      params.municipality && params.municipality !== 'ALL'
+        ? params.municipality
+        : undefined;
+
+    // Use adminDb (Supabase) — resolvePropertySearchIds already searches
+    // Property.name, Property.telephone, account_no, valuationNo, etc.
+    const results = await adminDb.property.findMany({
+      where: {
+        ...(municipality ? { municipality } : {}),
+        search: searchQuery,
       },
-      orderBy: { accountNumber: 'asc' },
+      take: 100,
+      include: { users: true },
     });
 
-    let totalDue = 0;
-    const formatted: AdminProperty[] = properties.map((p: any) => {
-      const isDefaulter = p.status !== 'PAID' && (p.arrears || 0) > 0;
+    const formattedProperties: AdminProperty[] = (results || []).map((p: any) => {
+      // p has mapPropertyRow applied: accountNumber, propertyClassification, ownerNameDirect, ownerPhoneDirect
+      const primaryUser = p.users?.[0];
+      const ownerName = p.ownerNameDirect || p.owner?.name || primaryUser?.name || 'Municipal Ratepayer';
+      const ownerPhone = p.ownerPhoneDirect || p.owner?.tel || p.owner?.mobileNumber || primaryUser?.phoneNumber || 'N/A';
+
       const billDateObj = new Date(p.billDate || Date.now());
       const deadlineObj = new Date(p.settlementDeadline || Date.now());
-      const primaryUser = p.users?.[0];
-      const ownerName = p.owner?.name || primaryUser?.name || 'Municipal Ratepayer';
-      const ownerPhone = p.owner?.tel || p.owner?.mobileNumber || primaryUser?.phoneNumber || 'N/A';
-      const due = p.totalAmountDue || 0;
-      totalDue += due;
+      const rateableValue = Number(p.rateableValue || 0);
+      const rateImposed = Number(p.rateImposed || 0);
+      const previousYearBill = Number(p.previousYearBill || 0);
+      const amountPaidLastYear = Number(p.amountPaidLastYear || 0);
+      const arrears = Number(p.arrears || 0);
+      const currentFee = Number(p.currentFee || 0);
+      const totalAmountDue = Number(p.totalAmountDue || 0);
 
       return {
         id: p.id,
-        accountNumber: p.accountNumber,
+        accountNumber: p.accountNumber || '',
+        valuationNo: p.valuationNo || '',
+        physicalAddress: p.physicalAddress || '',
+        houseNo: p.houseNo || '',
+        plotNo: p.plotNo || '',
         municipality: p.municipality || 'Kpone-Katamanso (KKMA)',
         ownerPhone,
         ownerName,
         ownerDigitalAddress: p.ownerDigitalAddress || 'N/A',
         propertyClassification: p.propertyClassification || 'RESIDENTIAL',
-        billYear: p.billYear || 2025,
+        billYear: Number(p.billYear || 2025),
         billDateFormatted: billDateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
         settlementDeadlineFormatted: deadlineObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-        rateableValue: p.rateableValue || 0,
-        rateableValueFormatted: `GH₵ ${(p.rateableValue || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-        rateImposed: p.rateImposed || 0.00025,
-        previousYearBill: p.previousYearBill || 0,
-        previousYearBillFormatted: `GH₵ ${(p.previousYearBill || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-        amountPaidLastYear: p.amountPaidLastYear || 0,
-        amountPaidLastYearFormatted: `GH₵ ${(p.amountPaidLastYear || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-        arrears: p.arrears || 0,
-        arrearsFormatted: `GH₵ ${(p.arrears || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-        currentFee: p.currentFee || 0,
-        currentFeeFormatted: `GH₵ ${(p.currentFee || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-        totalAmountDue: due,
-        totalAmountDueFormatted: `GH₵ ${due.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-        status: (p.status || 'UNPAID') as 'PAID' | 'PARTIALLY_PAID' | 'UNPAID',
-        isDefaulter,
+        rateableValue,
+        rateableValueFormatted: `GH₵ ${rateableValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+        rateImposed,
+        previousYearBill,
+        previousYearBillFormatted: `GH₵ ${previousYearBill.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        amountPaidLastYear,
+        amountPaidLastYearFormatted: `GH₵ ${amountPaidLastYear.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        arrears,
+        arrearsFormatted: `GH₵ ${arrears.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        currentFee,
+        currentFeeFormatted: `GH₵ ${currentFee.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        totalAmountDue,
+        totalAmountDueFormatted: `GH₵ ${totalAmountDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        status: p.status === 'PAID' || p.status === 'PARTIALLY_PAID' || p.status === 'UNPAID' ? p.status : 'UNPAID',
+        isDefaulter: p.status !== 'PAID' && arrears > 0,
         receipts: [],
+        latitude: p.latitude || null,
+        longitude: p.longitude || null,
+        ownerId: p.ownerId || null,
+        propertyTypeCode: p.propertyTypeCode || null,
+        propertyCategoryCode: p.propertyCategoryCode || null,
+        streetCode: p.streetCode || null,
+        communityCode: p.communityCode || null,
+        subMetroCode: p.subMetroCode || null,
       };
     });
 
     return {
-      totalCount: formatted.length,
-      totalDue,
-      totalDueFormatted: `GH₵ ${totalDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-      properties: formatted,
+      properties: formattedProperties,
+      count: formattedProperties.length,
     };
   } catch (error) {
-    console.error('Error fetching SMS rollout audience:', error);
+    console.error('Failed to search SMS rollout accounts:', error);
     return null;
   }
 }
 
+function cleanDash(val: any): string {
+  if (val === null || val === undefined) return '—';
+  const s = String(val).trim();
+  if (!s || s.toUpperCase() === 'N/A' || s === 'null' || s === 'undefined' || s === 'NONE') return '—';
+  return s;
+}
+
+function buildSmsAudienceWhereClause(params: {
+  municipality?: string;
+  classification?: string;
+  balanceStatus?: string;
+  requiredFields?: string[];
+  searchQuery?: string;
+}) {
+  const whereClause: any = {};
+  const rawMuni = params.municipality?.trim() || '';
+  if (rawMuni && rawMuni !== 'ALL' && !rawMuni.includes('ALL MUNICIPALITIES')) {
+    whereClause.municipality = rawMuni;
+  }
+
+  const rawClass = params.classification?.trim().toUpperCase() || '';
+  const isAllClassifications =
+    !rawClass ||
+    rawClass === 'ALL' ||
+    rawClass.includes('ALL CLASSIFICATIONS') ||
+    rawClass.includes('ALL');
+
+  if (!isAllClassifications) {
+    whereClause.propertyClassification = rawClass;
+  }
+
+  const rawBalance = params.balanceStatus?.trim().toUpperCase() || '';
+  const isAllBalances =
+    !rawBalance ||
+    rawBalance === 'ALL' ||
+    rawBalance.includes('ALL BALANCES') ||
+    rawBalance.includes('ALL RECORDS');
+
+  if (!isAllBalances) {
+    if (rawBalance === 'DEFAULTER' || rawBalance.includes('DEFAULTER')) {
+      whereClause.status = 'DEFAULTER';
+    } else if (rawBalance === 'OVERPAID' || rawBalance.includes('OVERPAID') || rawBalance.includes('CREDIT')) {
+      whereClause.status = 'OVERPAID';
+    } else if (rawBalance === 'PARTIALLY_PAID' || rawBalance.includes('PARTIAL')) {
+      whereClause.status = 'PARTIALLY_PAID';
+    } else if (rawBalance === 'PAID') {
+      whereClause.status = 'PAID';
+    } else if (rawBalance === 'UNPAID' || rawBalance.includes('UNPAID')) {
+      whereClause.status = 'UNPAID';
+    }
+  }
+
+  const validRequiredFields = (params.requiredFields || []).filter(
+    (field) => field && field.trim() && field.toUpperCase() !== 'ALL'
+  );
+
+  if (validRequiredFields.length > 0) {
+    whereClause.requiredFields = validRequiredFields;
+  }
+
+  const searchQuery = params.searchQuery?.trim();
+  if (searchQuery) {
+    whereClause.search = searchQuery;
+  }
+
+  return whereClause;
+}
+
+export async function getSmsRolloutAudience(params: {
+  municipality?: string;
+  classification?: string;
+  balanceStatus?: string;
+  requiredFields?: string[];
+  searchQuery?: string;
+  page?: number;
+  limit?: number;
+}) {
+  try {
+    const admin = await verifyAdminSession();
+
+    if (!admin) {
+      return {
+        success: false,
+        count: 0,
+        totalCount: 0,
+        totalPages: 1,
+        page: 1,
+        totalDue: 0,
+        totalDueFormatted: 'GH₵ 0.00',
+        properties: [],
+      };
+    }
+
+    const whereClause: any = {};
+
+    if (params.municipality && params.municipality !== 'ALL') {
+      whereClause.municipality = params.municipality;
+    }
+
+    const rawClass = params.classification?.trim().toUpperCase() || '';
+    const isAllClassifications =
+      !rawClass ||
+      rawClass === 'ALL' ||
+      rawClass.includes('ALL CLASSIFICATIONS') ||
+      rawClass.includes('ALL');
+
+    if (!isAllClassifications) {
+      whereClause.propertyClassification = rawClass;
+    }
+
+    const rawBalance = params.balanceStatus?.trim().toUpperCase() || '';
+    const isAllBalances =
+      !rawBalance ||
+      rawBalance === 'ALL' ||
+      rawBalance.includes('ALL BALANCES') ||
+      rawBalance.includes('ALL RECORDS');
+
+    if (!isAllBalances) {
+      if (rawBalance === 'DEFAULTER' || rawBalance.includes('DEFAULTER')) {
+        whereClause.status = 'DEFAULTER';
+      } else if (rawBalance === 'OVERPAID' || rawBalance.includes('OVERPAID') || rawBalance.includes('CREDIT')) {
+        whereClause.status = 'OVERPAID';
+      } else if (rawBalance === 'PARTIALLY_PAID' || rawBalance.includes('PARTIAL')) {
+        whereClause.status = 'PARTIALLY_PAID';
+      } else if (rawBalance === 'PAID') {
+        whereClause.status = 'PAID';
+      } else if (rawBalance === 'UNPAID' || rawBalance.includes('UNPAID')) {
+        whereClause.status = 'UNPAID';
+      }
+    }
+
+    const validRequiredFields = (params.requiredFields || []).filter(
+      (field) => field && field.trim() && field.toUpperCase() !== 'ALL'
+    );
+
+    if (validRequiredFields.length > 0) {
+      whereClause.requiredFields = validRequiredFields;
+    }
+
+    /*
+     * SEARCH FIX:
+     * Never load the entire municipality and then filter it in JavaScript.
+     * The search conditions are sent to PostgreSQL so only matching rows
+     * are returned.
+     */
+    const searchQuery = params.searchQuery?.trim();
+    if (searchQuery) {
+      whereClause.search = searchQuery;
+    }
+
+    const page = params.page && params.page > 0 ? params.page : 1;
+    const limit = params.limit !== undefined ? params.limit : 50;
+    const skip = (page - 1) * limit;
+
+    const [totalCount, propAggregate, properties] = await Promise.all([
+      adminDb.property.count({ where: whereClause }),
+      adminDb.property.aggregate({ where: whereClause }),
+      adminDb.property.findMany({
+        where: whereClause,
+        orderBy: { accountNumber: 'asc' },
+        ...(limit > 0 ? { skip, take: limit } : {}),
+        include: { users: true, owner: true },
+      }),
+    ]);
+
+    const formattedProperties: AdminProperty[] = properties.map((p: any) => {
+      const primaryUser = p.users?.[0];
+      const owner = p.owner;
+
+      const rawName = p.name || p.ownerNameDirect;
+      const cleanDirectName =
+        rawName && typeof rawName === 'string' && !rawName.toUpperCase().includes('NO NAME')
+          ? rawName.trim()
+          : null;
+
+      const ownerName =
+        cleanDirectName ||
+        owner?.name ||
+        primaryUser?.name ||
+        'Municipal Ratepayer';
+
+      const rawPhone = p.telephone || p.ownerPhoneDirect;
+      const cleanDirectPhone =
+        rawPhone && typeof rawPhone === 'string' && rawPhone.trim() !== '0' && rawPhone.trim().length >= 7
+          ? rawPhone.trim()
+          : null;
+
+      const ownerPhone =
+        cleanDirectPhone ||
+        owner?.tel ||
+        owner?.mobileNumber ||
+        primaryUser?.phoneNumber ||
+        '—';
+
+      const billDateObj = new Date(p.billDate || Date.now());
+      const deadlineObj = new Date(p.settlementDeadline || Date.now());
+
+      const rateableValue = Number(p.rateableValue || 0);
+      const rateImposed = Number(p.rateImposed || 0);
+      const previousYearBill = Number(p.previousYearBill || 0);
+      const amountPaidLastYear = Number(p.amountPaidLastYear || 0);
+      const arrears = Number(p.arrears || 0);
+      const currentFee = Number(p.currentFee || 0);
+      const totalAmountDue = Number(p.totalAmountDue || 0);
+
+      return {
+        id: p.id,
+        accountNumber: cleanDash(p.accountNumber || p.account_no),
+        valuationNo: cleanDash(p.valuationNo),
+        physicalAddress: cleanDash(p.physicalAddress),
+        houseNo: cleanDash(p.houseNo),
+        plotNo: cleanDash(p.plotNo),
+        electoralArea: cleanDash(p.electoral_area || p.electoralArea),
+        municipality: cleanDash(p.municipality || 'Kpone-Katamanso (KKMA)'),
+        ownerPhone: cleanDash(ownerPhone),
+        ownerName: cleanDash(ownerName),
+        ownerDigitalAddress: cleanDash(p.ownerDigitalAddress),
+        propertyClassification:
+          p.propertyClassification || p.property_cat || 'RESIDENTIAL',
+        billYear: Number(p.billYear || 2025),
+
+        billDateFormatted: billDateObj.toLocaleDateString('en-GB', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+        }),
+
+        settlementDeadlineFormatted: deadlineObj.toLocaleDateString('en-GB', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+        }),
+
+        rateableValue,
+        rateableValueFormatted:
+          `GH₵ ${rateableValue.toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+          })}`,
+
+        rateImposed,
+
+        previousYearBill,
+        previousYearBillFormatted:
+          `GH₵ ${previousYearBill.toLocaleString('en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}`,
+
+        amountPaidLastYear,
+        amountPaidLastYearFormatted:
+          `GH₵ ${amountPaidLastYear.toLocaleString('en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}`,
+
+        arrears,
+        arrearsFormatted:
+          `GH₵ ${arrears.toLocaleString('en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}`,
+
+        currentFee,
+        currentFeeFormatted:
+          `GH₵ ${currentFee.toLocaleString('en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}`,
+
+        totalAmountDue,
+        totalAmountDueFormatted:
+          `GH₵ ${totalAmountDue.toLocaleString('en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}`,
+
+        status: (p.status || 'UNPAID') as
+          'PAID' | 'PARTIALLY_PAID' | 'UNPAID',
+
+        isDefaulter: p.status !== 'PAID' && arrears > 0 && totalAmountDue > 0,
+        receipts: [],
+        latitude: p.latitude || null,
+        longitude: p.longitude || null,
+        ownerId: p.ownerId || null,
+        propertyTypeCode: p.propertyTypeCode || null,
+        propertyCategoryCode: p.propertyCategoryCode || null,
+        streetCode: p.streetCode || null,
+        communityCode: p.communityCode || null,
+        subMetroCode: p.subMetroCode || null,
+      };
+    });
+
+    const totalDue = Number(propAggregate?._sum?.totalAmountDue || 0);
+
+    return {
+      success: true,
+      count: formattedProperties.length,
+      totalCount,
+      totalPages: limit > 0 ? Math.ceil(totalCount / limit) : 1,
+      page,
+      totalDue,
+      totalDueFormatted:
+        `GH₵ ${totalDue.toLocaleString('en-US', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}`,
+      properties: formattedProperties,
+    };
+  } catch (error) {
+    console.error('Error fetching SMS rollout audience:', error);
+
+    return {
+      success: false,
+      count: 0,
+      totalCount: 0,
+      totalPages: 1,
+      page: 1,
+      totalDue: 0,
+      totalDueFormatted: 'GH₵ 0.00',
+      properties: [],
+    };
+  }
+}
 export async function batchDispatchSms(
-  accountNumbers: string[],
+  target: string[] | { accountNumbers?: string[]; filters?: any },
   adminPassword?: string,
   customTemplate?: string,
   baseUrl?: string,
@@ -1196,8 +1459,6 @@ export async function batchDispatchSms(
   try {
     const admin = await verifyAdminSession();
 
-
-    // High-security password challenge
     if (!adminPassword) {
       return { success: false, error: 'Administrator security password is required to authorize SMS rollout dispatch.' };
     }
@@ -1207,142 +1468,243 @@ export async function batchDispatchSms(
       return { success: false, error: 'Incorrect administrator security password. Dispatch authorization rejected.' };
     }
 
-    const properties = await prisma.property.findMany({
-      where: {
-        accountNumber: { in: accountNumbers },
-        status: { not: 'PAID' },
-        totalAmountDue: { gt: 0 },
-      },
-      include: { users: true, owner: true },
-    });
+    let accountNumbers: string[] = [];
 
-    let count = 0;
-    const notificationsToCreate = [];
-
-    // Authoritative dispatch mode resolution with persistent DB fallback
-    await syncActiveSmsConfig();
-    const effectiveMode = overrideMode || activeSmsConfig.dispatchMode || 'TEST';
-
-    for (const p of properties) {
-      const primaryUser = p.users?.[0];
-      const ownerName = p.owner?.name || primaryUser?.name || 'Municipal Ratepayer';
-      const ownerPhone = p.owner?.tel || p.owner?.mobileNumber || primaryUser?.phoneNumber;
-
-      if (ownerPhone) {
-        count++;
-
-        // Retrieve or generate persistent session token for one-click citizen access
-        let userToken: string | undefined = undefined;
-        if (primaryUser?.id) {
-          const userSession = await (prisma as any).session?.findFirst({
-            where: { userId: primaryUser.id },
-          });
-          if (userSession?.token) {
-            userToken = userSession.token;
-          } else {
-            const newToken = `tok_${Math.random().toString(36).substring(2, 10)}`;
-            const createdSession = await (prisma as any).session?.create({
-              data: { token: newToken, userId: primaryUser.id },
-            });
-            userToken = createdSession?.token || newToken;
-          }
-        }
-
-        const formatted = twilioService.formatBillRolloutMessage({
-          accountNumber: p.accountNumber,
-          ownerName: ownerName,
-          phoneNumber: ownerPhone,
-          totalAmountDue: p.totalAmountDue,
-          arrears: p.arrears,
-          currentFee: p.currentFee,
-          dueDate: '30-Jun-2025',
-          baseUrl,
-          token: userToken,
-          customTemplate: customTemplate || activeSmsConfig.messageTemplate,
-          municipality: p.municipality || 'Kpone-Katamanso (KKMA)',
-          billYear: p.billYear || 2026,
+    if (Array.isArray(target)) {
+      accountNumbers = target.filter(Boolean);
+    } else if (target && typeof target === 'object') {
+      if (Array.isArray(target.accountNumbers) && target.accountNumbers.length > 0) {
+        accountNumbers = target.accountNumbers.filter(Boolean);
+      } else if (target.filters) {
+        const whereClause = buildSmsAudienceWhereClause(target.filters);
+        const matched = await (adminDb.property as any).findMany({
+          where: whereClause,
         });
-
-        let deliveryStatus: 'DELIVERED' | 'FAILED' = 'DELIVERED';
-        let externalMessageId: string | null = null;
-
-        if (effectiveMode === 'LIVE') {
-          try {
-            const provider = getActiveSmsProvider();
-            const smsRes = await provider.sendSMS(ownerPhone, formatted.messageText);
-            if (smsRes && smsRes.success) {
-              deliveryStatus = 'DELIVERED';
-              externalMessageId = smsRes.messageId || null;
-            } else {
-              deliveryStatus = 'FAILED';
-              console.error(`SMS dispatch rejected for ${ownerPhone}:`, smsRes?.error || 'Provider returned failure');
-            }
-          } catch (smsErr) {
-            console.error(`SMS dispatch exception for ${ownerPhone}:`, smsErr);
-            deliveryStatus = 'FAILED';
-          }
-        } else {
-          // Safe Simulation Mode (Sandbox)
-          deliveryStatus = 'DELIVERED';
-          externalMessageId = `mock-arkesel-${Date.now()}`;
-        }
-
-        if (primaryUser) {
-          notificationsToCreate.push({
-            title: `Demand Notice - ${p.accountNumber}`,
-            message: formatted.messageText,
-            type: 'DEMAND_NOTICE',
-            userId: primaryUser.id,
-            deliveryMethod: 'SMS',
-            deliveryStatus,
-            externalMessageId,
-          });
-        }
+        accountNumbers = (matched || []).map((p: any) => p.accountNumber || p.account_no).filter(Boolean);
       }
     }
 
-    if (notificationsToCreate.length > 0) {
-      await prisma.notification.createMany({
-        data: notificationsToCreate
-      });
-
-      const isSingle = count === 1;
-      const targetAccount = properties[0]?.accountNumber;
-
-      await prisma.auditLog.create({
-        data: {
-          action: isSingle ? 'SINGLE_SMS_DISPATCH' : 'BATCH_SMS_DISPATCH',
-          entityType: 'Notification',
-          entityId: isSingle && targetAccount ? targetAccount : null,
-          details: isSingle
-            ? `Dispatched direct dual-link SMS demand notice (${effectiveMode} mode) to account #${targetAccount}.`
-            : `Dispatched dual-link SMS rollout (${effectiveMode} mode) to ${count} property accounts.`,
-          adminId: admin.id,
-        },
-      });
+    if (!accountNumbers || accountNumbers.length === 0) {
+      return { success: false, error: 'No matching property accounts found for SMS rollout dispatch.' };
     }
 
+    await syncActiveSmsConfig();
+    const effectiveMode = overrideMode || activeSmsConfig.dispatchMode || 'TEST';
+    const template = customTemplate || activeSmsConfig.messageTemplate;
 
-    if (count === 0) {
-      return {
-        success: false,
-        error: 'No accounts with outstanding balances found in selection. Paid accounts were automatically skipped.',
-        dispatchedCount: 0,
-      };
-    }
+    // Create the async job row — this is our queue entry
+    const job = await (prisma as any).smsRolloutJob.create({
+      data: {
+        accountNumbers,
+        template,
+        mode: effectiveMode,
+        adminId: admin.id,
+        totalCount: accountNumbers.length,
+        status: 'QUEUED',
+      },
+    });
+
+    // Fire-and-forget: process the job concurrently in the background (concurrency: 50)
+    processSmsJobInline(job.id, accountNumbers, template, effectiveMode, admin.id).catch((err) => {
+      console.error('[SMS Queue] Background dispatch failed:', err);
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        action: 'BATCH_SMS_DISPATCH_QUEUED',
+        entityType: 'SmsRolloutJob',
+        entityId: job.id,
+        details: `Queued SMS rollout job (${effectiveMode} mode) for ${accountNumbers.length} account(s). Job ID: ${job.id}`,
+        adminId: admin.id,
+      },
+    });
 
     revalidatePath('/');
     return {
       success: true,
-      dispatchedCount: count,
+      jobId: job.id,
+      dispatchedCount: accountNumbers.length,
       mode: effectiveMode,
       timestamp: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
     };
   } catch (error) {
-    console.error('Error in batch SMS dispatch:', error);
-    return { success: false, error: 'Batch dispatch failed.' };
+    console.error('Error queuing SMS dispatch job:', error);
+    return { success: false, error: 'Failed to queue SMS dispatch job.' };
   }
 }
+
+// Inline fallback processor used in local dev when no Supabase Edge Function URL is available.
+// Processes concurrently in chunks of 50 — mirrors exactly what the edge function does.
+async function processSmsJobInline(
+  jobId: string,
+  accountNumbers: string[],
+  template: string,
+  mode: string,
+  adminId: string
+) {
+  const CONCURRENCY = 50;
+  try {
+    await (prisma as any).smsRolloutJob.update({
+      where: { id: jobId },
+      data: { status: 'RUNNING' },
+    });
+
+    const properties = await prisma.property.findMany({
+      where: {
+        accountNumber: { in: accountNumbers },
+      },
+      include: { users: true, owner: true },
+    });
+
+    const phoneToGroupMap = new Map<string, {
+      phone: string;
+      ownerName: string;
+      properties: typeof properties;
+    }>();
+
+    for (const p of properties) {
+      const rawPhone = p.telephone || p.ownerPhoneDirect || p.owner?.tel || p.owner?.mobileNumber || p.users?.[0]?.phoneNumber;
+      if (!rawPhone?.trim()) continue;
+      const normPhone = rawPhone.trim().replace(/[^\d+]/g, '');
+      if (!normPhone || normPhone === '0' || normPhone.length < 7) continue;
+
+      const rawOwnerName = p.name || p.ownerNameDirect || p.owner?.name || p.users?.[0]?.name || 'Municipal Ratepayer';
+      const accNo = p.accountNumber || p.account_no || '';
+
+      const upper = (rawOwnerName || '').toUpperCase().trim();
+      let groupKey: string;
+      if (!upper || upper.includes('NO NAME')) {
+        // Unverified or unnamed records sharing a number are kept separate per account
+        groupKey = `${normPhone}::UNNAMED::${accNo}`;
+      } else {
+        const cleanName = upper
+          .replace(/\b(MR|MRS|MS|DR|ING|ALHAJI|HAJIA|HON|CHIEF|NII|NANA|REV|PASTOR|ELDER|MADAM)\b\.?/gi, '')
+          .replace(/[^\w\s]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        groupKey = `${normPhone}::${cleanName}`;
+      }
+
+      if (!phoneToGroupMap.has(groupKey)) {
+        phoneToGroupMap.set(groupKey, { phone: normPhone, ownerName: rawOwnerName, properties: [] });
+      }
+      phoneToGroupMap.get(groupKey)!.properties.push(p);
+    }
+
+    const groups = Array.from(phoneToGroupMap.values());
+    const totalCount = groups.length;
+
+    await (prisma as any).smsRolloutJob.update({
+      where: { id: jobId },
+      data: { totalCount },
+    });
+
+    let sentCount = 0;
+    let failedCount = 0;
+
+    const publicAppUrl = (process.env.NEXT_PUBLIC_APP_URL?.trim() || 'https://property-rate-app.vercel.app').replace(/\/+$/, '');
+
+    for (let i = 0; i < groups.length; i += CONCURRENCY) {
+      const chunk = groups.slice(i, i + CONCURRENCY);
+      const results = await Promise.allSettled(
+        chunk.map(async ({ phone, ownerName, properties: groupProps }) => {
+          const isMulti = groupProps.length > 1;
+          const primaryAcc = groupProps[0]?.accountNumber || '';
+          const propertyAccounts = groupProps.map((p: any) => p.accountNumber).join(', ');
+          const accNoDisplay = isMulti ? propertyAccounts : primaryAcc;
+          const totalDue = groupProps.reduce((s: number, p: any) => s + (p.totalAmountDue || 0), 0);
+          const arrears = groupProps.reduce((s: number, p: any) => s + (p.arrears || 0), 0);
+          
+          const assessmentLink = `${publicAppUrl}/dashboard?accountNumber=${encodeURIComponent(primaryAcc)}`;
+          const checkoutLink = isMulti
+            ? `${publicAppUrl}/checkout?propertyId=ALL&accountNumber=${encodeURIComponent(primaryAcc)}`
+            : `${publicAppUrl}/checkout?propertyId=${encodeURIComponent(primaryAcc)}`;
+
+          const currentFee = groupProps.reduce((s: number, p: any) => s + (p.currentFee || 0), 0);
+          const gpsAddress =
+            Array.from(
+              new Set(
+                groupProps
+                  .map((p: any) => p.ownerDigitalAddress?.trim())
+                  .filter((addr: any): addr is string => Boolean(addr))
+              )
+            ).join(', ') || groupProps[0]?.ownerDigitalAddress || 'N/A';
+          const dueDateFormatted = groupProps[0]?.settlementDeadline
+            ? new Date(groupProps[0].settlementDeadline).toLocaleDateString('en-GB', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric',
+              })
+            : '30-Jun-2025';
+
+          const messageText = template
+            .replace(/{{ownerName}}/g, ownerName)
+            .replace(/{{accountNumber}}/g, accNoDisplay)
+            .replace(/{{propertyAccounts}}/g, propertyAccounts)
+            .replace(/{{totalAmountDue}}/g, totalDue < 0 ? Math.abs(totalDue).toFixed(2) : totalDue.toFixed(2))
+            .replace(/{{arrears}}/g, arrears.toFixed(2))
+            .replace(/{{currentFee}}/g, currentFee.toFixed(2))
+            .replace(/{{propertyGpsAddress}}/g, gpsAddress)
+            .replace(/{{dueDate}}/g, dueDateFormatted)
+            .replace(/{{municipality}}/g, groupProps[0]?.municipality || 'Kpone-Katamanso (KKMA)')
+            .replace(/{{billYear}}/g, String(groupProps[0]?.billYear || new Date().getFullYear()))
+            .replace(/{{paymentLink}}/g, checkoutLink)
+            .replace(/{{billLink}}/g, assessmentLink)
+            .replace(/{{link_assessment}}/g, assessmentLink)
+            .replace(/{{link_checkout}}/g, checkoutLink);
+
+          if (mode === 'LIVE') {
+            const provider = getActiveSmsProvider();
+            const smsRes = await provider.sendSMS(phone, messageText);
+            if (!smsRes?.success) throw new Error(`SMS rejected for ${phone}: ${smsRes?.error}`);
+          }
+        })
+      );
+
+      for (const r of results) {
+        if (r.status === 'fulfilled') sentCount++;
+        else failedCount++;
+      }
+
+      await (prisma as any).smsRolloutJob.update({
+        where: { id: jobId },
+        data: { sentCount, failedCount },
+      });
+    }
+
+    const finalStatus = failedCount === totalCount && totalCount > 0 ? 'FAILED' : 'DONE';
+    await (prisma as any).smsRolloutJob.update({
+      where: { id: jobId },
+      data: { status: finalStatus, sentCount, failedCount },
+    });
+  } catch (err) {
+    console.error('[SMS Queue] Inline processor error:', err);
+    await (prisma as any).smsRolloutJob.update({
+      where: { id: jobId },
+      data: { status: 'FAILED', errorMessage: String(err) },
+    }).catch(() => {});
+  }
+}
+
+// Lightweight status poll — called by UI every 2s during an active job
+export async function getSmsJobStatus(jobId: string): Promise<{
+  status: string;
+  sentCount: number;
+  failedCount: number;
+  totalCount: number;
+} | null> {
+  try {
+    await verifyAdminSession();
+    const job = await (prisma as any).smsRolloutJob.findUnique({
+      where: { id: jobId },
+      select: { status: true, sentCount: true, failedCount: true, totalCount: true },
+    });
+    return job ?? null;
+  } catch {
+    return null;
+  }
+}
+
 
 export interface SmsSettingsData {
   dispatchMode: 'TEST' | 'LIVE';
@@ -1361,26 +1723,8 @@ export async function getSmsSettings(): Promise<SmsSettingsData> {
   await verifyAdminSession();
   await syncActiveSmsConfig();
 
-  let balanceInfo = null;
-
-  if (activeSmsConfig.provider === 'arkesel' && activeSmsConfig.arkeselApiKey) {
-    try {
-      const res = await fetch('https://sms.arkesel.com/api/v2/clients/balance-details', {
-        method: 'GET',
-        headers: { 'api-key': activeSmsConfig.arkeselApiKey },
-      });
-      const data = await res.json();
-      if (res.ok && data.status === 'success') {
-        balanceInfo = {
-          smsBalance: data.data?.sms_balance ?? 0,
-          mainBalance: data.data?.main_balance ?? 'GHS 0.00',
-        };
-      }
-    } catch {
-      // non-fatal
-    }
-  }
-
+  // Do not contact Arkesel while loading SMS settings.
+  // Balance is fetched separately through getArkeselBalance().
   return {
     dispatchMode: activeSmsConfig.dispatchMode,
     provider: activeSmsConfig.provider,
@@ -1388,8 +1732,76 @@ export async function getSmsSettings(): Promise<SmsSettingsData> {
     arkeselSenderId: activeSmsConfig.arkeselSenderId,
     messageTemplate: activeSmsConfig.messageTemplate,
     receiptTemplate: activeSmsConfig.receiptTemplate,
-    balanceInfo,
+    balanceInfo: arkeselBalanceCache?.data ?? null,
   };
+}
+
+export async function getArkeselBalance(): Promise<{
+  smsBalance: number;
+  mainBalance: string;
+} | null> {
+  await verifyAdminSession();
+  await syncActiveSmsConfig();
+
+  if (
+    activeSmsConfig.provider !== "arkesel" ||
+    !activeSmsConfig.arkeselApiKey
+  ) {
+    return null;
+  }
+
+  const now = Date.now();
+
+  if (
+    arkeselBalanceCache &&
+    now - arkeselBalanceCache.timestamp < BALANCE_CACHE_TTL_MS
+  ) {
+    return arkeselBalanceCache.data;
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+  try {
+    const response = await fetch(
+      "https://sms.arkesel.com/api/v2/clients/balance-details",
+      {
+        method: "GET",
+        headers: {
+          "api-key": activeSmsConfig.arkeselApiKey.trim(),
+        },
+        signal: controller.signal,
+      }
+    );
+
+    const data = await response.json();
+
+    if (response.ok && data.status === "success") {
+      const balanceInfo = {
+        smsBalance: data.data?.sms_balance ?? 0,
+        mainBalance: data.data?.main_balance ?? "GHS 0.00",
+      };
+
+      arkeselBalanceCache = {
+        data: balanceInfo,
+        timestamp: now,
+      };
+
+      return balanceInfo;
+    }
+
+    return null;
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      console.warn("Arkesel balance check timed out (8s limit exceeded).");
+    } else {
+      console.warn("Arkesel balance check failed:", err);
+    }
+
+    return null;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 export async function updateSmsSettings(newConfig: {
@@ -1416,7 +1828,6 @@ export async function updateSmsSettings(newConfig: {
     arkeselService.setSenderId(activeSmsConfig.arkeselSenderId);
   }
 
-  // Persist all updated settings to SystemSetting table
   try {
     const upserts = [];
     if (newConfig.dispatchMode) {
@@ -1493,7 +1904,6 @@ export async function saveSmsTemplate(template: string, type: 'BILLING' | 'RECEI
     activeSmsConfig.messageTemplate = cleanTemplate;
   }
 
-  // Persist directly to Supabase SystemSetting table
   try {
     await (prisma as any).systemSetting.upsert({
       where: { key: settingKey },
@@ -1567,7 +1977,6 @@ export async function runAnnualBillingBatch(params: {
   try {
     const admin = await verifyAdminSession();
 
-    // High-security password challenge
     if (!params.adminPassword) {
       return { success: false, error: 'Administrator security password is required to authorize annual batch billing rollout.' };
     }
@@ -1584,14 +1993,14 @@ export async function runAnnualBillingBatch(params: {
 
     for (const prop of properties) {
       const newArrears = prop.arrears + (prop.status === 'PAID' ? 0 : prop.currentFee);
-      
+
       let newRateImposed = params.otherRate;
       if (prop.propertyClassification === 'RESIDENTIAL' || prop.propertyClassification === 'PRIVATE THIRD CLASS RESIDENTIAL') {
         newRateImposed = params.residentialRate;
       } else if (prop.propertyClassification === 'COMMERCIAL' || prop.propertyClassification === 'SECOND CLASS COMMERCIAL') {
         newRateImposed = params.commercialRate;
       }
-      
+
       const newCurrentFee = prop.rateableValue * newRateImposed;
       const newTotalAmountDue = newArrears + newCurrentFee;
 
@@ -1613,8 +2022,23 @@ export async function runAnnualBillingBatch(params: {
       const ownerName = prop.owner?.name || primaryUser?.name || 'Municipal Ratepayer';
       const ownerPhone = prop.owner?.tel || prop.owner?.mobileNumber || primaryUser?.phoneNumber;
 
-      if (ownerPhone && primaryUser) {
-        const formatted = twilioService.formatBillRolloutMessage({
+      let targetUser = primaryUser;
+      if (!targetUser?.id && ownerPhone) {
+        const existing = await prisma.user.findUnique({ where: { phoneNumber: ownerPhone } });
+        if (existing) {
+          targetUser = await prisma.user.update({
+            where: { id: existing.id },
+            data: { name: ownerName },
+          });
+        } else {
+          targetUser = await prisma.user.create({
+            data: { phoneNumber: ownerPhone, name: ownerName },
+          });
+        }
+      }
+
+      if (ownerPhone && targetUser?.id) {
+        const formatted = smsFormatter.formatBillRolloutMessage({
           accountNumber: prop.accountNumber,
           ownerName: ownerName,
           phoneNumber: ownerPhone,
@@ -1629,7 +2053,7 @@ export async function runAnnualBillingBatch(params: {
         });
 
         notificationsToCreate.push({
-          userId: primaryUser.id,
+          userId: targetUser.id,
           title: `FY ${prop.billYear + 1} Annual Rate Assessment Issued`,
           message: formatted.messageText,
           type: 'BILLING_ROLLOUT',
@@ -1668,7 +2092,6 @@ export async function recordManualCashPayment(accountNumber: string, amount: num
   try {
     const admin = await verifyAdminSession();
 
-    // High-security password challenge
     if (!adminPassword) {
       return { success: false, error: 'Administrator security password is required to authorize payment settlement.' };
     }
@@ -1739,7 +2162,6 @@ export async function recordManualCashPayment(accountNumber: string, amount: num
       }),
     ]);
 
-    // If owner has settled all property rates, clear unread rollout/demand notices
     const remainingUnpaid = await prisma.property.count({
       where: {
         users: {
@@ -1775,7 +2197,6 @@ export async function saveProperty(data: any, adminPassword?: string) {
   try {
     const admin = await verifyAdminSession();
 
-    // High-security password challenge
     if (!adminPassword) {
       return { success: false, error: 'Administrator security password is required to authorize property valuation changes.' };
     }
@@ -1787,7 +2208,7 @@ export async function saveProperty(data: any, adminPassword?: string) {
     const { id, accountNumber, ownerName, ownerPhone, ownerDigitalAddress, physicalAddress, municipality, propertyClassification, rateableValue, rateImposed } = data;
     const currentFee = rateableValue * rateImposed;
 
-    let owner = await prisma.user.findUnique({ where: { phoneNumber: ownerPhone }});
+    let owner = await prisma.user.findUnique({ where: { phoneNumber: ownerPhone } });
     if (!owner) {
       owner = await prisma.user.create({
         data: { phoneNumber: ownerPhone, name: ownerName }
@@ -1816,7 +2237,7 @@ export async function saveProperty(data: any, adminPassword?: string) {
           }
         }
       });
-      
+
       await prisma.auditLog.create({
         data: {
           action: 'EDIT_PROPERTY',
@@ -1839,7 +2260,7 @@ export async function saveProperty(data: any, adminPassword?: string) {
           currentFee,
           totalAmountDue: currentFee,
           status: 'UNPAID',
-          settlementDeadline: new Date(new Date().getFullYear(), 5, 30), // June 30 of current year
+          settlementDeadline: new Date(new Date().getFullYear(), 5, 30),
           users: {
             connect: [{ id: owner.id }]
           }
@@ -1985,9 +2406,6 @@ export async function importCadastreCsvBatch(rows: any[], adminPassword?: string
   }
 }
 
-/**
- * Uploads a physical scanned GCR receipt image to Supabase Storage and links to the Receipt record.
- */
 export async function attachScannedReceiptImage(
   receiptId: string,
   base64Data: string,
@@ -2000,7 +2418,6 @@ export async function attachScannedReceiptImage(
       return { success: false, error: 'Receipt ID and image data are required.' };
     }
 
-    // Clean base64 string
     const cleanBase64 = base64Data.replace(/^data:image\/\w+;base64,/, '');
     const buffer = Buffer.from(cleanBase64, 'base64');
 
@@ -2025,7 +2442,6 @@ export async function attachScannedReceiptImage(
 
     const publicUrl = publicUrlData.publicUrl;
 
-    // Update receipt record with scanned URL
     const updated = await prisma.receipt.update({
       where: { id: receiptId },
       data: {
@@ -2052,9 +2468,6 @@ export async function attachScannedReceiptImage(
   }
 }
 
-/**
- * Dispatches an official receipt SMS notification with direct verification link to the ratepayer.
- */
 export async function sendReceiptNoticeSMS(receiptId: string, customTemplate?: string) {
   try {
     const admin = await verifyAdminSession();
@@ -2067,14 +2480,23 @@ export async function sendReceiptNoticeSMS(receiptId: string, customTemplate?: s
       return { success: false, error: 'Receipt record not found.' };
     }
 
-    const [user, property] = await Promise.all([
-      receipt.userId ? prisma.user.findUnique({ where: { id: receipt.userId } }) : null,
-      receipt.propertyId ? prisma.property.findUnique({ where: { id: receipt.propertyId } }) : null,
-    ]);
+    let user = receipt.userId ? await prisma.user.findUnique({ where: { id: receipt.userId } }) : null;
+    const property = receipt.propertyId ? await prisma.property.findUnique({ where: { id: receipt.propertyId } }) : null;
 
     const targetPhone = user?.phoneNumber || receipt.paymentPhoneNumber;
     if (!targetPhone) {
       return { success: false, error: 'No phone number linked to this receipt or ratepayer.' };
+    }
+
+    if (!user && targetPhone) {
+      const existing = await prisma.user.findUnique({ where: { phoneNumber: targetPhone } });
+      if (existing) {
+        user = existing;
+      } else {
+        user = await prisma.user.create({
+          data: { phoneNumber: targetPhone, name: 'Ratepayer' },
+        });
+      }
     }
 
     let host = (process.env.NEXT_PUBLIC_APP_URL || 'https://property-rate-app.vercel.app').replace(/\/$/, '');
@@ -2131,5 +2553,89 @@ export async function sendReceiptNoticeSMS(receiptId: string, customTemplate?: s
   } catch (err: any) {
     console.error('Error sending receipt notice SMS:', err);
     return { success: false, error: err.message || 'Failed to send receipt notice SMS' };
+  }
+}
+
+export interface AdminTreasuryReceipt {
+  id: string;
+  receiptNumber: string;
+  accountNumber: string;
+  ownerName: string;
+  amount: number;
+  amountFormatted: string;
+  settlementType: string;
+  paymentMethod: string;
+  status: string;
+  datePaid: string;
+  municipality: string;
+}
+
+export async function getTreasuryReceipts(
+  searchQuery = "",
+  paymentMethod = "ALL",
+  page = 1,
+  limit = 50
+): Promise<{ receipts: AdminTreasuryReceipt[]; total: number } | null> {
+  try {
+    await verifyAdminSession();
+
+    let query = supabase
+      .from('Receipt')
+      .select('id, receiptNumber, amount, settlementType, paymentMethod, paymentPhoneNumber, status, collectorName, cashierName, datePaid, userId, propertyId', { count: 'exact' });
+
+    if (paymentMethod && paymentMethod !== 'ALL') {
+      query = query.ilike('paymentMethod', `%${paymentMethod}%`);
+    }
+
+    if (searchQuery && searchQuery.trim()) {
+      const q = searchQuery.trim();
+      query = query.or(`receiptNumber.ilike.%${q}%,paymentPhoneNumber.ilike.%${q}%`);
+    }
+
+    query = query.order('datePaid', { ascending: false });
+
+    const skip = (page - 1) * limit;
+    query = query.range(skip, skip + limit - 1);
+
+    const { data, count, error } = await query;
+    if (error || !data) return { receipts: [], total: 0 };
+
+    const propertyIds = Array.from(new Set(data.map((r: any) => r.propertyId).filter(Boolean)));
+    let propsById: Record<string, any> = {};
+    if (propertyIds.length > 0) {
+      const { data: props } = await supabase
+        .from('Property')
+        .select('id, account_no, name, municipality')
+        .in('id', propertyIds);
+      propsById = (props || []).reduce((acc: any, p: any) => {
+        acc[p.id] = p;
+        return acc;
+      }, {});
+    }
+
+    const receipts: AdminTreasuryReceipt[] = data.map((r: any) => {
+      const prop = propsById[r.propertyId] || {};
+      const amt = Number(r.amount || 0);
+      return {
+        id: r.id,
+        receiptNumber: r.receiptNumber || 'N/A',
+        accountNumber: prop.account_no || 'N/A',
+        ownerName: prop.name || 'Municipal Ratepayer',
+        amount: amt,
+        amountFormatted: `GH₵ ${amt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        settlementType: r.settlementType || 'TOTAL',
+        paymentMethod: r.paymentMethod || 'Counter Cash Treasury',
+        status: r.status || 'PAID',
+        datePaid: new Date(r.datePaid || Date.now()).toLocaleDateString('en-GB', {
+          day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+        }),
+        municipality: prop.municipality || 'Kpone-Katamanso (KKMA)',
+      };
+    });
+
+    return { receipts, total: count || 0 };
+  } catch (err) {
+    console.error('Failed to get treasury receipts:', err);
+    return { receipts: [], total: 0 };
   }
 }

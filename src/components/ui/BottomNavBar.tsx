@@ -11,10 +11,9 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { name: "Home", path: "/dashboard", icon: Home },
-  { name: "Properties", path: "/properties", icon: Building2 },
-  { name: "Payments", path: "/receipts", icon: ReceiptText },
-  { name: "Settings", path: "/profile", icon: Settings },
+  { name: "Assessment", path: "/dashboard", icon: Home },
+  { name: "Pay Portal", path: "/checkout", icon: ReceiptText },
+  { name: "Receipts", path: "/receipts", icon: Building2 },
 ];
 
 export function BottomNavBar() {

@@ -40,26 +40,20 @@ export function middleware(request: NextRequest) {
 
   const hasDirectDeepLink = Boolean(tokenParam || searchParams.get('accountNumber') || searchParams.get('propertyId'));
 
-  const isInternalAppPath =
-    (pathname.startsWith('/dashboard') && !hasDirectDeepLink) ||
+  // Disallow user profile/settings and legacy auth routes
+  const isAuthOrProfilePath =
     pathname.startsWith('/profile') ||
-    pathname.startsWith('/receipts');
-
-  // Enforce portal containment: SMS token users cannot browse unassigned internal app areas
-  if (isPortalAccessOnly && isInternalAppPath) {
-    return NextResponse.redirect(new URL('/checkout', request.url));
-  }
-
-  const isProtectedPath =
-    (pathname.startsWith('/dashboard') && !hasDirectDeepLink) ||
-    (pathname.startsWith('/properties') && !hasDirectDeepLink) ||
-    pathname.startsWith('/receipts') ||
-    pathname.startsWith('/profile');
-
-  const isAuthPath =
     pathname.startsWith('/auth/welcome') ||
     pathname.startsWith('/auth/login') ||
     pathname.startsWith('/auth/verify');
+
+  if (isAuthOrProfilePath) {
+    const acc = searchParams.get('accountNumber') || searchParams.get('propertyId');
+    if (acc) {
+      return NextResponse.redirect(new URL(`/dashboard?accountNumber=${encodeURIComponent(acc)}`, request.url));
+    }
+    return NextResponse.redirect(new URL('/checkout', request.url));
+  }
 
   // Root redirect
   if (pathname === '/') {
@@ -68,25 +62,7 @@ export function middleware(request: NextRequest) {
       searchParams.forEach((value, key) => targetUrl.searchParams.set(key, value));
       return NextResponse.redirect(targetUrl);
     }
-    if (isPortalAccessOnly) {
-      return NextResponse.redirect(new URL('/checkout', request.url));
-    }
-    if (authSession) {
-      return NextResponse.redirect(new URL('/dashboard', request.url));
-    } else {
-      return NextResponse.redirect(new URL('/auth/welcome', request.url));
-    }
-  }
-
-  // If trying to access protected route without session
-  if (isProtectedPath && !authSession) {
-    const response = NextResponse.redirect(new URL('/auth/welcome', request.url));
-    return response;
-  }
-
-  // If already authenticated and accessing login/welcome
-  if (isAuthPath && authSession) {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
+    return NextResponse.redirect(new URL('/checkout', request.url));
   }
 
   return NextResponse.next();

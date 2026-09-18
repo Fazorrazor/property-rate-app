@@ -237,47 +237,47 @@ export function RatepayerDossierSheet({
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ type: "spring", damping: 26, stiffness: 280 }}
-            className="relative z-10 w-full max-w-2xl bg-white h-full shadow-2xl flex flex-col border-l border-[#DADCE0] font-sans"
+            className="relative z-10 w-full max-w-2xl bg-[#1E2329] h-full shadow-2xl flex flex-col border-l border-[#2B3139] font-sans"
           >
             {/* Header */}
-            <div className="px-6 py-4 border-b border-[#DADCE0] flex items-center justify-between shrink-0 bg-white">
+            <div className="px-6 py-4 border-b border-[#2B3139] flex items-center justify-between shrink-0 bg-[#1E2329]">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-[#F6ECF2] text-[#612D53] flex items-center justify-center shrink-0">
+                <div className="w-10 h-10 rounded-lg bg-[#181A20] text-[#FCD535] flex items-center justify-center shrink-0">
                   <User className="w-5 h-5" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[11px] text-[#717171] uppercase tracking-wider font-semibold">
+                    <span className="text-[11px] text-[#848E9C] uppercase tracking-wider font-semibold">
                       Ratepayer Dossier
                     </span>
                     {summary ? (
                       <span
                         className={`text-[11px] font-semibold ${
                           summary.status === "SETTLED"
-                            ? "text-[#137333]"
+                            ? "text-[#0ECB81]"
                             : summary.status === "DEFAULTER"
-                            ? "text-[#D93025]"
-                            : "text-[#B45309]"
+                            ? "text-[#F6465D]"
+                            : "text-[#FCD535]"
                         }`}
                       >
-                        &bull; {summary.status === "SETTLED" ? "Compliant & Settled" : summary.status === "DEFAULTER" ? "Statutory Defaulter" : "Balance Due"}
+                        &bull; {summary.status === "SETTLED" ? "Compliant & Settled" : summary.status === "DEFAULTER" ? "Overdue Balance" : "Balance Due"}
                       </span>
                     ) : (
-                      <div className="h-3 w-20 bg-[#E8EAED] animate-pulse rounded" />
+                      <div className="h-3 w-20 bg-[#2B3139] animate-pulse rounded" />
                     )}
 
                     {isLoading && (
                       <span className="flex items-center ml-1.5">
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-[#612D53]" />
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-[#FCD535]" />
                       </span>
                     )}
                   </div>
                   {user ? (
-                    <h2 className="text-base font-semibold text-[#2C2C2C] mt-0.5">
+                    <h2 className="text-base font-semibold text-[#EAECEF] mt-0.5">
                       {user.name}
                     </h2>
                   ) : (
-                    <div className="h-5 w-44 bg-[#F1F3F4] animate-pulse rounded mt-1" />
+                    <div className="h-5 w-44 bg-[#2B313A] animate-pulse rounded mt-1" />
                   )}
                 </div>
               </div>
@@ -285,7 +285,7 @@ export function RatepayerDossierSheet({
               <button
                 type="button"
                 onClick={onClose}
-                className="p-1.5 rounded-lg text-[#717171] hover:text-[#2C2C2C] transition-colors cursor-pointer"
+                className="p-1.5 rounded-lg text-[#848E9C] hover:text-[#EAECEF] transition-colors cursor-pointer"
                 aria-label="Close dossier"
               >
                 <X className="w-5 h-5" />
@@ -293,86 +293,86 @@ export function RatepayerDossierSheet({
             </div>
 
             {/* Citizen Quick Profile Bar */}
-            <div className="bg-[#F8F9FA] px-6 py-3.5 border-b border-[#DADCE0] grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs shrink-0">
+            <div className="bg-[#1E2329] px-6 py-3.5 border-b border-[#2B3139] grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs shrink-0">
               {user ? (
                 <>
                   <div>
-                    <span className="text-[#717171] block text-[11px]">Primary Phone</span>
-                    <span className="font-mono font-medium text-[#2C2C2C] flex items-center gap-1 mt-0.5">
-                      <Phone className="w-3.5 h-3.5 text-[#717171]" />
+                    <span className="text-[#848E9C] block text-[11px]">Primary Phone</span>
+                    <span className="font-mono font-medium text-[#EAECEF] flex items-center gap-1 mt-0.5">
+                      <Phone className="w-3.5 h-3.5 text-[#848E9C]" />
                       <span>{user.phoneNumber}</span>
                     </span>
                   </div>
                   <div>
-                    <span className="text-[#717171] block text-[11px]">Account Type</span>
-                    <span className="font-medium text-[#2C2C2C] mt-0.5 block">{user.role}</span>
+                    <span className="text-[#848E9C] block text-[11px]">Account Type</span>
+                    <span className="font-medium text-[#EAECEF] mt-0.5 block">{user.role}</span>
                   </div>
                   <div>
-                    <span className="text-[#717171] block text-[11px]">Registered Date</span>
-                    <span className="font-medium text-[#2C2C2C] mt-0.5 block">{user.createdAtFormatted}</span>
+                    <span className="text-[#848E9C] block text-[11px]">Registered Date</span>
+                    <span className="font-medium text-[#EAECEF] mt-0.5 block">{user.createdAtFormatted}</span>
                   </div>
                 </>
               ) : (
                 <>
                   <div className="space-y-1.5">
-                    <div className="h-3 w-16 bg-[#E8EAED] animate-pulse rounded" />
-                    <div className="h-4 w-28 bg-[#E8EAED] animate-pulse rounded" />
+                    <div className="h-3 w-16 bg-[#2B3139] animate-pulse rounded" />
+                    <div className="h-4 w-28 bg-[#2B3139] animate-pulse rounded" />
                   </div>
                   <div className="space-y-1.5">
-                    <div className="h-3 w-16 bg-[#E8EAED] animate-pulse rounded" />
-                    <div className="h-4 w-20 bg-[#E8EAED] animate-pulse rounded" />
+                    <div className="h-3 w-16 bg-[#2B3139] animate-pulse rounded" />
+                    <div className="h-4 w-20 bg-[#2B3139] animate-pulse rounded" />
                   </div>
                   <div className="space-y-1.5">
-                    <div className="h-3 w-20 bg-[#E8EAED] animate-pulse rounded" />
-                    <div className="h-4 w-24 bg-[#E8EAED] animate-pulse rounded" />
+                    <div className="h-3 w-20 bg-[#2B3139] animate-pulse rounded" />
+                    <div className="h-4 w-24 bg-[#2B3139] animate-pulse rounded" />
                   </div>
                 </>
               )}
             </div>
 
             {/* Financial Summary Scorecards (Zero Pills) */}
-            <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-white border-b border-[#DADCE0] grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 text-xs shrink-0">
+            <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-[#1E2329] border-b border-[#2B3139] grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 text-xs shrink-0">
               {summary ? (
                 <>
-                  <div className="p-3 bg-[#F8F9FA] border border-[#DADCE0] rounded-lg">
-                    <span className="text-[#717171] text-[11px] block">Properties Registered</span>
-                    <span className="text-lg font-semibold text-[#2C2C2C] mt-1 block">
-                      {summary.totalProperties} <span className="text-xs font-normal text-[#717171]">Parcels</span>
+                  <div className="p-3 bg-[#1E2329] border border-[#2B3139] rounded-lg">
+                    <span className="text-[#848E9C] text-[11px] block">Properties Registered</span>
+                    <span className="text-lg font-semibold text-[#EAECEF] mt-1 block">
+                      {summary.totalProperties} <span className="text-xs font-normal text-[#848E9C]">Parcels</span>
                     </span>
-                    <span className="text-[10px] text-[#717171] mt-1 block whitespace-nowrap tabular-nums">Valuation: {summary.totalValuationFormatted}</span>
+                    <span className="text-[10px] text-[#848E9C] mt-1 block whitespace-nowrap tabular-nums">Valuation: {summary.totalValuationFormatted}</span>
                   </div>
 
-                  <div className="p-3 bg-[#F8F9FA] border border-[#DADCE0] rounded-lg">
-                    <span className="text-[#717171] text-[11px] block">Total Outstanding Due</span>
-                    <span className="text-lg font-semibold text-[#2C2C2C] mt-1 block whitespace-nowrap tabular-nums">
+                  <div className="p-3 bg-[#1E2329] border border-[#2B3139] rounded-lg">
+                    <span className="text-[#848E9C] text-[11px] block">Total Outstanding Due</span>
+                    <span className="text-lg font-semibold text-[#EAECEF] mt-1 block whitespace-nowrap tabular-nums">
                       {summary.totalOutstandingDueFormatted}
                     </span>
-                    <span className="text-[10px] text-[#D93025] mt-1 block whitespace-nowrap tabular-nums">Arrears: {summary.totalArrearsFormatted}</span>
+                    <span className="text-[10px] text-[#F6465D] mt-1 block whitespace-nowrap tabular-nums">Arrears: {summary.totalArrearsFormatted}</span>
                   </div>
 
-                  <div className="p-3 bg-[#F8F9FA] border border-[#DADCE0] rounded-lg">
-                    <span className="text-[#717171] text-[11px] block">Total Settled (All-Time)</span>
-                    <span className="text-lg font-semibold text-[#137333] mt-1 block whitespace-nowrap tabular-nums">
+                  <div className="p-3 bg-[#1E2329] border border-[#2B3139] rounded-lg">
+                    <span className="text-[#848E9C] text-[11px] block">Total Settled (All-Time)</span>
+                    <span className="text-lg font-semibold text-[#0ECB81] mt-1 block whitespace-nowrap tabular-nums">
                       {summary.totalPaidFormatted}
                     </span>
-                    <span className="text-[10px] text-[#717171] mt-1 block">
+                    <span className="text-[10px] text-[#848E9C] mt-1 block">
                       {isDossierLoaded ? `${receipts.length} treasury receipts` : "Reconciling..."}
                     </span>
                   </div>
                 </>
               ) : (
                 [1, 2, 3].map((i) => (
-                  <div key={i} className="p-3 bg-[#F8F9FA] border border-[#DADCE0] rounded-lg space-y-2">
-                    <div className="h-3 w-20 bg-[#E8EAED] animate-pulse rounded" />
-                    <div className="h-6 w-24 bg-[#E8EAED] animate-pulse rounded" />
-                    <div className="h-2.5 w-16 bg-[#E8EAED] animate-pulse rounded" />
+                  <div key={i} className="p-3 bg-[#1E2329] border border-[#2B3139] rounded-lg space-y-2">
+                    <div className="h-3 w-20 bg-[#2B3139] animate-pulse rounded" />
+                    <div className="h-6 w-24 bg-[#2B3139] animate-pulse rounded" />
+                    <div className="h-2.5 w-16 bg-[#2B3139] animate-pulse rounded" />
                   </div>
                 ))
               )}
             </div>
 
             {/* Dossier Tabs Navigation (Zero Pills - Underline Indicator) */}
-            <div className="px-6 border-b border-[#DADCE0] bg-white flex items-center gap-6 text-xs shrink-0 overflow-x-auto">
+            <div className="px-6 border-b border-[#2B3139] bg-[#1E2329] flex items-center gap-6 text-xs shrink-0 overflow-x-auto">
               {tabs.map((tab) => {
                 const isActive = activeTab === tab.key;
                 return (
@@ -381,14 +381,14 @@ export function RatepayerDossierSheet({
                     type="button"
                     onClick={() => setActiveTab(tab.key)}
                     className={`py-3 text-xs font-medium relative transition-colors cursor-pointer focus:outline-none whitespace-nowrap ${
-                      isActive ? "text-[#612D53] font-semibold" : "text-[#717171] hover:text-[#2C2C2C]"
+                      isActive ? "text-[#FCD535] font-semibold" : "text-[#848E9C] hover:text-[#EAECEF]"
                     }`}
                   >
                     <span>{tab.label}</span>
                     {isActive && (
                       <motion.div
                         layoutId="dossierTabUnderline"
-                        className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#612D53]"
+                        className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#FCD535]"
                         transition={{ type: "spring", stiffness: 450, damping: 30 }}
                       />
                     )}
@@ -407,22 +407,22 @@ export function RatepayerDossierSheet({
                       {[1, 2].map((i) => (
                         <div
                           key={i}
-                          className="p-4 bg-white border border-[#DADCE0] rounded-xl space-y-3"
+                          className="p-4 bg-[#1E2329] border border-[#2B3139] rounded-xl space-y-3"
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="space-y-2 flex-1">
-                              <div className="h-4 w-32 bg-[#F1F3F4] animate-pulse rounded" />
-                              <div className="h-3 w-48 bg-[#F1F3F4] animate-pulse rounded" />
-                              <div className="h-3 w-28 bg-[#F1F3F4] animate-pulse rounded" />
+                              <div className="h-4 w-32 bg-[#2B313A] animate-pulse rounded" />
+                              <div className="h-3 w-48 bg-[#2B313A] animate-pulse rounded" />
+                              <div className="h-3 w-28 bg-[#2B313A] animate-pulse rounded" />
                             </div>
                             <div className="space-y-1.5 flex flex-col items-end">
-                              <div className="h-3 w-16 bg-[#F1F3F4] animate-pulse rounded" />
-                              <div className="h-4 w-24 bg-[#F1F3F4] animate-pulse rounded" />
+                              <div className="h-3 w-16 bg-[#2B313A] animate-pulse rounded" />
+                              <div className="h-4 w-24 bg-[#2B313A] animate-pulse rounded" />
                             </div>
                           </div>
-                          <div className="pt-2 border-t border-[#F1F3F4] flex items-center justify-between">
-                            <div className="h-3 w-36 bg-[#F1F3F4] animate-pulse rounded" />
-                            <div className="h-3 w-28 bg-[#F1F3F4] animate-pulse rounded" />
+                          <div className="pt-2 border-t border-[#2B3139] flex items-center justify-between">
+                            <div className="h-3 w-36 bg-[#2B313A] animate-pulse rounded" />
+                            <div className="h-3 w-28 bg-[#2B313A] animate-pulse rounded" />
                           </div>
                         </div>
                       ))}
@@ -434,15 +434,15 @@ export function RatepayerDossierSheet({
                       {[1, 2, 3].map((i) => (
                         <div
                           key={i}
-                          className="p-3.5 bg-white border border-[#DADCE0] rounded-xl flex items-center justify-between gap-3"
+                          className="p-3.5 bg-[#1E2329] border border-[#2B3139] rounded-xl flex items-center justify-between gap-3"
                         >
                           <div className="space-y-2 flex-1">
-                            <div className="h-4 w-32 bg-[#F1F3F4] animate-pulse rounded" />
-                            <div className="h-3 w-40 bg-[#F1F3F4] animate-pulse rounded" />
+                            <div className="h-4 w-32 bg-[#2B313A] animate-pulse rounded" />
+                            <div className="h-3 w-40 bg-[#2B313A] animate-pulse rounded" />
                           </div>
                           <div className="space-y-1.5 flex flex-col items-end">
-                            <div className="h-4 w-20 bg-[#F1F3F4] animate-pulse rounded" />
-                            <div className="h-3 w-24 bg-[#F1F3F4] animate-pulse rounded" />
+                            <div className="h-4 w-20 bg-[#2B313A] animate-pulse rounded" />
+                            <div className="h-3 w-24 bg-[#2B313A] animate-pulse rounded" />
                           </div>
                         </div>
                       ))}
@@ -454,16 +454,16 @@ export function RatepayerDossierSheet({
                       {[1, 2].map((i) => (
                         <div
                           key={i}
-                          className="p-3.5 bg-white border border-[#DADCE0] rounded-xl space-y-2.5"
+                          className="p-3.5 bg-[#1E2329] border border-[#2B3139] rounded-xl space-y-2.5"
                         >
                           <div className="flex items-center justify-between">
-                            <div className="h-4 w-40 bg-[#F1F3F4] animate-pulse rounded" />
-                            <div className="h-3 w-24 bg-[#F1F3F4] animate-pulse rounded" />
+                            <div className="h-4 w-40 bg-[#2B313A] animate-pulse rounded" />
+                            <div className="h-3 w-24 bg-[#2B313A] animate-pulse rounded" />
                           </div>
-                          <div className="h-14 w-full bg-[#F6ECF2]/60 animate-pulse rounded-lg" />
+                          <div className="h-14 w-full bg-[#181A20]/60 animate-pulse rounded-lg" />
                           <div className="flex items-center justify-between">
-                            <div className="h-3 w-32 bg-[#F1F3F4] animate-pulse rounded" />
-                            <div className="h-3 w-20 bg-[#F1F3F4] animate-pulse rounded" />
+                            <div className="h-3 w-32 bg-[#2B313A] animate-pulse rounded" />
+                            <div className="h-3 w-20 bg-[#2B313A] animate-pulse rounded" />
                           </div>
                         </div>
                       ))}
@@ -475,13 +475,13 @@ export function RatepayerDossierSheet({
                       {[1, 2, 3].map((i) => (
                         <div
                           key={i}
-                          className="p-3 bg-white border border-[#DADCE0] rounded-xl flex items-start justify-between"
+                          className="p-3 bg-[#1E2329] border border-[#2B3139] rounded-xl flex items-start justify-between"
                         >
                           <div className="space-y-1.5 flex-1">
-                            <div className="h-4 w-36 bg-[#F1F3F4] animate-pulse rounded" />
-                            <div className="h-3 w-56 bg-[#F1F3F4] animate-pulse rounded" />
+                            <div className="h-4 w-36 bg-[#2B313A] animate-pulse rounded" />
+                            <div className="h-3 w-56 bg-[#2B313A] animate-pulse rounded" />
                           </div>
-                          <div className="h-3 w-20 bg-[#F1F3F4] animate-pulse rounded" />
+                          <div className="h-3 w-20 bg-[#2B313A] animate-pulse rounded" />
                         </div>
                       ))}
                     </>
@@ -493,42 +493,42 @@ export function RatepayerDossierSheet({
                   {activeTab === "PROPERTIES" && (
                     <div className="space-y-3">
                       {properties.length === 0 ? (
-                        <p className="text-[#717171] py-8 text-center italic">No property parcels linked to this ratepayer.</p>
+                        <p className="text-[#848E9C] py-8 text-center italic">No property parcels linked to this ratepayer.</p>
                       ) : (
                         properties.map((prop) => (
                           <div
                             key={prop.id}
-                            className="p-4 bg-white border border-[#DADCE0] rounded-xl space-y-3 hover:border-[#BDC1C6] transition-colors"
+                            className="p-4 bg-[#1E2329] border border-[#2B3139] rounded-xl space-y-3 hover:border-[#363D47] transition-colors"
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
-                                <span className="font-semibold text-[#2C2C2C] text-sm">{prop.accountNumber}</span>
-                                <p className="text-[#717171] text-xs mt-0.5">
+                                <span className="font-semibold text-[#EAECEF] text-sm">{prop.accountNumber}</span>
+                                <p className="text-[#848E9C] text-xs mt-0.5">
                                   {prop.ownerDigitalAddress} &bull; {prop.municipality}
                                 </p>
-                                <p className="text-[#717171] text-[11px] mt-0.5">{prop.propertyClassification}</p>
+                                <p className="text-[#848E9C] text-[11px] mt-0.5">{prop.propertyClassification}</p>
                               </div>
 
                               <div className="text-right shrink-0">
                                 <span
                                   className={`text-xs font-semibold ${
                                     prop.status === "PAID"
-                                      ? "text-[#188038]"
+                                      ? "text-[#0ECB81]"
                                       : prop.status === "PARTIALLY_PAID"
-                                      ? "text-[#B45309]"
-                                      : "text-[#D93025]"
+                                      ? "text-[#FCD535]"
+                                      : "text-[#F6465D]"
                                   }`}
                                 >
                                   {prop.status === "PAID" ? "Settled" : prop.status === "PARTIALLY_PAID" ? "Partial" : "Unpaid"}
                                 </span>
-                                <p className="font-semibold text-[#2C2C2C] text-sm mt-1 whitespace-nowrap tabular-nums">{prop.totalAmountDueFormatted}</p>
+                                <p className="font-semibold text-[#EAECEF] text-sm mt-1 whitespace-nowrap tabular-nums">{prop.totalAmountDueFormatted}</p>
                                 {prop.arrears > 0 && (
-                                  <p className="text-[#D93025] text-[11px] whitespace-nowrap tabular-nums">Arrears: {prop.arrearsFormatted}</p>
+                                  <p className="text-[#F6465D] text-[11px] whitespace-nowrap tabular-nums">Arrears: {prop.arrearsFormatted}</p>
                                 )}
                               </div>
                             </div>
 
-                            <div className="pt-2 border-t border-[#F1F3F4] flex items-center justify-between text-[11px] text-[#717171]">
+                            <div className="pt-2 border-t border-[#2B3139] flex items-center justify-between text-[11px] text-[#848E9C]">
                               <span className="whitespace-nowrap tabular-nums">Rateable Valuation: {prop.rateableValueFormatted}</span>
                               {onSelectProperty && (
                                 <button
@@ -537,7 +537,7 @@ export function RatepayerDossierSheet({
                                     onSelectProperty(prop.accountNumber);
                                     onClose();
                                   }}
-                                  className="text-[#612D53] hover:underline font-medium cursor-pointer"
+                                  className="text-[#FCD535] hover:underline font-medium cursor-pointer"
                                 >
                                   Inspect Assessment Roll &rarr;
                                 </button>
@@ -553,56 +553,56 @@ export function RatepayerDossierSheet({
                   {activeTab === "PAYMENTS" && (
                     <div className="space-y-3">
                       {receipts.length === 0 ? (
-                        <p className="text-[#717171] py-8 text-center italic">No payment transactions recorded on this account.</p>
+                        <p className="text-[#848E9C] py-8 text-center italic">No payment transactions recorded on this account.</p>
                       ) : (
                         receipts.map((r) => (
                           <div
                             key={r.id}
-                            className="p-3.5 bg-white border border-[#DADCE0] rounded-xl space-y-2.5"
+                            className="p-3.5 bg-[#1E2329] border border-[#2B3139] rounded-xl space-y-2.5"
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div className="space-y-0.5 min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  <Receipt className="w-3.5 h-3.5 text-[#612D53] shrink-0" />
-                                  <span className="font-semibold text-[#2C2C2C]">{r.receiptNumber}</span>
-                                  <span className="text-[#137333] font-medium">&bull; Reconciled</span>
+                                  <Receipt className="w-3.5 h-3.5 text-[#FCD535] shrink-0" />
+                                  <span className="font-semibold text-[#EAECEF]">{r.receiptNumber}</span>
+                                  <span className="text-[#0ECB81] font-medium">&bull; Reconciled</span>
                                   {r.scannedImageUrl ? (
-                                    <span className="text-[#188038] text-[11px] font-medium flex items-center gap-1">
-                                      <CheckCircle2 className="w-3 h-3 text-[#188038]" />
+                                    <span className="text-[#0ECB81] text-[11px] font-medium flex items-center gap-1">
+                                      <CheckCircle2 className="w-3 h-3 text-[#0ECB81]" />
                                       <span>Scanned GCR Attached</span>
                                     </span>
                                   ) : (
-                                    <span className="text-[#717171] text-[11px] italic">
+                                    <span className="text-[#848E9C] text-[11px] italic">
                                       &bull; No Physical Scan
                                     </span>
                                   )}
                                 </div>
-                                <p className="text-[#717171] text-[11px]">
+                                <p className="text-[#848E9C] text-[11px]">
                                   {r.paymentMethod} &bull; {r.datePaid}
                                 </p>
                               </div>
 
                               <div className="text-right shrink-0">
-                                <span className="font-semibold text-[#188038] text-sm whitespace-nowrap tabular-nums">{r.amountFormatted}</span>
-                                <p className="text-[#717171] text-[10px] mt-0.5 whitespace-nowrap">{r.settlementType} Assessment</p>
+                                <span className="font-semibold text-[#0ECB81] text-sm whitespace-nowrap tabular-nums">{r.amountFormatted}</span>
+                                <p className="text-[#848E9C] text-[10px] mt-0.5 whitespace-nowrap">{r.settlementType} Assessment</p>
                               </div>
                             </div>
 
                             {/* Action Bar: View/Attach Stamped Leaf & Dispatch SMS */}
-                            <div className="pt-2 border-t border-[#F1F3F4] flex items-center justify-between gap-2 text-xs flex-wrap">
+                            <div className="pt-2 border-t border-[#2B3139] flex items-center justify-between gap-2 text-xs flex-wrap">
                               <div className="flex items-center gap-3">
                                 {r.scannedImageUrl && (
                                   <button
                                     type="button"
                                     onClick={() => setPreviewingImage({ url: r.scannedImageUrl!, receiptNumber: r.receiptNumber })}
-                                    className="text-[#612D53] hover:underline font-medium flex items-center gap-1 cursor-pointer"
+                                    className="text-[#FCD535] hover:underline font-medium flex items-center gap-1 cursor-pointer"
                                   >
                                     <Eye className="w-3.5 h-3.5" />
                                     <span>Inspect Scanned Leaf</span>
                                   </button>
                                 )}
 
-                                <label className="text-[#612D53] hover:underline font-medium flex items-center gap-1 cursor-pointer">
+                                <label className="text-[#FCD535] hover:underline font-medium flex items-center gap-1 cursor-pointer">
                                   <Camera className="w-3.5 h-3.5" />
                                   <span>{r.scannedImageUrl ? "Replace Scan" : "Attach Scanned GCR Leaf"}</span>
                                   <input
@@ -617,7 +617,7 @@ export function RatepayerDossierSheet({
 
                               <div className="flex items-center gap-2">
                                 {smsStatus[r.id] && (
-                                  <span className="text-[11px] text-[#137333] font-medium">
+                                  <span className="text-[11px] text-[#0ECB81] font-medium">
                                     {smsStatus[r.id]}
                                   </span>
                                 )}
@@ -625,7 +625,7 @@ export function RatepayerDossierSheet({
                                   type="button"
                                   disabled={sendingSmsReceiptId === r.id}
                                   onClick={() => handleSendReceiptSms(r.id)}
-                                  className="text-[#137333] hover:underline font-medium flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                                  className="text-[#0ECB81] hover:underline font-medium flex items-center gap-1 cursor-pointer disabled:opacity-50"
                                 >
                                   {sendingSmsReceiptId === r.id ? (
                                     <Loader2 className="w-3 h-3 animate-spin" />
@@ -646,28 +646,28 @@ export function RatepayerDossierSheet({
                   {activeTab === "SMS_NOTICES" && (
                     <div className="space-y-3">
                       {notifications.length === 0 ? (
-                        <p className="text-[#717171] py-8 text-center italic">No SMS or dispatch notices found for this ratepayer.</p>
+                        <p className="text-[#848E9C] py-8 text-center italic">No SMS or dispatch notices found for this ratepayer.</p>
                       ) : (
                         notifications.map((n) => (
                           <div
                             key={n.id}
-                            className="p-3.5 bg-white border border-[#DADCE0] rounded-xl space-y-2"
+                            className="p-3.5 bg-[#1E2329] border border-[#2B3139] rounded-xl space-y-2"
                           >
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
-                                <MessageSquare className="w-3.5 h-3.5 text-[#612D53]" />
-                                <span className="font-semibold text-[#2C2C2C]">{n.title}</span>
-                                <span className="text-[#717171] text-[11px]">&bull; {n.deliveryMethod}</span>
+                                <MessageSquare className="w-3.5 h-3.5 text-[#FCD535]" />
+                                <span className="font-semibold text-[#EAECEF]">{n.title}</span>
+                                <span className="text-[#848E9C] text-[11px]">&bull; {n.deliveryMethod}</span>
                               </div>
-                              <span className="text-[11px] text-[#717171]">{n.createdAtFormatted}</span>
+                              <span className="text-[11px] text-[#848E9C]">{n.createdAtFormatted}</span>
                             </div>
 
-                            <div className="p-2.5 bg-[#F6ECF2] border border-[#DADCE0] rounded-lg text-xs text-[#2C2C2C] leading-relaxed">
+                            <div className="p-2.5 bg-[#181A20] border border-[#2B3139] rounded-lg text-xs text-[#EAECEF] leading-relaxed">
                               {n.message}
                             </div>
 
-                            <div className="flex items-center justify-between text-[11px] text-[#717171]">
-                              <span>Delivery Status: <strong className="text-[#137333] font-medium">{n.deliveryStatus}</strong></span>
+                            <div className="flex items-center justify-between text-[11px] text-[#848E9C]">
+                              <span>Delivery Status: <strong className="text-[#0ECB81] font-medium">{n.deliveryStatus}</strong></span>
                               <span>Type: {n.type}</span>
                             </div>
                           </div>
@@ -680,18 +680,18 @@ export function RatepayerDossierSheet({
                   {activeTab === "AUDIT_TRAIL" && (
                     <div className="space-y-3">
                       {auditLogs.length === 0 ? (
-                        <p className="text-[#717171] py-8 text-center italic">No administrative audit events recorded for this user.</p>
+                        <p className="text-[#848E9C] py-8 text-center italic">No administrative audit events recorded for this user.</p>
                       ) : (
                         auditLogs.map((a) => (
                           <div
                             key={a.id}
-                            className="p-3 bg-white border border-[#DADCE0] rounded-xl flex items-start justify-between text-xs"
+                            className="p-3 bg-[#1E2329] border border-[#2B3139] rounded-xl flex items-start justify-between text-xs"
                           >
                             <div className="space-y-0.5">
-                              <span className="font-semibold text-[#2C2C2C]">{a.action}</span>
-                              <p className="text-[#717171] text-xs">{a.details}</p>
+                              <span className="font-semibold text-[#EAECEF]">{a.action}</span>
+                              <p className="text-[#848E9C] text-xs">{a.details}</p>
                             </div>
-                            <span className="text-[#717171] text-[11px] shrink-0">{a.createdAtFormatted}</span>
+                            <span className="text-[#848E9C] text-[11px] shrink-0">{a.createdAtFormatted}</span>
                           </div>
                         ))
                       )}
@@ -702,8 +702,8 @@ export function RatepayerDossierSheet({
             </div>
 
             {/* Footer */}
-            <div className="px-6 py-3.5 border-t border-[#DADCE0] bg-white flex items-center justify-between text-xs shrink-0">
-              <span className="text-[#717171]">
+            <div className="px-6 py-3.5 border-t border-[#2B3139] bg-[#1E2329] flex items-center justify-between text-xs shrink-0">
+              <span className="text-[#848E9C]">
                 Kpone-Katamanso Municipal Assembly (KKMA) &bull; Ratepayer Registry
               </span>
               <button
@@ -723,23 +723,23 @@ export function RatepayerDossierSheet({
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
-                className="bg-white border border-[#DADCE0] shadow-2xl rounded-2xl max-w-sm w-full p-5 space-y-4 text-xs"
+                className="bg-[#1E2329] border border-[#2B3139] shadow-2xl rounded-2xl max-w-sm w-full p-5 space-y-4 text-xs"
               >
-                <div className="flex items-center justify-between border-b border-[#F1F3F4] pb-2.5">
+                <div className="flex items-center justify-between border-b border-[#2B3139] pb-2.5">
                   <div>
-                    <h4 className="font-semibold text-sm text-[#2C2C2C]">Attach Scanned GCR Leaf</h4>
-                    <p className="text-[11px] text-[#717171]">Receipt #{confirmUpload.receiptNumber}</p>
+                    <h4 className="font-semibold text-sm text-[#EAECEF]">Attach Scanned GCR Leaf</h4>
+                    <p className="text-[11px] text-[#848E9C]">Receipt #{confirmUpload.receiptNumber}</p>
                   </div>
                   <button
                     type="button"
                     onClick={() => setConfirmUpload(null)}
-                    className="w-6 h-6 rounded flex items-center justify-center text-[#717171] hover:text-[#2C2C2C]"
+                    className="w-6 h-6 rounded flex items-center justify-center text-[#848E9C] hover:text-[#EAECEF]"
                   >
                     <X className="w-4 h-4" />
                   </button>
                 </div>
 
-                <div className="rounded-xl overflow-hidden border border-[#DADCE0] bg-[#F8F9FA] max-h-56 flex items-center justify-center">
+                <div className="rounded-xl overflow-hidden border border-[#2B3139] bg-[#1E2329] max-h-56 flex items-center justify-center">
                   <img
                     src={confirmUpload.dataUrl}
                     alt="Scanned Receipt Preview"
@@ -747,11 +747,11 @@ export function RatepayerDossierSheet({
                   />
                 </div>
 
-                <p className="text-[11px] text-[#717171] leading-relaxed">
+                <p className="text-[11px] text-[#848E9C] leading-relaxed">
                   Confirm attaching this physical GCR receipt leaf. It will be stored in municipal cloud storage and accessible by the citizen via their SMS receipt link.
                 </p>
 
-                <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#F1F3F4]">
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#2B3139]">
                   <button
                     type="button"
                     disabled={isUploading}
@@ -786,18 +786,18 @@ export function RatepayerDossierSheet({
           {/* High-Res Scanned Image Lightbox */}
           {previewingImage && (
             <div className="fixed inset-0 z-60 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-              <div className="bg-white border border-[#DADCE0] shadow-2xl rounded-2xl max-w-lg w-full p-4 space-y-3 text-xs">
-                <div className="flex items-center justify-between border-b border-[#F1F3F4] pb-2">
+              <div className="bg-[#1E2329] border border-[#2B3139] shadow-2xl rounded-2xl max-w-lg w-full p-4 space-y-3 text-xs">
+                <div className="flex items-center justify-between border-b border-[#2B3139] pb-2">
                   <div>
-                    <h4 className="font-semibold text-sm text-[#2C2C2C]">Physical Stamped GCR Leaf</h4>
-                    <p className="text-[11px] text-[#717171]">Receipt #{previewingImage.receiptNumber}</p>
+                    <h4 className="font-semibold text-sm text-[#EAECEF]">Physical Stamped GCR Leaf</h4>
+                    <p className="text-[11px] text-[#848E9C]">Receipt #{previewingImage.receiptNumber}</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <a
                       href={previewingImage.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="p-1 text-[#612D53] hover:bg-[#F6ECF2] rounded cursor-pointer"
+                      className="p-1 text-[#FCD535] hover:bg-[#181A20] rounded cursor-pointer"
                       title="Open full size"
                     >
                       <ExternalLink className="w-4 h-4" />
@@ -805,14 +805,14 @@ export function RatepayerDossierSheet({
                     <button
                       type="button"
                       onClick={() => setPreviewingImage(null)}
-                      className="w-6 h-6 rounded flex items-center justify-center text-[#717171] hover:text-[#2C2C2C] cursor-pointer"
+                      className="w-6 h-6 rounded flex items-center justify-center text-[#848E9C] hover:text-[#EAECEF] cursor-pointer"
                     >
                       <X className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
 
-                <div className="rounded-xl overflow-hidden border border-[#DADCE0] bg-[#1E1E1E] max-h-[60vh] flex items-center justify-center p-2">
+                <div className="rounded-xl overflow-hidden border border-[#2B3139] bg-[#1E1E1E] max-h-[60vh] flex items-center justify-center p-2">
                   <img
                     src={previewingImage.url}
                     alt={`Receipt ${previewingImage.receiptNumber}`}
