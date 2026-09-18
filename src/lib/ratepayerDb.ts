@@ -241,10 +241,82 @@ export const ratepayerDb = {
       return data;
     },
 
-    async findUnique(args: { where: { accountNumber?: string; id?: string }; include?: any }) {
+    async findFirst(args?: { where?: any; include?: any }) {
+      if (!args?.where) {
+        const { data: rawData, error } = await supabase.from('Property').select('*').limit(1).maybeSingle();
+        if (error || !rawData) return null;
+        return mapPropertyRow(rawData);
+      }
+
       let query = supabase.from('Property').select('*');
-      if (args.where.accountNumber) query = query.eq('account_no', args.where.accountNumber);
-      if (args.where.id) query = query.eq('id', args.where.id);
+      const w = args.where;
+
+      if (w.OR && Array.isArray(w.OR)) {
+        // Build OR string e.g. account_no.eq.X,id.eq.X
+        const parts: string[] = [];
+        for (const cond of w.OR) {
+          const acc = cond.accountNumber || cond.account_no;
+          const id = cond.id;
+          if (acc) parts.push(`account_no.eq.${acc}`);
+          if (id) parts.push(`id.eq.${id}`);
+        }
+        if (parts.length > 0) {
+          query = query.or(parts.join(','));
+        }
+      } else {
+        const acc = w.accountNumber || w.account_no;
+        const id = w.id;
+        if (acc && id) {
+          query = query.or(`account_no.eq.${acc},id.eq.${id}`);
+        } else if (acc) {
+          query = query.eq('account_no', acc);
+        } else if (id) {
+          query = query.eq('id', id);
+        }
+      }
+
+      const { data: rawData, error } = await query.limit(1).maybeSingle();
+      if (error || !rawData) return null;
+
+      const data = mapPropertyRow(rawData);
+
+      if (args.include?.owner && data.ownerId) {
+        const { data: owner } = await supabase.from('PropertyOwner').select('*').eq('ownerId', data.ownerId).maybeSingle();
+        data.owner = owner || null;
+      }
+
+      if (args.include?.users) {
+        const { data: links } = await supabase.from('_PropertyToUser').select('B').eq('A', data.id);
+        const userIds = (links || []).map((l: any) => l.B);
+        if (userIds.length > 0) {
+          const { data: users } = await supabase.from('User').select('*').in('id', userIds);
+          data.users = users || [];
+        } else if (data.owner?.mobileNumber || data.owner?.tel) {
+          const phone = data.owner.mobileNumber || data.owner.tel;
+          const { data: matchedUsers } = await supabase.from('User').select('*').eq('phoneNumber', phone);
+          data.users = matchedUsers || [];
+        } else {
+          data.users = [];
+        }
+      }
+
+      if (args.include?.receipts) {
+        const { data: receipts } = await supabase.from('Receipt').select('*').eq('propertyId', data.id);
+        data.receipts = receipts || [];
+      }
+      return data;
+    },
+
+    async findUnique(args: { where: { accountNumber?: string; account_no?: string; id?: string }; include?: any }) {
+      let query = supabase.from('Property').select('*');
+      const acc = args.where.accountNumber || (args.where as any).account_no;
+      if (acc && args.where.id) {
+        query = query.or(`account_no.eq.${acc},id.eq.${args.where.id}`);
+      } else if (acc) {
+        query = query.eq('account_no', acc);
+      } else if (args.where.id) {
+        query = query.eq('id', args.where.id);
+      }
       const { data: rawData, error } = await query.maybeSingle();
       if (error || !rawData) return null;
 

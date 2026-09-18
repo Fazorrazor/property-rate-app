@@ -702,6 +702,61 @@ export const adminDb = {
       return data;
     },
 
+    async findFirst(args?: { where?: any; include?: any }) {
+      if (!args?.where) {
+        const { data: rawData, error } = await supabase.from('Property').select('*').limit(1).maybeSingle();
+        if (error || !rawData) return null;
+        return mapPropertyRow(rawData);
+      }
+
+      let query = supabase.from('Property').select('*');
+      const w = args.where;
+
+      if (w.OR && Array.isArray(w.OR)) {
+        const parts: string[] = [];
+        for (const cond of w.OR) {
+          const acc = cond.accountNumber || cond.account_no;
+          const id = cond.id;
+          if (acc) parts.push(`account_no.eq.${acc}`);
+          if (id) parts.push(`id.eq.${id}`);
+        }
+        if (parts.length > 0) {
+          query = query.or(parts.join(','));
+        }
+      } else {
+        const acc = w.accountNumber || w.account_no;
+        const id = w.id;
+        if (acc && id) {
+          query = query.or(`account_no.eq.${acc},id.eq.${id}`);
+        } else if (acc) {
+          query = query.eq('account_no', acc);
+        } else if (id) {
+          query = query.eq('id', id);
+        }
+      }
+
+      const { data: rawData, error } = await query.limit(1).maybeSingle();
+      if (error || !rawData) return null;
+
+      const data = mapPropertyRow(rawData);
+
+      if (args.include?.owner && data.ownerId) {
+        const { data: owner } = await supabase
+          .from('PropertyOwner')
+          .select('*')
+          .eq('ownerId', data.ownerId)
+          .maybeSingle();
+        if (owner) data.owner = owner;
+      }
+
+      if (args.include?.receipts) {
+        const { data: receipts } = await supabase.from('Receipt').select('*').eq('propertyId', data.id);
+        data.receipts = receipts || [];
+      }
+
+      return data;
+    },
+
     async findUnique(args: { where: { accountNumber?: string; id?: string }; include?: any }) {
       let query = supabase.from('Property').select('*');
       if (args.where.accountNumber) query = query.eq('account_no', args.where.accountNumber);

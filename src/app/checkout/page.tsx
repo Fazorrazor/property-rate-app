@@ -225,7 +225,7 @@ function CheckoutContent() {
       }
     }
     load();
-  }, [propertyId, settlementTypeParam]);
+  }, [propertyId, settlementTypeParam, customAmount, rawAccountNumber]);
 
   // Debounced re-verification when user changes the mobile phone number
   useEffect(() => {
@@ -458,19 +458,34 @@ function CheckoutContent() {
   }
 
   if (!checkoutData || checkoutData.totalAmount <= 0) {
+    const accToView = rawAccountNumber || (propertyId !== "ALL" ? propertyId : undefined);
     return (
-      <main className="min-h-screen bg-background p-6 max-w-md mx-auto flex flex-col justify-center items-center text-center space-y-3 font-sans">
+      <main className="min-h-screen bg-background p-6 max-w-md mx-auto flex flex-col justify-center items-center text-center space-y-4 font-sans">
         <div className="w-12 h-12 rounded-2xl bg-[#E6F4EA] text-[#188038] flex items-center justify-center">
           <CheckCircle2 className="w-6 h-6" />
         </div>
-        <h2 className="text-base font-semibold text-foreground">No Outstanding Balance</h2>
-        <p className="text-xs text-on-surface-muted">This municipal assessment has already been settled in full.</p>
-        <button
-          onClick={() => window.close()}
-          className="px-5 py-2.5 rounded-xl bg-[#4B1426] text-white font-medium text-xs hover:bg-[#3E101F] transition-colors cursor-pointer shadow-xs"
-        >
-          Close Window
-        </button>
+        <div className="space-y-1">
+          <h2 className="text-base font-semibold text-foreground">No Outstanding Balance</h2>
+          <p className="text-xs text-on-surface-muted max-w-xs">
+            This municipal property rate assessment has already been settled in full.
+          </p>
+        </div>
+        <div className="flex flex-col gap-2.5 w-full max-w-xs pt-2">
+          {accToView && (
+            <button
+              onClick={() => router.push(`/dashboard?accountNumber=${encodeURIComponent(accToView)}`)}
+              className="btn-3d-primary w-full h-11 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+            >
+              <span>View Property Bill & Receipts</span>
+            </button>
+          )}
+          <button
+            onClick={() => window.close()}
+            className="w-full h-10 rounded-xl bg-surface border border-border-light text-foreground font-medium text-xs hover:bg-surface-subtle transition-colors cursor-pointer"
+          >
+            Close Window
+          </button>
+        </div>
       </main>
     );
   }

@@ -1,6 +1,6 @@
 'use server';
 
-import { prisma } from '@/lib/db';
+import { prisma, ratepayerDb } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 import { PaymentGateway } from '@/lib/payments/gateway';
@@ -337,12 +337,46 @@ export async function getDashboardData(accountNumberOverride?: string): Promise<
       });
 
       if (prop) {
+        const rawProp = prop as any;
+        const ownerPhone = rawProp.owner?.mobileNumber || rawProp.owner?.tel || rawProp.users?.[0]?.phoneNumber || rawProp.ownerPhoneDirect;
+        let allOwnerProps: any[] = [];
+        if (ownerPhone) {
+          const cleanDigits = ownerPhone.replace(/\D/g, '');
+          const normalized10 = cleanDigits.length === 12 && cleanDigits.startsWith('233') ? '0' + cleanDigits.substring(3) : cleanDigits;
+          const { data: propsByPhone } = await (ratepayerDb as any).property.findMany({
+            where: {
+              OR: [
+                { telephone: ownerPhone },
+                { telephone: cleanDigits },
+                { telephone: normalized10 },
+              ]
+            }
+          }).then((res: any) => ({ data: res })).catch(() => ({ data: [] }));
+
+          allOwnerProps = propsByPhone || [];
+        }
+
+        if (rawProp.ownerId && allOwnerProps.length <= 1) {
+          const { data: propsByOwner } = await (ratepayerDb as any).property.findMany({
+            where: { ownerId: rawProp.ownerId }
+          }).then((res: any) => ({ data: res })).catch(() => ({ data: [] }));
+          if (propsByOwner && propsByOwner.length > allOwnerProps.length) {
+            allOwnerProps = propsByOwner;
+          }
+        }
+
+        if (allOwnerProps.length === 0) {
+          allOwnerProps = [rawProp];
+        } else if (!allOwnerProps.some((p: any) => p.id === rawProp.id || p.accountNumber === rawProp.accountNumber)) {
+          allOwnerProps.unshift(rawProp);
+        }
+
         user = {
-          id: prop.users?.[0]?.id || 'usr_direct',
-          name: prop.owner?.name || prop.users?.[0]?.name || 'Municipal Ratepayer',
-          phoneNumber: prop.owner?.mobileNumber || prop.owner?.tel || '0243756235',
+          id: rawProp.users?.[0]?.id || 'usr_direct',
+          name: rawProp.owner?.name || rawProp.ownerNameDirect || rawProp.users?.[0]?.name || 'Municipal Ratepayer',
+          phoneNumber: ownerPhone || '0243756235',
           isVerified: true,
-          properties: [prop],
+          properties: allOwnerProps,
         };
       }
     }
