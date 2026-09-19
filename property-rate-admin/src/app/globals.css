@@ -75,26 +75,68 @@
   .btn-3d-danger {
     @apply relative inline-flex items-center justify-center gap-1.5 transition-all duration-150 active:scale-[0.98] bg-[#FF3B30] text-white hover:bg-[#D70015] font-medium text-xs min-h-[32px] px-3.5 rounded-lg shadow-xs cursor-pointer border-0;
   }
+
+  /* Vercel-style precision linear shimmer skeleton */
+  .vercel-skeleton {
+    position: relative;
+    overflow: hidden;
+    background-color: #EBEBEB;
+  }
+  .vercel-skeleton::after {
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background-image: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.5) 50%,
+      rgba(255, 255, 255, 0) 100%
+    );
+    animation: vercel-shimmer 1.8s infinite ease-in-out;
+    content: "";
+  }
 }
 
-/* Suppress visible scrollbars cross-browser across all tables, containers, and views while maintaining smooth scrolling */
+@keyframes vercel-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Apple HIG / Google Enterprise Precision Scrollbars for smooth, visible, drag-scrollable tables */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #C7C7CC;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #8E8E93;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #C7C7CC transparent;
+}
+
+/* Explicit opt-in suppression only when specifically marked with .scrollbar-none */
 .scrollbar-none::-webkit-scrollbar,
-.no-scrollbar::-webkit-scrollbar,
-table::-webkit-scrollbar,
-.overflow-x-auto::-webkit-scrollbar,
-.overflow-y-auto::-webkit-scrollbar,
-.overflow-auto::-webkit-scrollbar {
+.no-scrollbar::-webkit-scrollbar {
   display: none !important;
   width: 0 !important;
   height: 0 !important;
 }
 
 .scrollbar-none,
-.no-scrollbar,
-table,
-.overflow-x-auto,
-.overflow-y-auto,
-.overflow-auto {
+.no-scrollbar {
   -ms-overflow-style: none !important;
   scrollbar-width: none !important;
 }

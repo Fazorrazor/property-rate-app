@@ -1392,7 +1392,7 @@ export default function AdminDashboardPage() {
             ? "p-0 max-w-none overflow-hidden"
             : activeTab === "SETTINGS"
               ? "p-0 max-w-none overflow-y-auto"
-              : "p-0 lg:px-6 lg:py-3 max-w-none lg:max-w-7xl lg:mx-auto gap-0 lg:gap-3 bg-[#F2F2F7] lg:bg-transparent overflow-y-auto pb-3"
+              : "p-0 lg:px-6 lg:py-3 max-w-none lg:max-w-7xl lg:mx-auto gap-0 lg:gap-3 bg-[#F2F2F7] lg:bg-transparent overflow-y-auto lg:overflow-hidden pb-3"
           }`}>
           {/* Top KPI Cards (Zero Pills - Flat Edge-to-Edge on Mobile, Cards on Desktop) */}
           {activeTab === "REGISTRY" && (
@@ -1672,7 +1672,7 @@ export default function AdminDashboardPage() {
               <div
                 ref={tableContainerRef}
                 onScroll={handleTableScroll}
-                className="w-full flex-1 min-h-0 overflow-y-auto overflow-x-hidden scrollbar-none"
+                className="w-full flex-1 min-h-0 overflow-y-auto overflow-x-auto"
               >
                 {/* Desktop Cadastre Table (>= 768px) */}
                 <table className="hidden md:table table-fixed w-full text-left text-xs border-collapse">
@@ -1774,29 +1774,30 @@ export default function AdminDashboardPage() {
                     {isLoadingMore && (
                       <>
                         {[...Array(5)].map((_, i) => (
-                          <tr key={`cadastre-skel-desk-${i}`} className="animate-pulse bg-white border-b border-[#E5E5EA]">
-                            <td className="py-3 px-3 text-center">
-                              <div className="w-4 h-4 rounded bg-[#E5E5EA] mx-auto" />
+                          <tr key={`cadastre-skel-desk-${i}`} className="bg-white border-b border-[#E5E5EA]">
+                            <td className="py-2.5 px-3 text-center">
+                              <div className="w-3.5 h-3.5 rounded border border-[#E5E5EA] bg-[#F2F2F7] mx-auto" />
                             </td>
-                            <td className="py-3 px-3 space-y-1.5">
-                              <div className="h-3 bg-[#E5E5EA] rounded w-28" />
-                              <div className="h-2.5 bg-[#E5E5EA] rounded w-20" />
+                            <td className="py-2.5 px-3 space-y-1">
+                              <div className="h-3.5 vercel-skeleton rounded w-28" />
+                              <div className="h-2.5 vercel-skeleton rounded w-20" />
                             </td>
-                            <td className="py-3 px-3 space-y-1.5">
-                              <div className="h-3 bg-[#E5E5EA] rounded w-36" />
-                              <div className="h-2.5 bg-[#E5E5EA] rounded w-28" />
+                            <td className="py-2.5 px-3 space-y-1">
+                              <div className="h-3.5 vercel-skeleton rounded w-36" />
+                              <div className="h-2.5 vercel-skeleton rounded w-28" />
                             </td>
-                            <td className="py-3 px-3">
-                              <div className="h-3 bg-[#E5E5EA] rounded w-32" />
+                            <td className="py-2.5 px-3">
+                              <div className="h-3 vercel-skeleton rounded w-24" />
                             </td>
-                            <td className="py-3 px-3 text-right">
-                              <div className="h-3 bg-[#E5E5EA] rounded w-20 ml-auto" />
+                            <td className="py-2.5 px-3 text-right">
+                              <div className="h-3.5 vercel-skeleton rounded w-20 ml-auto" />
                             </td>
-                            <td className="py-3 px-3 text-right">
-                              <div className="h-3.5 bg-[#E5E5EA] rounded w-20 ml-auto" />
+                            <td className="py-2.5 px-3 text-right space-y-1">
+                              <div className="h-3.5 vercel-skeleton rounded w-20 ml-auto" />
+                              <div className="h-2.5 vercel-skeleton rounded w-14 ml-auto" />
                             </td>
-                            <td className="py-3 px-3 text-center">
-                              <div className="h-3 bg-[#E5E5EA] rounded w-14 mx-auto" />
+                            <td className="py-2.5 px-3 text-center">
+                              <div className="h-3.5 vercel-skeleton rounded w-12 mx-auto" />
                             </td>
                           </tr>
                         ))}
@@ -1894,32 +1895,29 @@ export default function AdminDashboardPage() {
                       {[...Array(4)].map((_, i) => (
                         <div key={`cadastre-skel-mob-${i}`} className="px-3.5 py-3 flex items-center justify-between gap-2.5">
                           <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                            <div className="w-4 h-4 rounded bg-[#E5E5EA] shrink-0" />
+                            <div className="w-4 h-4 rounded border border-[#E5E5EA] bg-[#F2F2F7] shrink-0" />
                             <div className="min-w-0 flex-1 space-y-1.5">
-                              <div className="flex items-center gap-2">
-                                <div className="h-3.5 bg-[#E5E5EA] rounded w-28" />
-                                <div className="h-2.5 bg-[#F2F2F7] rounded w-12" />
-                              </div>
-                              <div className="h-3 bg-[#F2F2F7] rounded w-44" />
+                              <div className="h-3.5 w-28 rounded vercel-skeleton" />
+                              <div className="h-2.5 w-36 rounded vercel-skeleton" />
                             </div>
                           </div>
                           <div className="space-y-1 text-right shrink-0">
-                            <div className="h-3.5 bg-[#E5E5EA] rounded w-16 ml-auto" />
-                            <div className="h-2.5 bg-[#F2F2F7] rounded w-12 ml-auto" />
+                            <div className="h-3.5 w-16 rounded vercel-skeleton ml-auto" />
+                            <div className="h-2.5 w-10 rounded vercel-skeleton ml-auto" />
                           </div>
                         </div>
                       ))}
                     </div>
                   )}
-
-                  {/* Endless Scroll Sentinel & Clean End Marker */}
-                  <div ref={propertySentinelRef} className="h-2 w-full" />
-                  {!hasMoreProperties && filteredProperties.length > 0 && (
-                    <div className="py-4 text-center text-[11px] text-[#6C6C70] border-t border-[#E5E5EA]">
-                      &bull; End of cadastre roll ({filteredProperties.length.toLocaleString()} properties loaded)
-                    </div>
-                  )}
                 </div>
+
+                {/* Endless Scroll Sentinel & Clean End Marker (Visible across desktop & mobile) */}
+                <div ref={propertySentinelRef} className="h-2 w-full shrink-0" />
+                {!hasMoreProperties && filteredProperties.length > 0 && (
+                  <div className="py-4 text-center text-[11px] text-[#6C6C70] border-t border-[#E5E5EA] bg-white shrink-0">
+                    &bull; End of cadastre roll ({filteredProperties.length.toLocaleString()} properties loaded)
+                  </div>
+                )}
               </div>
             </section>
           )}
@@ -2201,7 +2199,7 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
 
-              <div className="w-full flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
+              <div className="w-full flex-1 min-h-0 overflow-y-auto overflow-x-auto">
                 {/* Desktop Treasury Table (>= 768px) */}
                 <table className="hidden md:table table-fixed w-full text-left text-xs border-collapse">
                   <thead className="bg-[#F8F9FA] border-b border-[#E5E5EA] text-[#6C6C70] font-semibold text-[11px] sticky top-0 z-10">
@@ -2411,7 +2409,7 @@ export default function AdminDashboardPage() {
               {/* Table Container */}
               <div
                 ref={auditLogTableContainerRef}
-                className="w-full flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
+                className="w-full flex-1 min-h-0 overflow-y-auto overflow-x-auto"
               >
                 {/* Desktop Audit Trail Table (>= 768px) */}
                 <table className="hidden md:table table-fixed w-full text-left text-xs border-collapse">
