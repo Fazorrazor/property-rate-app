@@ -59,6 +59,22 @@ model Session {
   updatedAt DateTime @updatedAt
 }
 
+model AccessGrant {
+  id             String    @id @default(uuid())
+  token          String    @unique
+  accountNumber  String
+  phoneNumber    String
+  destination    String    @default("checkout") // checkout, dashboard
+  expiresAt      DateTime
+  claimedAt      DateTime?
+  claimedSession String?
+  createdAt      DateTime  @default(now())
+
+  @@index([token])
+  @@index([phoneNumber])
+  @@index([accountNumber])
+}
+
 model AuditLog {
   id         String   @id @default(uuid())
   action     String // RECORD_PAYMENT, BATCH_BILLING, EDIT_PROPERTY, GCR_ALLOCATE

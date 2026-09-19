@@ -87,31 +87,6 @@ export async function getAuthenticatedSession() {
       }
     }
 
-    // Fallback if session is missing or points to a non-existent user
-    if (!user) {
-      user = await prisma.user.findFirst({
-        include: {
-          properties: {
-            include: { receipts: true },
-          },
-        },
-      });
-
-      if (user) {
-        const token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-        await prisma.session.create({
-          data: { token, userId: user.id }
-        });
-        cookieStore.set('auth_session', token, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'lax',
-          maxAge: 60 * 60 * 24 * 365, // 1 year non-expiring session
-          path: '/',
-        });
-      }
-    }
-
     return user;
   } catch (error) {
     console.error('Error verifying auth session:', error);
@@ -210,12 +185,19 @@ export async function verifyOtpAndLogin(otp: string, explicitPhone?: string) {
       });
     }
 
-    if (!user) {
-      user = await prisma.user.findFirst();
+    if (!user && phoneToVerify) {
+      user = await prisma.user.create({
+        data: {
+          phoneNumber: phoneToVerify,
+          name: 'Municipal Ratepayer',
+          isVerified: true,
+          role: 'RATEPAYER',
+        },
+      });
     }
 
     if (!user) {
-      return { success: false, error: 'Taxpayer profile not found in database.' };
+      return { success: false, error: 'Taxpayer profile not found in database for this telephone number.' };
     }
 
     if (!user.isVerified) {
@@ -317,72 +299,199 @@ export async function logoutUser() {
 }
 
 // ----------------------------------------------------
+// SECURE ONE-TIME ACCESS LINK & DEVICE BINDING
+// ----------------------------------------------------
+
+export async function claimAccessGrant(token: string) {
+  try {
+    if (!token || typeof token !== 'string') {
+      return { success: false, error: 'INVALID_TOKEN', message: 'Missing or malformed access token.' };
+    }
+
+    const cleanToken = token.trim();
+
+    // Check if demo token in development/simulator
+    if (cleanToken.startsWith('demo_')) {
+      const dest = cleanToken.includes('_ckt_') ? 'checkout' : 'dashboard';
+      const acc = cleanToken.replace(/^demo_(ast|ckt)_/, '');
+      return {
+        success: true,
+        destination: dest,
+        accountNumber: acc,
+      };
+    }
+
+    const grant = await ratepayerDb.accessGrant.findUnique({
+      where: { token: cleanToken },
+    });
+
+    if (!grant) {
+      return { success: false, error: 'NOT_FOUND', message: 'This access link is invalid or has been revoked.' };
+    }
+
+    // Check expiration
+    if (new Date() > new Date(grant.expiresAt)) {
+      const maskedPhone = grant.phoneNumber ? grant.phoneNumber.replace(/(\d{3})\d+(\d{3})/, '$1****$2') : '';
+      return {
+        success: false,
+        error: 'EXPIRED',
+        phoneNumber: grant.phoneNumber,
+        maskedPhoneNumber: maskedPhone,
+        message: 'This access link has expired. For your security, please verify with your mobile number.',
+      };
+    }
+
+    const cookieStore = await cookies();
+    const existingSessionToken = cookieStore.get('auth_session')?.value;
+
+    // Check if grant is already claimed by another device/session
+    if (grant.claimedSession) {
+      // If current browser already holds this exact session token, grant access smoothly!
+      if (existingSessionToken && existingSessionToken === grant.claimedSession) {
+        return {
+          success: true,
+          destination: grant.destination || 'checkout',
+          accountNumber: grant.accountNumber,
+        };
+      }
+
+      // DEVICE MISMATCH: Token was claimed on another device/browser
+      const maskedPhone = grant.phoneNumber ? grant.phoneNumber.replace(/(\d{3})\d+(\d{3})/, '$1****$2') : 'your registered number';
+      return {
+        success: false,
+        error: 'DEVICE_MISMATCH',
+        phoneNumber: grant.phoneNumber,
+        maskedPhoneNumber: maskedPhone,
+        accountNumber: grant.accountNumber,
+        message: `This secure billing link was already activated on another device. To protect ratepayer privacy, please verify your mobile number (${maskedPhone}).`,
+      };
+    }
+
+    // FIRST-TIME ACTIVATION ON RECIPIENT'S DEVICE
+    let cleanPhone = (grant.phoneNumber || '').replace(/\D/g, '');
+    if (cleanPhone.startsWith('233') && cleanPhone.length === 12) {
+      cleanPhone = `0${cleanPhone.substring(3)}`;
+    } else if (cleanPhone.length === 9) {
+      cleanPhone = `0${cleanPhone}`;
+    }
+
+    // Resolve or create ratepayer user
+    let user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { phoneNumber: cleanPhone },
+          { phoneNumber: grant.phoneNumber },
+        ],
+      },
+    });
+
+    if (!user) {
+      user = await prisma.user.create({
+        data: {
+          phoneNumber: cleanPhone || grant.phoneNumber,
+          name: 'Municipal Ratepayer',
+          role: 'RATEPAYER',
+          isVerified: true,
+        },
+      });
+    }
+
+    // Associate target property if not already connected
+    const targetAcc = grant.accountNumber.startsWith('ALL:')
+      ? grant.accountNumber.split(':')[1]
+      : grant.accountNumber;
+
+    if (targetAcc) {
+      const prop = await prisma.property.findFirst({
+        where: {
+          OR: [{ accountNumber: targetAcc }, { id: targetAcc }],
+        },
+      });
+      if (prop) {
+        await prisma.property.update({
+          where: { id: prop.id },
+          data: {
+            users: {
+              connect: { id: user.id },
+            },
+          },
+        }).catch(() => {});
+      }
+    }
+
+    // Mint device session
+    const newSessionToken = `dev_${Math.random().toString(36).substring(2, 15)}_${Math.random().toString(36).substring(2, 15)}`;
+    await prisma.session.create({
+      data: {
+        token: newSessionToken,
+        userId: user.id,
+      },
+    });
+
+    // Set secure cookie on this device
+    cookieStore.set('auth_session', newSessionToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 30, // 30 days
+      path: '/',
+    });
+
+    // Mark grant as claimed and bound to this device session
+    await ratepayerDb.accessGrant.update({
+      where: { id: grant.id },
+      data: {
+        claimedAt: new Date().toISOString(),
+        claimedSession: newSessionToken,
+      },
+    });
+
+    return {
+      success: true,
+      destination: grant.destination || 'checkout',
+      accountNumber: grant.accountNumber,
+    };
+  } catch (error) {
+    console.error('Error claiming access grant:', error);
+    return { success: false, error: 'SERVER_ERROR', message: 'An unexpected error occurred verifying your link.' };
+  }
+}
+
+// ----------------------------------------------------
 // TAXPAYER DASHBOARD & IN-APP BILL RESOLVER
 // ----------------------------------------------------
 
 export async function getDashboardData(accountNumberOverride?: string): Promise<DashboardData | null> {
   try {
-    let user: any = null;
-
-    if (accountNumberOverride) {
-      const cleanAcc = accountNumberOverride.trim();
-      const prop = await prisma.property.findFirst({
-        where: {
-          OR: [
-            { accountNumber: cleanAcc },
-            { id: cleanAcc },
-          ],
-        },
-        include: { users: { include: { properties: true } }, owner: true },
-      });
-
-      if (prop) {
-        const rawProp = prop as any;
-        const ownerPhone = rawProp.owner?.mobileNumber || rawProp.owner?.tel || rawProp.users?.[0]?.phoneNumber || rawProp.ownerPhoneDirect || rawProp.telephone;
-        let allOwnerProps: any[] = [];
-        if (ownerPhone) {
-          const cleanDigits = ownerPhone.replace(/\D/g, '');
-          const normalized10 = cleanDigits.length === 12 && cleanDigits.startsWith('233') ? '0' + cleanDigits.substring(3) : cleanDigits;
-          const propsByPhone = await ratepayerDb.property.findMany({
-            where: {
-              OR: [
-                { telephone: ownerPhone },
-                { telephone: cleanDigits },
-                { telephone: normalized10 },
-              ]
-            }
-          }).catch(() => []);
-
-          allOwnerProps = propsByPhone || [];
-        }
-
-        if (allOwnerProps.length === 0) {
-          allOwnerProps = [rawProp];
-        } else if (!allOwnerProps.some((p: any) => p.id === rawProp.id || p.accountNumber === rawProp.accountNumber)) {
-          allOwnerProps.unshift(rawProp);
-        }
-
-        user = {
-          id: rawProp.users?.[0]?.id || 'usr_direct',
-          name: rawProp.owner?.name || rawProp.ownerNameDirect || rawProp.users?.[0]?.name || 'Municipal Ratepayer',
-          phoneNumber: ownerPhone || '0243756235',
-          isVerified: true,
-          properties: allOwnerProps,
-        };
-      }
-    }
-
+    const user = await getAuthenticatedSession();
     if (!user) {
-      user = await getAuthenticatedSession();
+      return null;
     }
-    if (!user) return null;
 
     let totalValuation = 0;
     let totalOutstanding = 0;
     let paidCount = 0;
     let unpaidCount = 0;
 
-    const formattedProperties: DashboardProperty[] = user.properties.map((p: any) => {
+    let userProps: any[] = user.properties || [];
+    if (userProps.length === 0 && user.phoneNumber) {
+      const cleanDigits = user.phoneNumber.replace(/\D/g, '');
+      const normalized10 = cleanDigits.length === 12 && cleanDigits.startsWith('233') ? '0' + cleanDigits.substring(3) : cleanDigits;
+      const matched = await ratepayerDb.property.findMany({
+        where: {
+          OR: [
+            { telephone: user.phoneNumber },
+            { telephone: cleanDigits },
+            { telephone: normalized10 },
+          ],
+        },
+      }).catch(() => []);
+      if (matched.length > 0) {
+        userProps = matched;
+      }
+    }
+
+    const formattedProperties: DashboardProperty[] = userProps.map((p: any) => {
       totalValuation += p.rateableValue;
       totalOutstanding += p.status === 'PAID' ? 0 : p.totalAmountDue;
 

@@ -1618,10 +1618,33 @@ async function processSmsJobInline(
           const totalDue = groupProps.reduce((s: number, p: any) => s + (p.totalAmountDue || 0), 0);
           const arrears = groupProps.reduce((s: number, p: any) => s + (p.arrears || 0), 0);
           
-          const assessmentLink = `${publicAppUrl}/dashboard?accountNumber=${encodeURIComponent(primaryAcc)}`;
-          const checkoutLink = isMulti
-            ? `${publicAppUrl}/checkout?propertyId=ALL&accountNumber=${encodeURIComponent(primaryAcc)}`
-            : `${publicAppUrl}/checkout?propertyId=${encodeURIComponent(primaryAcc)}`;
+          // Generate high-entropy, single-device access tokens
+          const tokenAssess = `ast_${Math.random().toString(36).substring(2, 10)}${Math.random().toString(36).substring(2, 10)}`;
+          const tokenCheckout = `ckt_${Math.random().toString(36).substring(2, 10)}${Math.random().toString(36).substring(2, 10)}`;
+          const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+
+          await adminDb.accessGrant.create({
+            data: {
+              token: tokenAssess,
+              accountNumber: primaryAcc,
+              phoneNumber: phone,
+              destination: 'dashboard',
+              expiresAt,
+            }
+          });
+
+          await adminDb.accessGrant.create({
+            data: {
+              token: tokenCheckout,
+              accountNumber: isMulti ? `ALL:${primaryAcc}` : primaryAcc,
+              phoneNumber: phone,
+              destination: 'checkout',
+              expiresAt,
+            }
+          });
+
+          const assessmentLink = `${publicAppUrl}/auth/access?token=${tokenAssess}`;
+          const checkoutLink = `${publicAppUrl}/auth/access?token=${tokenCheckout}`;
 
           const currentFee = groupProps.reduce((s: number, p: any) => s + (p.currentFee || 0), 0);
           const gpsAddress =

@@ -181,9 +181,16 @@ function CheckoutContent() {
     }
   }, [toast]);
 
+  const tokenParam = searchParams.get("token") || undefined;
+
   useEffect(() => {
     async function load() {
       try {
+        if (tokenParam) {
+          router.replace(`/auth/access?token=${encodeURIComponent(tokenParam)}`);
+          return;
+        }
+
         const data = await getCheckoutData(propertyId, settlementTypeParam, customAmount, rawAccountNumber);
         if (data) {
           setCheckoutData(data);
@@ -222,7 +229,7 @@ function CheckoutContent() {
       }
     }
     load();
-  }, [propertyId, settlementTypeParam, customAmount, rawAccountNumber]);
+  }, [propertyId, settlementTypeParam, customAmount, rawAccountNumber, tokenParam, router]);
 
   // Debounced re-verification when user changes the mobile phone number
   useEffect(() => {

@@ -480,7 +480,7 @@ export function SmsRolloutSimulator({
   // Fallback scroll handler for audience table container
   const handleAudienceTableScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const target = e.currentTarget;
-    if (target.scrollTop + target.clientHeight >= target.scrollHeight - 100) {
+    if (target.scrollTop + target.clientHeight >= target.scrollHeight - 250) {
       loadNextAudiencePage();
     }
   };
@@ -496,7 +496,10 @@ export function SmsRolloutSimulator({
           loadNextAudiencePage();
         }
       },
-      { rootMargin: "300px" }
+      {
+        root: tableContainerRef.current,
+        rootMargin: "250px",
+      }
     );
 
     observer.observe(sentinel);
@@ -530,7 +533,7 @@ export function SmsRolloutSimulator({
 
   const handleLogsTableScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const target = e.currentTarget;
-    if (target.scrollTop + target.clientHeight >= target.scrollHeight - 100) {
+    if (target.scrollTop + target.clientHeight >= target.scrollHeight - 250) {
       loadNextLogsPage();
     }
   };
@@ -545,7 +548,10 @@ export function SmsRolloutSimulator({
           loadNextLogsPage();
         }
       },
-      { rootMargin: "300px" }
+      {
+        root: logsTableContainerRef.current,
+        rootMargin: "250px",
+      }
     );
 
     observer.observe(sentinel);
@@ -690,10 +696,8 @@ export function SmsRolloutSimulator({
       publicAppUrl = "https://property-rate-app.vercel.app";
     }
 
-    const assessmentLink = `${publicAppUrl}/dashboard?accountNumber=${encodeURIComponent(primaryAcc)}`;
-    const checkoutLink = isMulti
-      ? `${publicAppUrl}/checkout?propertyId=ALL&accountNumber=${encodeURIComponent(primaryAcc)}`
-      : `${publicAppUrl}/checkout?propertyId=${encodeURIComponent(primaryAcc)}`;
+    const assessmentLink = `${publicAppUrl}/auth/access?token=demo_ast_${encodeURIComponent(primaryAcc)}`;
+    const checkoutLink = `${publicAppUrl}/auth/access?token=demo_ckt_${encodeURIComponent(primaryAcc)}`;
 
     const gpsAddresses = isMulti
       ? Array.from(new Set(groupProps.map((p) => p.ownerDigitalAddress?.trim()).filter(Boolean))).join(", ")
@@ -1094,6 +1098,7 @@ export function SmsRolloutSimulator({
                 </div>
               </div>
             </div>
+          </div>
 
             {/* Matched Audience Rollout Queue Table (Consumes All Vertical Space) */}
             <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-white">
@@ -1153,12 +1158,36 @@ export function SmsRolloutSimulator({
               <div
                 ref={tableContainerRef}
                 onScroll={handleAudienceTableScroll}
-                className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
+                className="flex-1 min-h-0 overflow-auto"
               >
-                <table className="w-full text-left text-xs border-collapse">
+                <table className="w-[2750px] min-w-[2750px] table-fixed text-left text-xs border-collapse">
+                  <colgroup>
+                    <col className="w-[48px]" />
+                    <col className="w-[140px]" />
+                    <col className="w-[190px]" />
+                    <col className="w-[130px]" />
+                    <col className="w-[160px]" />
+                    <col className="w-[150px]" />
+                    <col className="w-[110px]" />
+                    <col className="w-[110px]" />
+                    <col className="w-[140px]" />
+                    <col className="w-[180px]" />
+                    <col className="w-[140px]" />
+                    <col className="w-[90px]" />
+                    <col className="w-[110px]" />
+                    <col className="w-[130px]" />
+                    <col className="w-[110px]" />
+                    <col className="w-[130px]" />
+                    <col className="w-[130px]" />
+                    <col className="w-[130px]" />
+                    <col className="w-[130px]" />
+                    <col className="w-[130px]" />
+                    <col className="w-[150px]" />
+                    <col className="w-[140px]" />
+                  </colgroup>
                   <thead className="border-b text-[#6C6C70] font-semibold text-[11px] sticky top-0 z-20 bg-[#F8F9FA] border-[#E5E5EA]">
                     <tr>
-                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA] w-10 text-center border-l-4 border-[#F8F9FA]">
+                      <th className="py-2.5 px-3 text-center border-l-4 border-[#F8F9FA] bg-[#F8F9FA] w-[48px]">
                         <input
                           type="checkbox"
                           checked={audienceScope === "SELECTED" && liveAudience.length > 0 && selectedSpecificAccounts.length === liveAudience.length}
@@ -1179,27 +1208,27 @@ export function SmsRolloutSimulator({
                           className="w-3.5 h-3.5 rounded border-[#C7C7CC] text-[#007AFF] focus:ring-[#007AFF] accent-[#007AFF] cursor-pointer"
                         />
                       </th>
-                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA]">Account No</th>
-                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA]">Name</th>
-                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA]">Telephone</th>
-                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA]">ID</th>
-                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA]">Owner Digital Address</th>
-                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA]">House No</th>
-                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA]">Plot No</th>
-                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA]">Valuation No</th>
-                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA]">Municipality</th>
-                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA]">Property Cat</th>
-                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA]">Bill Year</th>
-                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA]">Bill Date</th>
-                      <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#F8F9FA]">Rateable Value</th>
-                      <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#F8F9FA]">Rate Imposed</th>
-                      <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#F8F9FA]">Previous Year Bill</th>
-                      <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#F8F9FA]">Amount Paid</th>
-                      <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#F8F9FA]">Arrears</th>
-                      <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#F8F9FA]">Current Bill</th>
-                      <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#F8F9FA]">Bill Amount</th>
-                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA]">Electoral Area</th>
-                      <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#F8F9FA]">Outstanding Amt</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA] truncate w-[140px]">Account No</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA] truncate w-[190px]">Name</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA] truncate w-[130px]">Telephone</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA] truncate w-[160px]">ID</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA] truncate w-[150px]">Owner Digital Address</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA] truncate w-[110px]">House No</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA] truncate w-[110px]">Plot No</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA] truncate w-[140px]">Valuation No</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA] truncate w-[180px]">Municipality</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA] truncate w-[140px]">Property Cat</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA] truncate w-[90px]">Bill Year</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA] truncate w-[110px]">Bill Date</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#F8F9FA] truncate w-[130px]">Rateable Value</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#F8F9FA] truncate w-[110px]">Rate Imposed</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#F8F9FA] truncate w-[130px]">Previous Year Bill</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#F8F9FA] truncate w-[130px]">Amount Paid</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#F8F9FA] truncate w-[130px]">Arrears</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#F8F9FA] truncate w-[130px]">Current Bill</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#F8F9FA] truncate w-[130px]">Bill Amount</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA] truncate w-[150px]">Electoral Area</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#F8F9FA] truncate w-[140px]">Outstanding Amt</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#E5E5EA] bg-white">
@@ -1227,7 +1256,7 @@ export function SmsRolloutSimulator({
                               <tr
                                 className="bg-[#F8F9FA] border-t border-b border-[#E5E5EA] transition-colors select-none hover:bg-[#F2F2F7]"
                               >
-                                <td className="py-2.5 px-3 text-center w-10 border-l-4 border-[#007AFF]">
+                                <td className="py-2.5 px-3 text-center border-l-4 border-[#007AFF] bg-[#F8F9FA] w-[48px]">
                                   <input
                                     type="checkbox"
                                     checked={isAllGroupSelected}
@@ -1572,7 +1601,11 @@ export function SmsRolloutSimulator({
                     )}
 
                     {/* Endless Scroll Sentinel Row */}
-                    <tr ref={audienceSentinelRef} className="h-2 pointer-events-none" />
+                    {hasMoreAudience && (
+                      <tr ref={audienceSentinelRef}>
+                        <td colSpan={22} className="h-6 p-0 border-0 pointer-events-none" />
+                      </tr>
+                    )}
 
                     {/* Clean End-of-Roll Marker */}
                     {!hasMoreAudience && liveAudience.length > 0 && (
@@ -1585,10 +1618,47 @@ export function SmsRolloutSimulator({
                   </tbody>
                 </table>
               </div>
+
+              {/* Pagination Bar (Zero Pills - Google Enterprise Standard) */}
+              <div className="px-4 py-2.5 border-t border-[#E5E5EA] bg-white flex flex-col sm:flex-row items-center justify-between gap-2.5 shrink-0 select-none">
+                <div className="flex items-center gap-2 text-xs text-[#6C6C70]">
+                  <span>
+                    Showing <strong className="text-[#1C1C1E]">{liveAudience.length.toLocaleString()}</strong> of{" "}
+                    <strong className="text-[#1C1C1E]">{(totalAudienceCount || liveAudience.length).toLocaleString()}</strong> properties
+                  </span>
+                  {hasMoreAudience && (
+                    <span className="text-[11px] text-[#8E8E93] hidden sm:inline">
+                      &bull; Page {audiencePage} of {Math.max(1, Math.ceil((totalAudienceCount || liveAudience.length) / 50))}
+                    </span>
+                  )}
+                </div>
+
+                {hasMoreAudience ? (
+                  <button
+                    type="button"
+                    onClick={() => loadNextAudiencePage()}
+                    disabled={isLoadingMoreAudience}
+                    className="h-7.5 px-3.5 rounded-lg border border-[#E5E5EA] bg-[#F2F2F7] hover:bg-[#E5E5EA] hover:border-[#007AFF]/40 text-xs font-semibold text-[#007AFF] flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Load next batch of matching properties"
+                  >
+                    {isLoadingMoreAudience ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-[#007AFF]" />
+                        <span>Loading more properties...</span>
+                      </>
+                    ) : (
+                      <span>Load More Records</span>
+                    )}
+                  </button>
+                ) : (
+                  <span className="text-[11px] font-medium text-[#6C6C70]">
+                    &bull; All matching properties loaded
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
         {/* PANE 2: DELIVERY LOGS */}
         <div className="w-1/2 h-full flex flex-col min-h-0 p-0 overflow-hidden relative bg-[#F2F2F7]">
@@ -1620,9 +1690,9 @@ export function SmsRolloutSimulator({
             <div
               ref={logsTableContainerRef}
               onScroll={handleLogsTableScroll}
-              className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
+              className="flex-1 min-h-0 overflow-auto"
             >
-              <table className="w-full text-left text-xs">
+              <table className="min-w-[700px] w-full text-left text-xs border-collapse">
                   <thead className="border-b text-[#6C6C70] sticky top-0 bg-[#F8F9FA] border-[#E5E5EA]">
                     <tr>
                       <th className="py-2.5 px-3">Timestamp</th>
@@ -1662,7 +1732,11 @@ export function SmsRolloutSimulator({
                         ))}
                       </>
                     )}
-                    <tr ref={logsSentinelRef} className="h-2 pointer-events-none" />
+                    {hasMoreLogs && (
+                      <tr ref={logsSentinelRef}>
+                        <td colSpan={4} className="h-6 p-0 border-0 pointer-events-none" />
+                      </tr>
+                    )}
                     {!hasMoreLogs && logsList.length > 0 && (
                       <tr className="bg-[#F8F9FA] border-t border-[#E5E5EA]">
                         <td colSpan={4} className="py-3 text-center text-[11px] font-medium text-[#6C6C70]">
@@ -1673,6 +1747,31 @@ export function SmsRolloutSimulator({
                   </tbody>
                 </table>
               </div>
+
+              {/* Delivery Logs Pagination Bar (Zero Pills - Google Enterprise Standard) */}
+              {hasMoreLogs && (
+                <div className="px-4 py-2.5 border-t border-[#E5E5EA] bg-white flex items-center justify-between gap-2.5 shrink-0 select-none">
+                  <span className="text-xs text-[#6C6C70]">
+                    Showing <strong className="text-[#1C1C1E]">{logsList.length}</strong> recorded dispatches
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => loadNextLogsPage()}
+                    disabled={isLoadingMoreLogs}
+                    className="h-7.5 px-3.5 rounded-lg border border-[#E5E5EA] bg-[#F2F2F7] hover:bg-[#E5E5EA] hover:border-[#007AFF]/40 text-xs font-semibold text-[#007AFF] flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Load more delivery logs"
+                  >
+                    {isLoadingMoreLogs ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-[#007AFF]" />
+                        <span>Loading more logs...</span>
+                      </>
+                    ) : (
+                      <span>Load More Logs</span>
+                    )}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </motion.div>

@@ -552,4 +552,34 @@ export const ratepayerDb = {
       return { count: data?.length || 0 };
     },
   },
+
+  accessGrant: {
+    async findUnique(args: { where: { token?: string; id?: string } }) {
+      let query = supabase.from('AccessGrant').select('*');
+      if (args.where.token) query = query.eq('token', args.where.token);
+      if (args.where.id) query = query.eq('id', args.where.id);
+      const { data, error } = await query.maybeSingle();
+      if (error || !data) return null;
+      return data;
+    },
+
+    async create(args: { data: any }) {
+      const row = {
+        ...args.data,
+        createdAt: new Date().toISOString(),
+      };
+      const { data, error } = await supabase.from('AccessGrant').insert([row]).select().single();
+      if (error) throw new Error(error.message);
+      return data;
+    },
+
+    async update(args: { where: { id?: string; token?: string }; data: any }) {
+      let query = supabase.from('AccessGrant').update(args.data);
+      if (args.where.id) query = query.eq('id', args.where.id);
+      if (args.where.token) query = query.eq('token', args.where.token);
+      const { data, error } = await query.select().single();
+      if (error) throw new Error(error.message);
+      return data;
+    },
+  },
 };

@@ -1294,7 +1294,7 @@ export default function AdminDashboardPage() {
       </aside>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 min-h-screen lg:h-screen lg:overflow-hidden">
+      <div className={`flex-1 flex flex-col min-w-0 ${activeTab === "SMS_CENTER" ? "h-screen overflow-hidden" : "min-h-screen lg:h-screen lg:overflow-hidden"}`}>
         {/* Mobile App Header */}
         <header className="bg-white/80 backdrop-blur-xl border-b border-[#E5E5EA] shadow-2xs px-3.5 sm:px-4 h-13 flex items-center justify-between shrink-0 lg:hidden font-sans z-20 sticky top-0">
           <div className="flex items-center gap-2.5 min-w-0">
@@ -1389,7 +1389,7 @@ export default function AdminDashboardPage() {
 
         {/* Main Dashboard Workspace (Viewport Fitted & Full-Bleed on Mobile) */}
         <main className={`flex-1 min-h-0 w-full flex flex-col ${activeTab === "SMS_CENTER"
-            ? "p-0 max-w-none overflow-hidden"
+            ? "p-0 max-w-none overflow-hidden h-full"
             : activeTab === "SETTINGS"
               ? "p-0 max-w-none overflow-y-auto"
               : "p-0 lg:px-6 lg:py-3 max-w-none lg:max-w-7xl lg:mx-auto gap-0 lg:gap-3 bg-[#F2F2F7] lg:bg-transparent overflow-y-auto lg:overflow-hidden pb-3"

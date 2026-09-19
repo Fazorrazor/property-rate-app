@@ -1254,6 +1254,52 @@ export const adminDb = {
     },
   },
 
+  accessGrant: {
+    async findUnique(args: { where: { token?: string; id?: string } }) {
+      try {
+        let query = supabase.from('AccessGrant').select('*');
+        if (args.where.token) query = query.eq('token', args.where.token);
+        if (args.where.id) query = query.eq('id', args.where.id);
+        const { data, error } = await query.maybeSingle();
+        if (error || !data) return null;
+        return data;
+      } catch (e) {
+        return null;
+      }
+    },
+
+    async create(args: { data: any }) {
+      try {
+        const row = {
+          ...args.data,
+          createdAt: new Date().toISOString(),
+        };
+        const { data, error } = await supabase.from('AccessGrant').insert([row]).select().single();
+        if (error) {
+          console.error('[adminDb.accessGrant.create] error:', error);
+          return null;
+        }
+        return data;
+      } catch (e) {
+        console.error('[adminDb.accessGrant.create] exception:', e);
+        return null;
+      }
+    },
+
+    async update(args: { where: { id?: string; token?: string }; data: any }) {
+      try {
+        let query = supabase.from('AccessGrant').update(args.data);
+        if (args.where.id) query = query.eq('id', args.where.id);
+        if (args.where.token) query = query.eq('token', args.where.token);
+        const { data, error } = await query.select().single();
+        if (error) return null;
+        return data;
+      } catch (e) {
+        return null;
+      }
+    },
+  },
+
   async $transaction(promisesOrFn: any) {
     if (typeof promisesOrFn === 'function') {
       return await promisesOrFn(adminDb);

@@ -20,6 +20,7 @@ function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const accountNumberParam = searchParams.get("accountNumber") || undefined;
+  const tokenParam = searchParams.get("token") || undefined;
 
   const [data, setData] = useState<DashboardData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -27,9 +28,16 @@ function DashboardContent() {
   useEffect(() => {
     async function loadData() {
       try {
+        if (tokenParam) {
+          router.replace(`/auth/access?token=${encodeURIComponent(tokenParam)}`);
+          return;
+        }
+
         const dashRes = await getDashboardData(accountNumberParam);
         if (dashRes) {
           setData(dashRes);
+        } else {
+          router.replace("/auth/login");
         }
       } catch (err) {
         console.error("Error loading dashboard:", err);
@@ -38,7 +46,7 @@ function DashboardContent() {
       }
     }
     loadData();
-  }, [accountNumberParam]);
+  }, [accountNumberParam, tokenParam, router]);
 
   const properties = [...(data?.properties || [])].sort((a, b) => {
     if (accountNumberParam) {
