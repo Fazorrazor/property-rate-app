@@ -3,26 +3,23 @@
 import { useState, useEffect, useMemo, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  ArrowLeft,
-  ShieldCheck,
+  ChevronLeft,
   CheckCircle2,
   Check,
-  Lock,
   ReceiptText as ReceiptIcon,
   AlertTriangle,
   X,
-  Edit2,
 } from "lucide-react";
-import {
-  MtnMomoLogo,
-  TelecelLogo,
-  AirtelTigoLogo,
-  VisaLogo,
-} from "@/components/icons/PaymentLogos";
 import { HeinzLoader } from "@/components/ui/HeinzLoader";
 import { CheckoutSkeleton } from "@/components/ui/Skeletons";
 import { motion, AnimatePresence } from "framer-motion";
-import { getCheckoutData, chargeMobileMoneyAction, verifyPaymentTransaction, initializePayment, verifySubscriberAction } from "@/app/actions";
+import {
+  getCheckoutData,
+  chargeMobileMoneyAction,
+  verifyPaymentTransaction,
+  initializePayment,
+  verifySubscriberAction,
+} from "@/app/actions";
 import { identifyNetworkCarrier } from "@/lib/utils/network-detector";
 
 type Step = "CHANNELS" | "DETAILS" | "PROCESSING" | "CONFIRMATION" | "FAILED";
@@ -86,7 +83,8 @@ function CheckoutContent() {
   const [step, setStep] = useState<Step>("CHANNELS");
   const [channel, setChannel] = useState<Channel>("MOMO");
   const [network, setNetwork] = useState<MoMoNetwork>("MTN");
-  // Clean initial states (no pre-filled mock data)
+  
+  // Input states
   const [phoneNumber, setPhoneNumber] = useState("");
   const [payerName, setPayerName] = useState("");
   const [cardholderName, setCardholderName] = useState("");
@@ -140,18 +138,18 @@ function CheckoutContent() {
   const activeTotalAmount = Math.ceil(activeSubtotal / 0.98);
   const activeProcessingFee = Number((activeTotalAmount - activeSubtotal).toFixed(2));
 
-  const activeSubtotalFormatted = `GH₵ ${activeSubtotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  const activeProcessingFeeFormatted = `GH₵ ${activeProcessingFee.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  const activeTotalAmountFormatted = `GH₵ ${activeTotalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const activeSubtotalFormatted = `GH₵ ${activeSubtotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const activeProcessingFeeFormatted = `GH₵ ${activeProcessingFee.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const activeTotalAmountFormatted = `GH₵ ${activeTotalAmount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   const parsedTemp = parseFloat(tempAmount);
   let tempValidationError: string | null = null;
   if (!tempAmount.trim() || isNaN(parsedTemp)) {
     tempValidationError = "Please enter an amount";
   } else if (parsedTemp < minPartialAmount) {
-    tempValidationError = `Minimum payment is 40% (GH₵ ${minPartialAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`;
+    tempValidationError = `Minimum payment is 40% (GH₵ ${minPartialAmount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`;
   } else if (parsedTemp > maxPartialAmount) {
-    tempValidationError = `Amount cannot exceed total bill of GH₵ ${maxPartialAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    tempValidationError = `Amount cannot exceed total bill of GH₵ ${maxPartialAmount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
   const isTempValid = !tempValidationError && parsedTemp >= minPartialAmount && parsedTemp <= maxPartialAmount;
 
@@ -197,7 +195,6 @@ function CheckoutContent() {
             setCustomSubtotal(clamped.toString());
           }
 
-          // Auto-populate Step 2 details from the registered user and Hubtel verification
           const userPhone = data.user?.phoneNumber || "";
           const resolvedName = data.verifiedSubscriberName || data.preferredDisplayName || data.user?.name || "";
 
@@ -219,7 +216,7 @@ function CheckoutContent() {
           }
         }
       } catch (err) {
-        console.error(err);
+        console.error("Failed to load checkout data:", err);
       } finally {
         setIsLoading(false);
       }
@@ -262,8 +259,7 @@ function CheckoutContent() {
     return () => clearTimeout(timer);
   }, [phoneNumber]);
 
-
-  // Polling Effect
+  // Polling Effect for Processing
   useEffect(() => {
     let intervalId: NodeJS.Timeout;
 
@@ -278,7 +274,7 @@ function CheckoutContent() {
               setReceiptResult({
                 receiptNumber: res.receipt?.receiptNumber || "PENDING-GENERATION",
                 receiptId: res.receipt?.receiptId || "PENDING",
-                amountFormatted: checkoutData?.totalAmountFormatted || "0.00",
+                amountFormatted: checkoutData?.totalAmountFormatted || activeTotalAmountFormatted,
                 paymentMethod: `${network} Mobile Money`,
                 timestamp: new Date().toLocaleString(),
               });
@@ -287,9 +283,8 @@ function CheckoutContent() {
               clearInterval(intervalId);
               setStep("FAILED");
             } else {
-              // PENDING
-              setPollingAttempts(prev => {
-                if (prev > 40) { // Approx 2 minutes timeout (40 * 3s = 120s)
+              setPollingAttempts((prev) => {
+                if (prev > 40) {
                   clearInterval(intervalId);
                   setStep("FAILED");
                   return prev;
@@ -299,7 +294,7 @@ function CheckoutContent() {
             }
           }
         } catch (err) {
-          console.error("Polling error", err);
+          console.error("Polling verification error:", err);
         }
       }, 3000);
     }
@@ -307,23 +302,32 @@ function CheckoutContent() {
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
-  }, [step, activeReference, checkoutData, network]);
-
+  }, [step, activeReference, checkoutData, network, activeTotalAmountFormatted]);
 
   const handleBack = () => {
     if (step === "DETAILS") {
       setStep("CHANNELS");
+    } else if (step === "CHANNELS") {
+      if (typeof window !== "undefined" && window.history.length > 1) {
+        router.back();
+      } else {
+        const acc = rawAccountNumber || (propertyId !== "ALL" ? propertyId : "");
+        router.push(acc ? `/dashboard?accountNumber=${encodeURIComponent(acc)}` : "/dashboard");
+      }
     }
   };
 
   const handleProceedToDetails = () => {
     if (isMultiPropertyMode && selectedPropertyIds.length === 0) {
-      showToast("Please select at least one property to pay.", "error");
+      showToast("Please select at least one property to settle.", "error");
       return;
     }
     if (paymentMode === "PARTIAL") {
       if (activeSubtotal < minPartialAmount || activeSubtotal > maxPartialAmount) {
-        showToast(`Partial payment must be between GH₵ ${minPartialAmount.toFixed(2)} and GH₵ ${maxPartialAmount.toFixed(2)}`, "error");
+        showToast(
+          `Partial payment must be between GH₵ ${minPartialAmount.toFixed(2)} and GH₵ ${maxPartialAmount.toFixed(2)}`,
+          "error"
+        );
         return;
       }
     }
@@ -335,7 +339,10 @@ function CheckoutContent() {
 
     if (paymentMode === "PARTIAL") {
       if (subtotal < minPartialAmount || subtotal > maxPartialAmount) {
-        showToast(`Partial payment must be between GH₵ ${minPartialAmount.toFixed(2)} and GH₵ ${maxPartialAmount.toFixed(2)}`, "error");
+        showToast(
+          `Partial payment must be between GH₵ ${minPartialAmount.toFixed(2)} and GH₵ ${maxPartialAmount.toFixed(2)}`,
+          "error"
+        );
         return;
       }
     }
@@ -363,7 +370,7 @@ function CheckoutContent() {
       }
     } catch (err) {
       console.error(err);
-      showToast("An unexpected error occurred.", "error");
+      showToast("An unexpected error occurred initiating payment.", "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -400,7 +407,7 @@ function CheckoutContent() {
       await executePayment(activeTotalAmount, activeSubtotal, activeProcessingFee);
     } else if (channel === "CARD") {
       if (!cardholderName.trim()) {
-        showToast("Please enter the name on your card.", "error");
+        showToast("Please enter the cardholder name.", "error");
         return;
       }
       const cleanCard = cardNumber.replace(/\s/g, "");
@@ -432,7 +439,7 @@ function CheckoutContent() {
             isSubscription: false,
             subtotal: activeSubtotal,
             processingFee: activeProcessingFee,
-          }
+          },
         });
 
         if (res.success && res.authorizationUrl) {
@@ -460,28 +467,87 @@ function CheckoutContent() {
   if (!checkoutData || checkoutData.totalAmount <= 0) {
     const accToView = rawAccountNumber || (propertyId !== "ALL" ? propertyId : undefined);
     return (
-      <main className="min-h-screen bg-background p-6 max-w-md mx-auto flex flex-col justify-center items-center text-center space-y-4 font-sans">
-        <div className="w-12 h-12 rounded-2xl bg-[#E6F4EA] text-[#188038] flex items-center justify-center">
-          <CheckCircle2 className="w-6 h-6" />
-        </div>
-        <div className="space-y-1">
-          <h2 className="text-base font-semibold text-foreground">No Outstanding Balance</h2>
-          <p className="text-xs text-on-surface-muted max-w-xs">
-            This municipal property rate assessment has already been settled in full.
-          </p>
-        </div>
-        <div className="flex flex-col gap-2.5 w-full max-w-xs pt-2">
-          {accToView && (
+      <main className="min-h-screen bg-background text-foreground flex flex-col max-w-md mx-auto w-full font-sans">
+        <header className="sticky top-0 z-30 bg-background/95 backdrop-blur-md border-b border-border-light/60 h-11 flex items-center justify-between px-4">
+          <div className="w-16" />
+          <h1 className="text-base font-semibold text-foreground tracking-tight text-center flex-1">
+            KKMA
+          </h1>
+          <div className="w-16" />
+        </header>
+
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-4">
+          <div className="w-12 h-12 rounded-full bg-[#E6F4EA] text-[#188038] flex items-center justify-center">
+            <CheckCircle2 className="w-6 h-6" />
+          </div>
+          <div className="space-y-1">
+            <h2 className="text-base font-semibold text-foreground">No Outstanding Balance</h2>
+            <p className="text-xs text-on-surface-muted max-w-xs">
+              This municipal property rate assessment has already been settled in full.
+            </p>
+          </div>
+          <div className="flex flex-col gap-2.5 w-full max-w-xs pt-4">
+            {accToView && (
+              <button
+                type="button"
+                onClick={() => router.push(`/dashboard?accountNumber=${encodeURIComponent(accToView)}`)}
+                className="w-full h-11 rounded-xl bg-[#007AFF] hover:bg-[#0062CC] text-white font-semibold text-xs transition-colors cursor-pointer"
+              >
+                View Property Bill &amp; Receipts
+              </button>
+            )}
             <button
-              onClick={() => router.push(`/dashboard?accountNumber=${encodeURIComponent(accToView)}`)}
-              className="btn-3d-primary w-full h-11 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+              type="button"
+              onClick={() => window.close()}
+              className="w-full h-11 rounded-xl bg-surface border border-border-light/70 text-foreground font-medium text-xs hover:bg-surface-subtle transition-colors cursor-pointer"
             >
-              <span>View Property Bill & Receipts</span>
+              Close Window
             </button>
-          )}
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (isCompleted) {
+    return (
+      <main className="min-h-screen bg-background text-foreground flex flex-col max-w-md mx-auto w-full font-sans">
+        <header className="sticky top-0 z-30 bg-background/95 backdrop-blur-md border-b border-border-light/60 h-11 flex items-center justify-between px-4">
+          <div className="w-16" />
+          <h1 className="text-base font-semibold text-foreground tracking-tight text-center flex-1">
+            KKMA
+          </h1>
+          <div className="w-16" />
+        </header>
+
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-4">
+          <div className="w-16 h-16 bg-[#E6F4EA] rounded-full flex items-center justify-center mx-auto ring-4 ring-[#E6F4EA]/50">
+            <CheckCircle2 className="w-8 h-8 text-[#188038]" />
+          </div>
+          <div className="space-y-1">
+            <h2 className="text-base font-semibold text-foreground">
+              Rate Settlement Complete
+            </h2>
+            <p className="text-xs text-on-surface-muted leading-relaxed max-w-xs">
+              Your payment has been credited to Kpone-Katamanso Municipal Assembly.
+            </p>
+          </div>
+          <div className="bg-surface rounded-xl border border-border-light/70 overflow-hidden divide-y divide-border-light/60 w-full text-xs">
+            <div className="flex items-center justify-between px-4 py-3">
+              <span className="text-on-surface-muted">Payment Reference</span>
+              <span className="font-mono font-semibold text-foreground">
+                {receiptResult?.receiptNumber || checkoutData.title}
+              </span>
+            </div>
+            <div className="flex items-center justify-between px-4 py-3">
+              <span className="text-on-surface-muted">Settlement Status</span>
+              <span className="text-[#188038] font-medium">&bull; Reconciled</span>
+            </div>
+          </div>
           <button
+            type="button"
             onClick={() => window.close()}
-            className="w-full h-10 rounded-xl bg-surface border border-border-light text-foreground font-medium text-xs hover:bg-surface-subtle transition-colors cursor-pointer"
+            className="w-full h-11 rounded-xl bg-[#007AFF] hover:bg-[#0062CC] text-white font-semibold text-xs transition-colors cursor-pointer"
           >
             Close Window
           </button>
@@ -490,557 +556,426 @@ function CheckoutContent() {
     );
   }
 
-  if (isCompleted) {
-    return (
-      <main className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center max-w-md mx-auto w-full p-6 text-center space-y-4 font-sans">
-        <div className="w-16 h-16 bg-[#E6F4EA] rounded-full flex items-center justify-center mx-auto shadow-sm ring-4 ring-[#E6F4EA]/50">
-          <CheckCircle2 className="w-8 h-8 text-[#188038]" />
-        </div>
-        <div className="space-y-1">
-          <h2 className="text-base font-semibold text-foreground">
-            Rate Settlement Complete
-          </h2>
-          <p className="text-xs text-on-surface-muted leading-relaxed max-w-xs">
-            Your payment has been successfully credited to Kpone-Katamanso Municipal Assembly. You may now close this window.
-          </p>
-        </div>
-        <div className="p-3.5 bg-surface border border-border-light rounded-xl text-left w-full text-xs space-y-2 shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-on-surface-muted">Payment Reference</span>
-            <span className="font-mono font-semibold text-foreground">{receiptResult?.receiptNumber || checkoutData?.title}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-on-surface-muted">Settlement Status</span>
-            <span className="text-[#188038] font-medium">&bull; Reconciled</span>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => window.close()}
-          className="w-full h-11 rounded-xl bg-[#4B1426] hover:bg-[#3E101F] text-white font-medium text-xs flex items-center justify-center transition-colors cursor-pointer shadow-xs"
-        >
-          Close Window
-        </button>
-      </main>
-    );
-  }
-
   return (
-    <main className="min-h-screen bg-background text-foreground flex flex-col max-w-md mx-auto w-full p-4 sm:p-5 font-sans">
-      {/* Top Header */}
+    <main className="min-h-screen bg-background text-foreground flex flex-col max-w-md mx-auto w-full font-sans">
+      {/* GLOBAL APPLE FLAT NAVIGATION BAR */}
       {step !== "PROCESSING" && (
-        <header className="flex items-center justify-between py-2 border-b border-border-light mb-4">
-          {step === "DETAILS" ? (
-            <button
-              type="button"
-              onClick={handleBack}
-              className="w-9 h-9 rounded-xl bg-surface border border-border-light flex items-center justify-center text-on-surface-muted hover:bg-background transition-colors cursor-pointer"
-              aria-label="Go Back"
-            >
-              <ArrowLeft className="w-4 h-4" />
-            </button>
-          ) : (
-            <div className="w-9 h-9" />
-          )}
-
-          <div className="text-center">
-            <h1 className="text-xs font-semibold text-foreground uppercase tracking-wider">
-              {step === "CONFIRMATION" ? "Official Receipt" : "Property Rate Payment"}
-            </h1>
-            <p className="text-[11px] text-on-surface-muted font-normal flex items-center justify-center gap-1">
-              <Lock className="w-3 h-3 text-on-surface-muted" />
-              <span>Municipal Treasury Encrypted</span>
-            </p>
+        <header className="sticky top-0 z-30 bg-background/95 backdrop-blur-md border-b border-border-light/60 h-11 flex items-center justify-between px-4">
+          <div className="w-16 flex items-center">
+            {step !== "CONFIRMATION" ? (
+              <button
+                type="button"
+                onClick={handleBack}
+                className="flex items-center text-sm font-normal text-[#007AFF] hover:opacity-70 transition-opacity cursor-pointer p-0 bg-transparent border-0"
+                aria-label="Back"
+              >
+                <ChevronLeft className="w-5 h-5 -ml-1 text-[#007AFF]" />
+                <span>Back</span>
+              </button>
+            ) : null}
           </div>
 
-          <div className="w-9 h-9 rounded-xl bg-surface border border-border-light flex items-center justify-center text-on-surface-muted">
-            <ShieldCheck className="w-4 h-4" />
-          </div>
+          <h1 className="text-base font-semibold text-foreground tracking-tight text-center flex-1">
+            KKMA
+          </h1>
+
+          <div className="w-16" />
         </header>
       )}
 
-      {/* STEP 1: PAYMENT OPTIONS / CHANNELS SCREEN */}
+      {/* SCREEN 1: BILL INFO SCREEN */}
       {step === "CHANNELS" && (
         <motion.div
-          key="step-channels"
-          initial={{ opacity: 0, x: -8 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: 8 }}
-          className="space-y-4 flex flex-col"
+          key="step-bill-info"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="flex-1 flex flex-col"
         >
-          <div className="space-y-4">
-            {/* Invoice Summary Card */}
-            <div className="p-4 rounded-xl bg-surface border border-border-light space-y-3 shadow-2xs">
-              <div className="flex items-center justify-between text-xs text-on-surface-muted">
-                <span>Bill Payment</span>
-                <span>{checkoutData.fiscalYear} Fiscal</span>
-              </div>
+          <div className="flex-1 px-4 py-3 space-y-4">
+            {/* Prominent Clean Initial Amount */}
+            <div className="pt-3 pb-2 text-center">
+              <span className="text-xs text-on-surface-muted block mb-1">Total Assessment</span>
+              <span className="text-3xl sm:text-4xl font-bold tracking-tight text-foreground block tabular-nums">
+                {activeSubtotalFormatted}
+              </span>
+              {paymentMode === "PARTIAL" && (
+                <span className="text-xs text-on-surface-muted block mt-1">
+                  Custom installment of {checkoutData.actualAmountDueFormatted || checkoutData.subtotalFormatted}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={openEditAmountModal}
+                className="mt-2 text-xs text-[#007AFF] hover:underline font-medium cursor-pointer"
+              >
+                {paymentMode === "PARTIAL" ? "Edit Installment" : "Pay in Installments"}
+              </button>
+            </div>
 
-              {/* Structured Ratepayer Bill Breakdown */}
-              <div className="space-y-1.5 py-1 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="text-on-surface-muted">Account No:</span>
-                  <span className="font-semibold text-foreground font-mono">{checkoutData.accountNumber || "—"}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-on-surface-muted">Name:</span>
+            {/* Inset-Grouped Bill Metadata Rows */}
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-medium text-on-surface-muted uppercase tracking-wider px-3">
+                Bill Information
+              </p>
+              <div className="bg-surface rounded-xl border border-border-light/70 overflow-hidden divide-y divide-border-light/60">
+                <div className="flex items-center justify-between px-4 py-3 text-xs">
+                  <span className="text-on-surface-muted">Ratepayer Name</span>
                   <span className="font-medium text-foreground">{checkoutData.ownerName || "—"}</span>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-on-surface-muted">Arrears:</span>
+                <div className="flex items-center justify-between px-4 py-3 text-xs">
+                  <span className="text-on-surface-muted">Account Number</span>
+                  <span className="font-mono font-semibold text-foreground">{checkoutData.accountNumber || "—"}</span>
+                </div>
+                <div className="flex items-center justify-between px-4 py-3 text-xs">
+                  <span className="text-on-surface-muted">Billing Period</span>
+                  <span className="font-medium text-foreground">{checkoutData.fiscalYear} Fiscal Year</span>
+                </div>
+                <div className="flex items-center justify-between px-4 py-3 text-xs">
+                  <span className="text-on-surface-muted">Prior Arrears</span>
                   <span className="font-medium text-foreground">{checkoutData.arrearsFormatted || "GH₵ 0.00"}</span>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-on-surface-muted">Annual Rate:</span>
+                <div className="flex items-center justify-between px-4 py-3 text-xs">
+                  <span className="text-on-surface-muted">Current Assessment</span>
                   <span className="font-medium text-foreground">{checkoutData.annualRateFormatted || "GH₵ 0.00"}</span>
                 </div>
+                <div className="flex items-center justify-between px-4 py-3 text-xs">
+                  <span className="text-on-surface-muted">Due Date</span>
+                  <span className="font-medium text-foreground">Dec 31, {checkoutData.fiscalYear}</span>
+                </div>
               </div>
+            </div>
 
-              {/* Multi-Property Portfolio Selection List */}
-              {isMultiPropertyMode && checkoutData.portfolioProperties && (
-                <div className="pt-2 border-t border-border-light space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-foreground">Select Properties to Pay:</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (selectedPropertyIds.length === checkoutData.portfolioProperties!.length) {
-                          setSelectedPropertyIds([]);
-                        } else {
-                          setSelectedPropertyIds(checkoutData.portfolioProperties!.map((p) => p.id));
-                        }
-                      }}
-                      className="text-[11px] font-semibold text-primary hover:underline cursor-pointer"
-                    >
-                      {selectedPropertyIds.length === checkoutData.portfolioProperties.length ? "Deselect All" : "Select All"}
-                    </button>
-                  </div>
+            {/* Multi-Property Portfolio Inset Group (if applicable) */}
+            {isMultiPropertyMode && checkoutData.portfolioProperties && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between px-3">
+                  <p className="text-[11px] font-medium text-on-surface-muted uppercase tracking-wider">
+                    Properties in Assessment
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedPropertyIds.length === checkoutData.portfolioProperties!.length) {
+                        setSelectedPropertyIds([]);
+                      } else {
+                        setSelectedPropertyIds(checkoutData.portfolioProperties!.map((p) => p.id));
+                      }
+                    }}
+                    className="text-xs text-[#007AFF] hover:underline font-medium cursor-pointer"
+                  >
+                    {selectedPropertyIds.length === checkoutData.portfolioProperties.length
+                      ? "Deselect All"
+                      : "Select All"}
+                  </button>
+                </div>
 
-                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                    {checkoutData.portfolioProperties.map((prop) => {
-                      const isChecked = selectedPropertyIds.includes(prop.id);
-                      return (
-                        <div
-                          key={prop.id}
-                          onClick={() => {
-                            setSelectedPropertyIds((prev) =>
-                              prev.includes(prop.id)
-                                ? prev.filter((id) => id !== prop.id)
-                                : [...prev, prop.id]
-                            );
-                          }}
-                          className={`p-2.5 rounded-lg border transition-all cursor-pointer flex items-center justify-between ${
-                            isChecked
-                              ? "bg-surface border-foreground/30 shadow-2xs"
-                              : "bg-surface-subtle/50 border-border-light opacity-60 hover:opacity-100"
-                          }`}
-                        >
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              readOnly
-                              className="w-4 h-4 rounded border-border-light text-[#4B1426] focus:ring-0 cursor-pointer pointer-events-none"
-                            />
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-1.5">
-                                <span className="font-mono font-bold text-foreground text-xs">{prop.accountNumber}</span>
-                                <span className="text-[10px] text-on-surface-muted truncate">({prop.ownerDigitalAddress})</span>
-                              </div>
-                              <div className="text-[10px] text-on-surface-muted">
-                                {prop.arrears > 0 ? `Arrears: GH₵ ${prop.arrears.toFixed(2)} | ` : ""}Rate: GH₵ {prop.currentFee.toFixed(2)}
-                              </div>
+                <div className="bg-surface rounded-xl border border-border-light/70 overflow-hidden divide-y divide-border-light/60">
+                  {checkoutData.portfolioProperties.map((prop) => {
+                    const isChecked = selectedPropertyIds.includes(prop.id);
+                    return (
+                      <div
+                        key={prop.id}
+                        onClick={() => {
+                          setSelectedPropertyIds((prev) =>
+                            prev.includes(prop.id) ? prev.filter((id) => id !== prop.id) : [...prev, prop.id]
+                          );
+                        }}
+                        className={`p-3 transition-colors cursor-pointer flex items-center justify-between ${
+                          isChecked ? "bg-surface" : "bg-surface-subtle/50 opacity-60 hover:opacity-100"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            readOnly
+                            className="w-4 h-4 rounded border-border-light text-[#007AFF] focus:ring-0 cursor-pointer pointer-events-none"
+                          />
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-mono font-semibold text-foreground text-xs">
+                                {prop.accountNumber}
+                              </span>
+                              <span className="text-[10px] text-on-surface-muted truncate">
+                                ({prop.ownerDigitalAddress})
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-on-surface-muted">
+                              {prop.arrears > 0 ? `Arrears: GH₵ ${prop.arrears.toFixed(2)} | ` : ""}Rate: GH₵{" "}
+                              {prop.currentFee.toFixed(2)}
                             </div>
                           </div>
-                          <span className="text-xs font-bold text-foreground tabular-nums shrink-0 ml-2">
-                            GH₵ {prop.totalAmountDue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </span>
                         </div>
-                      );
-                    })}
-                  </div>
+                        <span className="text-xs font-semibold text-foreground tabular-nums shrink-0 ml-2">
+                          GH₵{" "}
+                          {prop.totalAmountDue.toLocaleString("en-US", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
-              )}
+              </div>
+            )}
+          </div>
 
-              <div className="pt-3 border-t border-border-light flex flex-col gap-2">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="text-xs text-on-surface-muted block">
-                      {paymentMode === "PARTIAL" ? "Custom Installment" : "Amount Due"}
-                    </span>
-                    {paymentMode === "PARTIAL" && (
-                      <span className="text-[11px] text-on-surface-muted block">
-                        of {checkoutData.actualAmountDueFormatted || checkoutData.subtotalFormatted} full bill
-                      </span>
-                    )}
-                  </div>
-                  <span className="text-xl font-bold text-foreground">
-                    {activeSubtotalFormatted}
-                  </span>
-                </div>
+          {/* Sticky Bottom CTA: Continue to Payment Details */}
+          <div className="sticky bottom-0 bg-background/95 backdrop-blur-md px-4 py-3 border-t border-border-light/40 mt-auto">
+            <button
+              type="button"
+              onClick={handleProceedToDetails}
+              className="w-full h-12 rounded-xl bg-[#007AFF] hover:bg-[#0062CC] active:bg-[#0051A8] text-white font-semibold text-sm transition-colors cursor-pointer flex items-center justify-center shadow-xs"
+            >
+              Continue to Payment Details
+            </button>
+          </div>
+        </motion.div>
+      )}
+
+      {/* SCREEN 2: PAYMENT DETAILS SCREEN */}
+      {step === "DETAILS" && (
+        <motion.div
+          key="step-details"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="flex-1 flex flex-col"
+        >
+          <div className="flex-1 px-4 py-3 space-y-4">
+            {/* Integrated Payment Mode Segmented Control */}
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-medium text-on-surface-muted uppercase tracking-wider px-3">
+                Payment Method
+              </p>
+              <div className="bg-[#E5E5EA] p-1 rounded-lg flex items-center">
                 <button
                   type="button"
-                  onClick={openEditAmountModal}
-                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-surface-subtle hover:bg-[#F2F2F2] border border-border-light text-on-surface-muted hover:text-foreground transition-colors cursor-pointer shadow-xs"
+                  onClick={() => setChannel("MOMO")}
+                  className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                    channel === "MOMO"
+                      ? "bg-surface text-foreground shadow-xs"
+                      : "text-on-surface-muted hover:text-foreground"
+                  }`}
                 >
-                  <Edit2 className="w-3.5 h-3.5" />
-                  <span className="text-xs font-medium">
-                    {paymentMode === "PARTIAL" ? "Change Custom Amount" : "Edit Amount"}
-                  </span>
+                  Mobile Money
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setChannel("CARD")}
+                  className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                    channel === "CARD"
+                      ? "bg-surface text-foreground shadow-xs"
+                      : "text-on-surface-muted hover:text-foreground"
+                  }`}
+                >
+                  Credit / Debit Card
                 </button>
               </div>
             </div>
 
-            {/* Payment Channels */}
-            <div className="space-y-2.5">
-              <div className="flex items-center justify-between px-0.5">
-                <h3 className="text-xs font-semibold text-on-surface-muted uppercase tracking-wider">
-                  Payment Mode
-                </h3>
-                <span className="text-xs text-on-surface-muted">
-                  Step 1 of 2
-                </span>
-              </div>
+            {/* Dynamic Inset Form for Mobile Money */}
+            {channel === "MOMO" && (
+              <div className="space-y-1.5">
+                <p className="text-[11px] font-medium text-on-surface-muted uppercase tracking-wider px-3">
+                  Account Details
+                </p>
+                <div className="bg-surface rounded-xl border border-border-light/70 overflow-hidden divide-y divide-border-light/60">
+                  {/* Carrier / Network Selector */}
+                  <div className="px-4 py-2.5 flex items-center justify-between text-xs">
+                    <span className="text-on-surface-muted font-normal">Network</span>
+                    <div className="flex items-center gap-1.5">
+                      {(["MTN", "TELECEL", "AIRTELTIGO"] as const).map((net) => (
+                        <button
+                          key={net}
+                          type="button"
+                          onClick={() => setNetwork(net)}
+                          className={`px-2.5 py-1 text-xs rounded-md transition-all cursor-pointer ${
+                            network === net
+                              ? "bg-[#007AFF] text-white font-semibold shadow-xs"
+                              : "bg-surface-subtle text-on-surface-muted hover:text-foreground hover:bg-[#E5E5EA]"
+                          }`}
+                        >
+                          {net === "MTN" ? "MTN" : net === "TELECEL" ? "Telecel" : "AT"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
-              <div className="space-y-2">
-                {/* 1. Mobile Money */}
-                <div
-                  onClick={() => setChannel("MOMO")}
-                  className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between shadow-2xs ${
-                    channel === "MOMO"
-                      ? "border-[#4B1426] bg-background"
-                      : "border-border-light bg-surface hover:border-border-light"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center shrink-0">
-                      <MtnMomoLogo className="w-7 h-7" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <h4 className="text-xs font-semibold text-foreground">Mobile Money</h4>
-                        <span className="text-[11px] text-on-surface-muted">(Instant MoMo)</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 text-[11px] text-on-surface-muted">
-                        <span>MTN</span>
-                        <span>&bull;</span>
-                        <span>Telecel</span>
-                        <span>&bull;</span>
-                        <span>AT Money</span>
-                      </div>
-                    </div>
+                  {/* Mobile Phone Number */}
+                  <div className="px-4 py-2 flex items-center justify-between text-xs gap-3">
+                    <label htmlFor="momo-phone" className="text-on-surface-muted shrink-0">
+                      Mobile Number
+                    </label>
+                    <input
+                      id="momo-phone"
+                      type="tel"
+                      value={phoneNumber}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setPhoneNumber(val);
+                        const detected = identifyNetworkCarrier(val);
+                        if (detected) setNetwork(detected);
+                      }}
+                      placeholder="024 000 0000"
+                      className="w-full text-right text-xs font-medium text-foreground bg-transparent focus:outline-none placeholder:text-on-surface-muted/40"
+                    />
                   </div>
-                  <div
-                    className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
-                      channel === "MOMO" ? "border-[#4B1426] bg-[#4B1426]" : "border-border-light"
-                    }`}
-                  >
-                    {channel === "MOMO" && <div className="w-1.5 h-1.5 rounded-full bg-surface" />}
-                  </div>
-                </div>
 
-                {/* 2. Card */}
-                <div
-                  onClick={() => setChannel("CARD")}
-                  className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between shadow-2xs ${
-                    channel === "CARD"
-                      ? "border-[#4B1426] bg-background"
-                      : "border-border-light bg-surface hover:border-border-light"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-background flex items-center justify-center shrink-0 p-1">
-                      <VisaLogo className="w-8 h-5" />
+                  {/* Account Name with Subtle Status */}
+                  <div className="px-4 py-2 flex items-center justify-between text-xs gap-3">
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <label htmlFor="momo-name" className="text-on-surface-muted">
+                        Account Name
+                      </label>
+                      {isVerifyingSubscriber ? (
+                        <span className="text-[10px] text-on-surface-muted animate-pulse">Verifying...</span>
+                      ) : isHubtelVerified ? (
+                        <span className="text-[10px] text-[#188038] font-medium flex items-center gap-0.5">
+                          <Check className="w-3 h-3 text-[#188038]" />
+                          Verified
+                        </span>
+                      ) : null}
                     </div>
-                    <div>
-                      <h4 className="text-xs font-semibold text-foreground">Credit / Debit Card</h4>
-                      <div className="flex items-center gap-1.5 text-[11px] text-on-surface-muted">
-                        <span>VISA</span>
-                        <span>&bull;</span>
-                        <span>Mastercard</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div
-                    className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
-                      channel === "CARD" ? "border-[#4B1426] bg-[#4B1426]" : "border-border-light"
-                    }`}
-                  >
-                    {channel === "CARD" && <div className="w-1.5 h-1.5 rounded-full bg-surface" />}
+                    <input
+                      id="momo-name"
+                      type="text"
+                      value={payerName}
+                      onChange={(e) => {
+                        setPayerName(e.target.value);
+                        setIsHubtelVerified(false);
+                      }}
+                      placeholder="Kwame Mensah"
+                      className="w-full text-right text-xs font-medium text-foreground bg-transparent focus:outline-none placeholder:text-on-surface-muted/40"
+                    />
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
+            )}
 
-          {/* Continue Button */}
-          <div className="pt-2">
-            <button
-              type="button"
-              onClick={handleProceedToDetails}
-              className="w-full h-11 rounded-xl bg-[#4B1426] hover:bg-[#558467] text-white font-medium text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-xs"
-            >
-              <span>Continue to Payment Details</span>
-              <ArrowLeft className="w-3.5 h-3.5 rotate-180" />
-            </button>
-          </div>
-        </motion.div>
-      )}
+            {/* Dynamic Inset Form for Card */}
+            {channel === "CARD" && (
+              <div className="space-y-1.5">
+                <p className="text-[11px] font-medium text-on-surface-muted uppercase tracking-wider px-3">
+                  Card Details
+                </p>
+                <div className="bg-surface rounded-xl border border-border-light/70 overflow-hidden divide-y divide-border-light/60">
+                  <div className="px-4 py-2 flex items-center justify-between text-xs gap-3">
+                    <label htmlFor="card-name" className="text-on-surface-muted shrink-0">
+                      Cardholder
+                    </label>
+                    <input
+                      id="card-name"
+                      type="text"
+                      value={cardholderName}
+                      onChange={(e) => setCardholderName(e.target.value)}
+                      placeholder="Name as printed on card"
+                      className="w-full text-right text-xs font-medium text-foreground bg-transparent focus:outline-none placeholder:text-on-surface-muted/40"
+                    />
+                  </div>
 
-      {/* STEP 2: INPUT PAYMENT DETAILS SCREEN */}
-      {step === "DETAILS" && (
-        <motion.div
-          key="step-details"
-          initial={{ opacity: 0, x: 8 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -8 }}
-          className="space-y-4 flex flex-col"
-        >
-          <div className="space-y-4">
-            {/* Bold Total Amount Header for Step 2 */}
-            <div className="pb-3 border-b border-border-light flex items-start justify-between">
-              <div>
-                <span className="text-xs text-on-surface-muted font-medium block">Step 2 of 2</span>
-                <h2 className="text-base font-semibold text-foreground mt-0.5">
-                  {channel === "MOMO" ? "Mobile Money Payment" : "Card Payment"}
-                </h2>
-                <p className="text-[11px] text-on-surface-muted mt-0.5">
-                  {channel === "MOMO"
-                    ? "Confirm your number to authorize instant MoMo prompt"
-                    : "Enter your card details to complete payment"}
+                  <div className="px-4 py-2 flex items-center justify-between text-xs gap-3">
+                    <label htmlFor="card-number" className="text-on-surface-muted shrink-0">
+                      Card Number
+                    </label>
+                    <input
+                      id="card-number"
+                      type="text"
+                      value={cardNumber}
+                      onChange={handleCardNumberChange}
+                      placeholder="•••• •••• •••• ••••"
+                      className="w-full text-right font-mono text-xs font-medium text-foreground bg-transparent focus:outline-none placeholder:text-on-surface-muted/40 tracking-wider"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 divide-x divide-border-light/60">
+                    <div className="px-4 py-2 flex items-center justify-between text-xs gap-2">
+                      <label htmlFor="card-expiry" className="text-on-surface-muted shrink-0">
+                        Expires
+                      </label>
+                      <input
+                        id="card-expiry"
+                        type="text"
+                        value={cardExpiry}
+                        onChange={handleExpiryChange}
+                        placeholder="MM/YY"
+                        maxLength={5}
+                        className="w-full text-right font-mono text-xs font-medium text-foreground bg-transparent focus:outline-none placeholder:text-on-surface-muted/40"
+                      />
+                    </div>
+
+                    <div className="px-4 py-2 flex items-center justify-between text-xs gap-2">
+                      <label htmlFor="card-cvc" className="text-on-surface-muted shrink-0">
+                        CVC
+                      </label>
+                      <input
+                        id="card-cvc"
+                        type="password"
+                        maxLength={4}
+                        value={cardCvc}
+                        onChange={handleCvcChange}
+                        placeholder="•••"
+                        className="w-full text-right font-mono text-xs font-medium text-foreground bg-transparent focus:outline-none placeholder:text-on-surface-muted/40"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <p className="text-[11px] text-on-surface-muted px-3 pt-0.5">
+                  Supports Visa and Mastercard. One-time payment with no recurring billing.
                 </p>
               </div>
-              <div className="text-right shrink-0">
-                <span className="text-[10px] font-semibold text-on-surface-muted uppercase tracking-wider block">
-                  Total Payable
-                </span>
-                <span className="text-2xl font-black text-foreground tracking-tight block">
-                  {activeTotalAmountFormatted}
-                </span>
-                <span className="text-[10px] text-on-surface-muted block">
-                  (Incl. 2% fee)
-                </span>
-              </div>
-            </div>
-
-            {/* MOMO DETAILS */}
-            {channel === "MOMO" && (
-              <div className="space-y-3 text-xs">
-                <div className="space-y-1.5">
-                  <label className="font-medium text-on-surface-muted">Select Network</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setNetwork("MTN")}
-                      className={`relative p-2.5 rounded-xl border text-center font-medium transition-all cursor-pointer flex flex-col items-center gap-1 ${
-                        network === "MTN"
-                          ? "border-2 border-[#4B1426] bg-[#4B1426]/5 text-[#4B1426] font-bold shadow-xs"
-                          : "border border-border-light bg-surface text-on-surface-muted opacity-70 hover:opacity-100 hover:bg-background"
-                      }`}
-                    >
-                      {network === "MTN" && (
-                        <Check className="w-3.5 h-3.5 text-[#4B1426] absolute top-1.5 right-1.5" />
-                      )}
-                      <MtnMomoLogo className="w-6 h-6" />
-                      <span>MTN MoMo</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setNetwork("TELECEL")}
-                      className={`relative p-2.5 rounded-xl border text-center font-medium transition-all cursor-pointer flex flex-col items-center gap-1 ${
-                        network === "TELECEL"
-                          ? "border-2 border-[#4B1426] bg-[#4B1426]/5 text-[#4B1426] font-bold shadow-xs"
-                          : "border border-border-light bg-surface text-on-surface-muted opacity-70 hover:opacity-100 hover:bg-background"
-                      }`}
-                    >
-                      {network === "TELECEL" && (
-                        <Check className="w-3.5 h-3.5 text-[#4B1426] absolute top-1.5 right-1.5" />
-                      )}
-                      <TelecelLogo className="w-6 h-6" />
-                      <span>Telecel</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setNetwork("AIRTELTIGO")}
-                      className={`relative p-2.5 rounded-xl border text-center font-medium transition-all cursor-pointer flex flex-col items-center gap-1 ${
-                        network === "AIRTELTIGO"
-                          ? "border-2 border-[#4B1426] bg-[#4B1426]/5 text-[#4B1426] font-bold shadow-xs"
-                          : "border border-border-light bg-surface text-on-surface-muted opacity-70 hover:opacity-100 hover:bg-background"
-                      }`}
-                    >
-                      {network === "AIRTELTIGO" && (
-                        <Check className="w-3.5 h-3.5 text-[#4B1426] absolute top-1.5 right-1.5" />
-                      )}
-                      <AirtelTigoLogo className="w-6 h-6" />
-                      <span>AT Money</span>
-                    </button>
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-medium text-on-surface-muted">Mobile Money Phone Number</label>
-                  <input
-                    type="tel"
-                    value={phoneNumber}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setPhoneNumber(val);
-                      const detected = identifyNetworkCarrier(val);
-                      if (detected) setNetwork(detected);
-                    }}
-                    placeholder="e.g. 024 000 0000"
-                    className="w-full h-10 px-3 rounded-lg bg-surface border border-border-light text-xs font-medium text-foreground focus:outline-none focus:border-[#4B1426]"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <label className="font-medium text-on-surface-muted">Account Holder Name</label>
-                    {isVerifyingSubscriber ? (
-                      <span className="text-[11px] text-on-surface-muted flex items-center gap-1 font-normal">
-                        <span className="w-2.5 h-2.5 border border-t-transparent border-[#4B1426] rounded-full animate-spin shrink-0" />
-                        Verifying subscriber...
-                      </span>
-                    ) : isHubtelVerified ? (
-                      <span className="text-[11px] text-emerald-700 flex items-center gap-1 font-medium">
-                        <Check className="w-3 h-3 text-emerald-600" />
-                        Verified via Hubtel
-                      </span>
-                    ) : null}
-                  </div>
-                  <input
-                    type="text"
-                    value={payerName}
-                    onChange={(e) => {
-                      setPayerName(e.target.value);
-                      setIsHubtelVerified(false);
-                    }}
-                    placeholder="e.g. Kwame Mensah"
-                    className="w-full h-10 px-3 rounded-lg bg-surface border border-border-light text-xs font-medium text-foreground focus:outline-none focus:border-[#4B1426]"
-                  />
-                </div>
-              </div>
             )}
 
-            {/* CARD DETAILS */}
-            {channel === "CARD" && (
-              <div className="space-y-3 text-xs">
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <label className="font-medium text-on-surface-muted">Cardholder Name</label>
-                    {isHubtelVerified && (
-                      <span className="text-[11px] text-emerald-700 flex items-center gap-1 font-medium">
-                        <Check className="w-3 h-3 text-emerald-600" />
-                        Verified Name
-                      </span>
-                    )}
-                  </div>
-                  <input
-                    type="text"
-                    value={cardholderName}
-                    onChange={(e) => setCardholderName(e.target.value)}
-                    placeholder="Name as it appears on card"
-                    className="w-full h-10 px-3 rounded-lg bg-surface border border-border-light text-xs font-medium text-foreground focus:outline-none focus:border-[#4B1426]"
-                  />
+            {/* Apple Wallet Style Financial Breakdown */}
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-medium text-on-surface-muted uppercase tracking-wider px-3">
+                Payment Summary
+              </p>
+              <div className="bg-surface rounded-xl border border-border-light/70 overflow-hidden divide-y divide-border-light/60 px-4 py-1">
+                <div className="flex justify-between items-center py-2.5 text-xs">
+                  <span className="text-on-surface-muted">Base Amount</span>
+                  <span className="text-foreground tabular-nums">{activeSubtotalFormatted}</span>
                 </div>
-
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <label className="font-medium text-on-surface-muted">Card Number</label>
-                    <span className="text-[11px] text-on-surface-muted font-normal">Debit &bull; Credit &bull; Virtual &bull; Prepaid</span>
-                  </div>
-                  <input
-                    type="text"
-                    value={cardNumber}
-                    onChange={handleCardNumberChange}
-                    placeholder="•••• •••• •••• ••••"
-                    className="w-full h-10 px-3 rounded-lg bg-surface border border-border-light text-xs font-medium text-foreground focus:outline-none focus:border-[#4B1426] tracking-wider font-mono"
-                  />
+                <div className="flex justify-between items-center py-2.5 text-xs">
+                  <span className="text-on-surface-muted">Processing Fee (2%)</span>
+                  <span className="text-foreground tabular-nums">{activeProcessingFeeFormatted}</span>
                 </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <label className="font-medium text-on-surface-muted">Expiry (MM/YY)</label>
-                    <input
-                      type="text"
-                      value={cardExpiry}
-                      onChange={handleExpiryChange}
-                      placeholder="MM/YY"
-                      maxLength={5}
-                      className="w-full h-10 px-3 rounded-lg bg-surface border border-border-light text-xs font-medium text-foreground focus:outline-none focus:border-[#4B1426] font-mono text-center"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="font-medium text-on-surface-muted">CVC / CVV</label>
-                    <input
-                      type="password"
-                      maxLength={4}
-                      value={cardCvc}
-                      onChange={handleCvcChange}
-                      placeholder="•••"
-                      className="w-full h-10 px-3 rounded-lg bg-surface border border-border-light text-xs font-medium text-foreground focus:outline-none focus:border-[#4B1426] font-mono text-center"
-                    />
-                  </div>
+                <div className="flex justify-between items-center py-3 text-sm font-semibold text-foreground">
+                  <span>Total</span>
+                  <span className="tabular-nums">{activeTotalAmountFormatted}</span>
                 </div>
-
-                {/* Acceptance & One-Time Payment Reassurance */}
-                <div className="pt-2 border-t border-border-light space-y-0.5 text-on-surface-muted text-[11px]">
-                  <p className="text-foreground font-medium">Supports Visa, Mastercard, Virtual &amp; Prepaid Cards.</p>
-                  <p>One-time payment. No recurring charges.</p>
-                </div>
-              </div>
-            )}
-
-            {/* Order Summary */}
-            <div className="p-3.5 rounded-xl bg-background border border-border-light space-y-1.5 text-xs">
-              <div className="flex justify-between text-on-surface-muted">
-                <span>Settlement Amount</span>
-                <span className="font-medium text-foreground">{activeSubtotalFormatted}</span>
-              </div>
-              <div className="flex justify-between text-on-surface-muted">
-                <span>Processing Fee (2%)</span>
-                <span className="font-medium text-foreground">{activeProcessingFeeFormatted}</span>
-              </div>
-              <div className="pt-1.5 border-t border-border-light flex justify-between font-semibold text-foreground">
-                <span>Total Payable</span>
-                <span>{activeTotalAmountFormatted}</span>
               </div>
             </div>
           </div>
 
-          {/* Action Button */}
-          <div className="pt-2">
+          {/* Sticky Bottom Action: Pay [Total Amount] */}
+          <div className="sticky bottom-0 bg-background/95 backdrop-blur-md px-4 py-3 border-t border-border-light/40 mt-auto">
             <button
               type="button"
               disabled={isSubmitting}
               onClick={handleCompletePayment}
-              className={`w-full h-11 rounded-xl text-white font-medium text-xs flex items-center justify-center gap-2 transition-colors shadow-xs ${isSubmitting ? 'bg-[#4B1426]/70 cursor-not-allowed' : 'bg-[#4B1426] hover:bg-[#558467] cursor-pointer'}`}
+              className={`w-full h-12 rounded-xl text-white font-semibold text-sm transition-colors flex items-center justify-center shadow-xs ${
+                isSubmitting
+                  ? "bg-[#007AFF]/60 cursor-not-allowed"
+                  : "bg-[#007AFF] hover:bg-[#0062CC] active:bg-[#0051A8] cursor-pointer"
+              }`}
             >
               {isSubmitting ? (
-                <div className="flex items-center justify-center gap-2">
-                  <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   <span>Authorizing...</span>
                 </div>
               ) : (
-                <>
-                  <ShieldCheck className="w-4 h-4" />
-                  <span>
-                    {channel === "MOMO"
-                      ? `Authorize via ${network === "MTN" ? "MTN MoMo" : network === "TELECEL" ? "Telecel Cash" : "AT Money"} • ${activeTotalAmountFormatted}`
-                      : `Pay with Card • ${activeTotalAmountFormatted}`}
-                  </span>
-                </>
+                <span>Pay {activeTotalAmountFormatted}</span>
               )}
             </button>
           </div>
         </motion.div>
       )}
 
-
-
-      {/* STEP 4: PROCESSING OVERLAY */}
+      {/* PROCESSING STATE */}
       {step === "PROCESSING" && (
         <motion.div
           key="step-processing"
@@ -1049,17 +984,18 @@ function CheckoutContent() {
           className="flex-1 flex flex-col items-center justify-center text-center p-6 space-y-6"
         >
           <HeinzLoader size="large" />
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <h2 className="text-base font-semibold text-foreground">Check Your Phone</h2>
-            <p className="text-xs text-on-surface-muted max-w-[250px] mx-auto">
-              Please enter your PIN on your mobile device to authorize this transaction.
+            <p className="text-xs text-on-surface-muted max-w-[260px] mx-auto leading-relaxed">
+              Please enter your PIN on your mobile device to authorize this payment prompt.
             </p>
           </div>
-          
-          <div className="pt-8">
+
+          <div className="pt-6">
             <button
+              type="button"
               onClick={handleCancelPayment}
-              className="px-4 py-2 text-xs font-medium text-on-surface-muted hover:text-foreground transition-colors underline cursor-pointer"
+              className="text-xs text-[#007AFF] hover:underline font-medium cursor-pointer"
             >
               Cancel Payment
             </button>
@@ -1067,29 +1003,30 @@ function CheckoutContent() {
         </motion.div>
       )}
 
-      {/* STEP 3.5: FAILED OVERLAY */}
+      {/* FAILED STATE */}
       {step === "FAILED" && (
         <motion.div
           key="step-failed"
-          initial={{ opacity: 0, scale: 0.95 }}
+          initial={{ opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
           className="flex-1 flex flex-col items-center justify-center text-center p-6 space-y-6"
         >
-          <div className="w-16 h-16 bg-[#FCE8E6] rounded-full flex items-center justify-center mx-auto shadow-sm ring-4 ring-[#FCE8E6]/50">
+          <div className="w-16 h-16 bg-[#FCE8E6] rounded-full flex items-center justify-center mx-auto ring-4 ring-[#FCE8E6]/50">
             <AlertTriangle className="w-8 h-8 text-[#C5221F]" />
           </div>
-          
-          <div className="space-y-2">
-            <h2 className="text-lg font-semibold text-foreground">Payment Failed</h2>
-            <p className="text-xs text-on-surface-muted max-w-[250px] mx-auto">
+
+          <div className="space-y-1.5">
+            <h2 className="text-base font-semibold text-foreground">Payment Failed</h2>
+            <p className="text-xs text-on-surface-muted max-w-[260px] mx-auto leading-relaxed">
               The authorization timed out, failed, or was cancelled on your device. No funds were deducted.
             </p>
           </div>
 
-          <div className="pt-4 space-y-2 w-full">
+          <div className="w-full max-w-xs pt-4">
             <button
+              type="button"
               onClick={() => setStep("CHANNELS")}
-              className="w-full h-11 rounded-xl bg-[#4B1426] hover:bg-[#3E101F] text-white font-medium text-xs flex items-center justify-center transition-colors cursor-pointer shadow-xs"
+              className="w-full h-11 rounded-xl bg-[#007AFF] hover:bg-[#0062CC] text-white font-semibold text-xs transition-colors cursor-pointer"
             >
               Retry Payment
             </button>
@@ -1097,100 +1034,84 @@ function CheckoutContent() {
         </motion.div>
       )}
 
-      {/* STEP 4: CONFIRMATION SCREEN */}
+      {/* CONFIRMATION STATE */}
       {step === "CONFIRMATION" && receiptResult && (
         <motion.div
           key="step-confirmation"
           initial={{ opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.3 }}
-          className="space-y-4 flex flex-col pt-2 pb-2"
+          className="flex-1 flex flex-col"
         >
-          <div className="space-y-4 text-center">
-            <motion.div
-              initial={{ scale: 0.5, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ type: "spring", stiffness: 300, damping: 20, delay: 0.1 }}
-              className="w-16 h-16 bg-[#E6F4EA] rounded-full flex items-center justify-center mx-auto shadow-sm ring-4 ring-[#E6F4EA]/50"
-            >
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <motion.path
-                  d="M5 13l4 4L19 7"
-                  stroke="#188038"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  initial={{ pathLength: 0 }}
-                  animate={{ pathLength: 1 }}
-                  transition={{ duration: 0.5, ease: "easeOut", delay: 0.3 }}
-                />
-              </svg>
-            </motion.div>
+          <div className="flex-1 px-4 py-5 space-y-5 text-center">
+            <div className="w-16 h-16 bg-[#E6F4EA] rounded-full flex items-center justify-center mx-auto ring-4 ring-[#E6F4EA]/50">
+              <Check className="w-8 h-8 text-[#188038]" />
+            </div>
 
-            <div className="space-y-0.5">
+            <div className="space-y-1">
               <h2 className="text-lg font-semibold text-foreground">
                 Rate Payment Confirmed
               </h2>
               <p className="text-xs text-on-surface-muted">
-                Municipal assessment credited to KKMA Treasury.
+                Municipal assessment successfully credited to KKMA Treasury.
               </p>
             </div>
 
-            {/* Receipt Summary Card */}
-            <div className="p-4 rounded-xl bg-surface border border-border-light text-left space-y-3 text-xs shadow-2xs">
-              <div className="flex items-center justify-between border-b border-border-light pb-2">
-                <div>
-                  <span className="text-[11px] text-on-surface-muted">Official Receipt Reference</span>
-                  <p className="font-mono font-semibold text-foreground">
+            {/* Apple Grouped Inset Receipt Summary */}
+            <div className="space-y-1.5 text-left">
+              <p className="text-[11px] font-medium text-on-surface-muted uppercase tracking-wider px-3">
+                Official Receipt
+              </p>
+              <div className="bg-surface rounded-xl border border-border-light/70 overflow-hidden divide-y divide-border-light/60 text-xs">
+                <div className="flex items-center justify-between px-4 py-3">
+                  <span className="text-on-surface-muted">Receipt Number</span>
+                  <span className="font-mono font-semibold text-foreground">
                     {receiptResult.receiptNumber}
-                  </p>
+                  </span>
                 </div>
-                <span className="text-xs font-medium text-[#188038]">
-                  Paid
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
+                <div className="flex items-center justify-between px-4 py-3">
                   <span className="text-on-surface-muted">Amount Settled</span>
-                  <p className="text-base font-bold text-foreground">{receiptResult.amountFormatted}</p>
+                  <span className="font-semibold text-foreground tabular-nums">
+                    {receiptResult.amountFormatted}
+                  </span>
                 </div>
-                <div>
-                  <span className="text-on-surface-muted">Channel</span>
-                  <p className="font-medium text-foreground mt-0.5">{receiptResult.paymentMethod}</p>
+                <div className="flex items-center justify-between px-4 py-3">
+                  <span className="text-on-surface-muted">Payment Channel</span>
+                  <span className="font-medium text-foreground">
+                    {receiptResult.paymentMethod}
+                  </span>
                 </div>
-              </div>
-
-              <div className="pt-2 border-t border-border-light flex items-center justify-between text-on-surface-muted">
-                <span>Timestamp</span>
-                <span className="font-medium text-foreground">{receiptResult.timestamp}</span>
+                <div className="flex items-center justify-between px-4 py-3">
+                  <span className="text-on-surface-muted">Timestamp</span>
+                  <span className="font-medium text-foreground">
+                    {receiptResult.timestamp}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="space-y-2 pt-2">
+          <div className="sticky bottom-0 bg-background/95 backdrop-blur-md px-4 py-3 border-t border-border-light/40 space-y-2 mt-auto">
             <button
               type="button"
               onClick={() => window.print()}
-              className="w-full h-11 rounded-xl bg-[#4B1426] hover:bg-[#3E101F] text-white font-medium text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-xs"
+              className="w-full h-12 rounded-xl bg-[#007AFF] hover:bg-[#0062CC] text-white font-semibold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-xs"
             >
               <ReceiptIcon className="w-4 h-4" />
-              <span>Print / Download Official Receipt</span>
+              <span>Print / Download Receipt</span>
             </button>
 
             <button
               type="button"
               onClick={() => setIsCompleted(true)}
-              className="w-full h-10 rounded-xl bg-surface border border-border-light text-foreground hover:bg-background text-xs font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              className="w-full h-11 rounded-xl bg-surface border border-border-light/70 text-foreground hover:bg-surface-subtle text-xs font-medium flex items-center justify-center transition-colors cursor-pointer"
             >
-              <CheckCircle2 className="w-3.5 h-3.5 text-[#188038]" />
-              <span>Done (Finish Settlement)</span>
+              Done
             </button>
           </div>
         </motion.div>
       )}
 
-      {/* Google-Style Toast Notification */}
+      {/* TOAST NOTIFICATION */}
       <AnimatePresence>
         {toast && (
           <motion.div
@@ -1198,7 +1119,7 @@ function CheckoutContent() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 15, scale: 0.95 }}
             transition={{ duration: 0.2 }}
-            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-sm bg-[#17433F] text-white px-4 py-3 rounded-xl shadow-2xl border border-white/10 flex items-center justify-between gap-3 text-xs font-medium"
+            className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-sm bg-[#1C1C1E] text-white px-4 py-3 rounded-xl shadow-2xl border border-white/10 flex items-center justify-between gap-3 text-xs font-medium"
             role="status"
             aria-live="polite"
           >
@@ -1209,7 +1130,7 @@ function CheckoutContent() {
               {toast.type === "error" && (
                 <AlertTriangle className="w-4 h-4 text-[#F28B82] shrink-0" />
               )}
-              <span className="text-[#F3F4F4] leading-tight">{toast.message}</span>
+              <span className="text-[#F3F4F4] leading-tight truncate">{toast.message}</span>
             </div>
 
             <button
@@ -1224,7 +1145,7 @@ function CheckoutContent() {
         )}
       </AnimatePresence>
 
-      {/* EDIT AMOUNT MODAL */}
+      {/* EDIT AMOUNT MODAL (APPLE SHEET STYLE) */}
       <AnimatePresence>
         {isEditingAmount && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -1236,32 +1157,43 @@ function CheckoutContent() {
               onClick={() => setIsEditingAmount(false)}
             />
             <motion.div
-              initial={{ opacity: 0, y: -20, scale: 0.95 }}
+              initial={{ opacity: 0, y: 20, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 10, scale: 0.95 }}
-              className="relative z-10 w-full max-w-sm bg-surface rounded-2xl border border-border-light shadow-2xl p-5 space-y-4 font-sans"
+              exit={{ opacity: 0, y: 20, scale: 0.98 }}
+              className="relative z-10 w-full max-w-sm bg-surface rounded-2xl border border-border-light/70 shadow-2xl p-5 space-y-4 font-sans"
             >
-              <div className="flex items-center justify-between pb-1 border-b border-border-light">
-                <h3 className="text-sm font-semibold text-foreground">Edit Payment Amount</h3>
-                <button onClick={() => setIsEditingAmount(false)} className="text-on-surface-muted hover:text-foreground p-1 transition-colors cursor-pointer rounded-lg hover:bg-surface-subtle">
+              <div className="flex items-center justify-between pb-2 border-b border-border-light/60">
+                <h3 className="text-sm font-semibold text-foreground">Custom Installment</h3>
+                <button
+                  type="button"
+                  onClick={() => setIsEditingAmount(false)}
+                  className="text-on-surface-muted hover:text-foreground p-1 transition-colors cursor-pointer"
+                  aria-label="Close"
+                >
                   <X className="w-4 h-4" />
                 </button>
               </div>
-              <div className="space-y-1.5 pt-1">
-                <label className="text-xs font-medium text-on-surface-muted">Custom Amount (GH₵)</label>
+
+              <div className="space-y-1.5">
+                <label htmlFor="custom-amount-input" className="text-xs text-on-surface-muted">
+                  Amount in Ghanaian Cedi (GH₵)
+                </label>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-foreground">GH₵</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-foreground">
+                    GH₵
+                  </span>
                   <input
+                    id="custom-amount-input"
                     type="number"
                     step="0.01"
                     autoFocus
                     value={tempAmount}
                     onChange={(e) => setTempAmount(e.target.value)}
                     placeholder={actualBill.toString()}
-                    className={`w-full h-11 pl-12 pr-4 rounded-xl bg-background border text-sm font-semibold text-foreground focus:outline-none transition-colors shadow-2xs ${
+                    className={`w-full h-11 pl-12 pr-4 rounded-xl bg-surface-subtle border text-sm font-semibold text-foreground focus:outline-none transition-colors ${
                       tempValidationError
                         ? "border-red-500 focus:border-red-500"
-                        : "border-[#4B1426]/30 focus:border-[#4B1426]"
+                        : "border-border-light/70 focus:border-[#007AFF]"
                     }`}
                   />
                 </div>
@@ -1271,11 +1203,12 @@ function CheckoutContent() {
                   </p>
                 )}
               </div>
-              <div className="pt-3 flex gap-2">
+
+              <div className="pt-2 flex gap-2">
                 <button
                   type="button"
                   onClick={handleResetToFull}
-                  className="flex-1 h-10 rounded-xl bg-surface border border-border-light text-foreground font-medium text-xs hover:bg-background transition-colors cursor-pointer shadow-xs"
+                  className="flex-1 h-10 rounded-xl bg-surface border border-border-light/70 text-foreground font-medium text-xs hover:bg-surface-subtle transition-colors cursor-pointer"
                 >
                   Reset to Full
                 </button>
@@ -1283,10 +1216,10 @@ function CheckoutContent() {
                   type="button"
                   disabled={!isTempValid}
                   onClick={handleApplyCustom}
-                  className={`flex-1 h-10 rounded-xl font-medium text-xs transition-colors shadow-xs ${
+                  className={`flex-1 h-10 rounded-xl font-semibold text-xs transition-colors shadow-xs ${
                     isTempValid
-                      ? "bg-[#2C2C2C] text-white hover:bg-[#1F1F1F] cursor-pointer"
-                      : "bg-[#2C2C2C]/40 text-white/50 cursor-not-allowed"
+                      ? "bg-[#007AFF] text-white hover:bg-[#0062CC] cursor-pointer"
+                      : "bg-[#007AFF]/40 text-white/50 cursor-not-allowed"
                   }`}
                 >
                   Apply Custom
@@ -1302,9 +1235,7 @@ function CheckoutContent() {
 
 export default function CheckoutPage() {
   return (
-    <Suspense
-      fallback={<CheckoutSkeleton />}
-    >
+    <Suspense fallback={<CheckoutSkeleton />}>
       <CheckoutContent />
     </Suspense>
   );

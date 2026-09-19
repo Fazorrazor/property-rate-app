@@ -248,41 +248,49 @@ export function NotificationsSkeleton() {
 
 export function CheckoutSkeleton() {
   return (
-    <main className="min-h-screen bg-[#F6ECF2] flex flex-col p-4 sm:p-5 pb-8 max-w-md mx-auto w-full font-sans gap-4">
-      <header className="flex items-center justify-between pb-3 border-b border-[#DADCE0]/50 sticky top-0 bg-[#F6ECF2] z-10 pt-2">
-        <Skeleton className="w-8 h-8 rounded-full" />
-        <Skeleton className="w-24 h-5" />
-        <div className="w-8 h-8" />
+    <main className="min-h-screen bg-background flex flex-col max-w-md mx-auto w-full font-sans">
+      <header className="sticky top-0 z-30 bg-background/95 border-b border-border-light/60 h-11 flex items-center justify-between px-4">
+        <div className="w-16">
+          <Skeleton className="w-12 h-4" />
+        </div>
+        <Skeleton className="w-14 h-5" />
+        <div className="w-16" />
       </header>
       
-      <div className="space-y-4">
-        <div className="bg-white p-4 rounded-2xl border border-[#DADCE0] text-center space-y-2">
-          <Skeleton className="w-32 h-3 mx-auto" />
-          <Skeleton className="w-40 h-8 mx-auto" />
+      <div className="flex-1 px-4 py-3 space-y-4">
+        <div className="pt-3 pb-2 text-center space-y-2">
+          <Skeleton className="w-24 h-3 mx-auto" />
+          <Skeleton className="w-44 h-9 mx-auto" />
         </div>
         
-        <div className="bg-white p-4 rounded-2xl border border-[#DADCE0] space-y-4">
-          <Skeleton className="w-32 h-4" />
-          <div className="space-y-3">
-            <div className="flex justify-between items-center pb-3 border-b border-[#F1F3F4]">
-              <div className="flex items-center gap-3">
-                <Skeleton className="w-8 h-8 rounded" />
-                <Skeleton className="w-24 h-4" />
-              </div>
-              <Skeleton className="w-4 h-4 rounded-full" />
+        <div className="space-y-1.5">
+          <Skeleton className="w-24 h-3 ml-3" />
+          <div className="bg-surface rounded-xl border border-border-light/70 overflow-hidden divide-y divide-border-light/60">
+            <div className="px-4 py-3 flex justify-between items-center">
+              <Skeleton className="w-24 h-3" />
+              <Skeleton className="w-28 h-3" />
             </div>
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-3">
-                <Skeleton className="w-8 h-8 rounded" />
-                <Skeleton className="w-20 h-4" />
-              </div>
-              <Skeleton className="w-4 h-4 rounded-full" />
+            <div className="px-4 py-3 flex justify-between items-center">
+              <Skeleton className="w-20 h-3" />
+              <Skeleton className="w-32 h-3" />
+            </div>
+            <div className="px-4 py-3 flex justify-between items-center">
+              <Skeleton className="w-24 h-3" />
+              <Skeleton className="w-20 h-3" />
+            </div>
+            <div className="px-4 py-3 flex justify-between items-center">
+              <Skeleton className="w-20 h-3" />
+              <Skeleton className="w-24 h-3" />
+            </div>
+            <div className="px-4 py-3 flex justify-between items-center">
+              <Skeleton className="w-24 h-3" />
+              <Skeleton className="w-20 h-3" />
             </div>
           </div>
         </div>
       </div>
       
-      <div className="mt-auto pt-6">
+      <div className="sticky bottom-0 bg-background/95 px-4 py-3 border-t border-border-light/40 mt-auto">
         <Skeleton className="w-full h-12 rounded-xl" />
       </div>
     </main>
