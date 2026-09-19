@@ -163,11 +163,24 @@ export const ratepayerDb = {
 
   property: {
     async findMany(args?: { where?: any; include?: any; orderBy?: any; take?: number; skip?: number }) {
-      let query = supabase.from('Property').select('id, account_no, valuationNo, ownerId, ownerDigitalAddress, property_cat, billYear, rateableValue, rateImposed, previousYearBill, amount_paid, arrears, current_bill, billDate, settlementDeadline, municipality, houseNo, plotNo, name, telephone, outstanding_amt');
+      let query = supabase.from('Property').select('*');
 
       if (args?.where) {
         if (args.where.accountNumber) query = query.eq('account_no', args.where.accountNumber);
         if (args.where.ownerDigitalAddress) query = query.eq('ownerDigitalAddress', args.where.ownerDigitalAddress);
+        if (args.where.telephone) query = query.eq('telephone', args.where.telephone);
+
+        if (args.where.OR && Array.isArray(args.where.OR)) {
+          const parts: string[] = [];
+          for (const cond of args.where.OR) {
+            if (cond.telephone) parts.push(`telephone.eq.${cond.telephone}`);
+            if (cond.accountNumber || cond.account_no) parts.push(`account_no.eq.${cond.accountNumber || cond.account_no}`);
+            if (cond.id) parts.push(`id.eq.${cond.id}`);
+          }
+          if (parts.length > 0) {
+            query = query.or(parts.join(','));
+          }
+        }
 
         if (args.where.users?.some?.id) {
           const userId = args.where.users.some.id;

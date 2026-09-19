@@ -338,12 +338,12 @@ export async function getDashboardData(accountNumberOverride?: string): Promise<
 
       if (prop) {
         const rawProp = prop as any;
-        const ownerPhone = rawProp.owner?.mobileNumber || rawProp.owner?.tel || rawProp.users?.[0]?.phoneNumber || rawProp.ownerPhoneDirect;
+        const ownerPhone = rawProp.owner?.mobileNumber || rawProp.owner?.tel || rawProp.users?.[0]?.phoneNumber || rawProp.ownerPhoneDirect || rawProp.telephone;
         let allOwnerProps: any[] = [];
         if (ownerPhone) {
           const cleanDigits = ownerPhone.replace(/\D/g, '');
           const normalized10 = cleanDigits.length === 12 && cleanDigits.startsWith('233') ? '0' + cleanDigits.substring(3) : cleanDigits;
-          const { data: propsByPhone } = await (ratepayerDb as any).property.findMany({
+          const propsByPhone = await ratepayerDb.property.findMany({
             where: {
               OR: [
                 { telephone: ownerPhone },
@@ -351,18 +351,9 @@ export async function getDashboardData(accountNumberOverride?: string): Promise<
                 { telephone: normalized10 },
               ]
             }
-          }).then((res: any) => ({ data: res })).catch(() => ({ data: [] }));
+          }).catch(() => []);
 
           allOwnerProps = propsByPhone || [];
-        }
-
-        if (rawProp.ownerId && allOwnerProps.length <= 1) {
-          const { data: propsByOwner } = await (ratepayerDb as any).property.findMany({
-            where: { ownerId: rawProp.ownerId }
-          }).then((res: any) => ({ data: res })).catch(() => ({ data: [] }));
-          if (propsByOwner && propsByOwner.length > allOwnerProps.length) {
-            allOwnerProps = propsByOwner;
-          }
         }
 
         if (allOwnerProps.length === 0) {
@@ -674,27 +665,34 @@ export async function getCheckoutData(
       });
 
       if (seedProp) {
-        const ownerPhone = seedProp.owner?.mobileNumber || seedProp.owner?.tel || seedProp.users?.[0]?.phoneNumber;
+        const rawSeed = seedProp as any;
+        const ownerPhone = rawSeed.owner?.mobileNumber || rawSeed.owner?.tel || rawSeed.users?.[0]?.phoneNumber || rawSeed.ownerPhoneDirect || rawSeed.telephone;
         let allOwnerProps: any[] = [];
         if (ownerPhone) {
           const cleanDigits = ownerPhone.replace(/\D/g, '');
-          allOwnerProps = await prisma.property.findMany({
+          const normalized10 = cleanDigits.length === 12 && cleanDigits.startsWith('233') ? '0' + cleanDigits.substring(3) : cleanDigits;
+          const propsByPhone = await ratepayerDb.property.findMany({
             where: {
               OR: [
-                { owner: { OR: [{ mobileNumber: ownerPhone }, { tel: ownerPhone }, { mobileNumber: cleanDigits }, { tel: cleanDigits }] } },
-                { users: { some: { phoneNumber: ownerPhone } } },
-              ],
-            },
-            include: { owner: true },
-          });
+                { telephone: ownerPhone },
+                { telephone: cleanDigits },
+                { telephone: normalized10 },
+              ]
+            }
+          }).catch(() => []);
+
+          allOwnerProps = propsByPhone || [];
         }
+
         if (allOwnerProps.length === 0) {
-          allOwnerProps = [seedProp];
+          allOwnerProps = [rawSeed];
+        } else if (!allOwnerProps.some((p: any) => p.id === rawSeed.id || p.accountNumber === rawSeed.accountNumber)) {
+          allOwnerProps.unshift(rawSeed);
         }
 
         user = {
-          id: seedProp.users?.[0]?.id || 'usr_direct',
-          name: seedProp.owner?.name || seedProp.users?.[0]?.name || 'Municipal Ratepayer',
+          id: rawSeed.users?.[0]?.id || 'usr_direct',
+          name: rawSeed.owner?.name || rawSeed.ownerNameDirect || rawSeed.name || 'Municipal Ratepayer',
           phoneNumber: ownerPhone || '0243756235',
           isVerified: true,
           properties: allOwnerProps,
