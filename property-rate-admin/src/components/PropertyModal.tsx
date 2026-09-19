@@ -106,7 +106,7 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/50 backdrop-blur-xs"
+            className="fixed inset-0 bg-black/30 backdrop-blur-xs"
           />
 
           {/* Bottom-to-Top Sliding Modal Sheet */}
@@ -115,21 +115,21 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: '100%', opacity: 0 }}
             transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-            className="relative z-10 bg-[#1E2329] rounded-t-2xl sm:rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[90vh]"
+            className="relative z-10 bg-white rounded-t-2xl sm:rounded-2xl border border-[#E5E5EA] shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[90vh]"
           >
-            <div className="w-10 h-1 bg-[#2B3139] rounded-full mx-auto my-2 sm:hidden shrink-0" />
-            <div className="flex items-center justify-between p-3.5 sm:p-4 border-b border-[#2B3139] bg-[#181A20]/50 shrink-0">
-              <h2 className="font-semibold text-[#EAECEF] text-sm sm:text-base">
+            <div className="w-10 h-1 bg-[#D1D1D6] rounded-full mx-auto my-2 sm:hidden shrink-0" />
+            <div className="flex items-center justify-between p-4 border-b border-[#E5E5EA] bg-white/80 backdrop-blur-md shrink-0">
+              <h2 className="font-semibold text-[#1C1C1E] text-sm sm:text-base">
                 {property ? 'Edit Property Assessment' : 'Register New Property'}
               </h2>
-              <button onClick={onClose} className="p-1 hover:bg-[#2B313A] rounded-lg transition-colors cursor-pointer" aria-label="Close modal">
-                <X className="w-5 h-5 text-[#848E9C]" />
+              <button onClick={onClose} className="p-1.5 hover:bg-[#F2F2F7] rounded-lg transition-colors cursor-pointer text-[#8E8E93] hover:text-[#1C1C1E]" aria-label="Close modal">
+                <X className="w-5 h-5" />
               </button>
             </div>
             
             <div className="p-4 sm:p-6 overflow-y-auto">
               {error && (
-                <div className="mb-4 bg-[#F6465D]/10 border border-[#FAD2CF] text-[#F6465D] px-4 py-3 rounded-md text-xs">
+                <div className="mb-4 bg-[#FF3B30]/10 border border-[#FF3B30]/30 text-[#FF3B30] px-4 py-3 rounded-xl text-xs leading-relaxed">
                   {error}
                 </div>
               )}
@@ -149,7 +149,7 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div>
-                    <label className="block text-xs font-medium text-[#848E9C] mb-1">Account Number *</label>
+                    <label className="block text-xs font-medium text-[#6C6C70] mb-1.5">Account Number *</label>
                     <input
                       required
                       type="text"
@@ -164,17 +164,17 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
                       value={formData.accountNumber}
                       onChange={(e) => setFormData({ ...formData, accountNumber: e.target.value })}
                       disabled={!!property}
-                      className="w-full text-xs p-2.5 sm:p-2 border border-[#2B3139] rounded-md focus:ring-[#FCD535] focus:border-[#FCD535] disabled:bg-[#181A20]"
+                      className="w-full text-xs p-2.5 sm:p-2 border border-[#E5E5EA] rounded-lg bg-[#F2F2F7] text-[#1C1C1E] placeholder:text-[#8E8E93] focus:bg-white focus:ring-2 focus:ring-[#007AFF]/20 focus:border-[#007AFF] transition-all disabled:bg-[#E5E5EA]/50 disabled:text-[#8E8E93]"
                       placeholder="e.g. KKDA03188007"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-[#848E9C] mb-1">Municipality</label>
+                    <label className="block text-xs font-medium text-[#6C6C70] mb-1.5">Municipality</label>
                     <select
                       value={formData.municipality}
                       onChange={(e) => setFormData({ ...formData, municipality: e.target.value })}
                       aria-label="Select Municipality"
-                      className="w-full text-xs p-2.5 sm:p-2 border border-[#2B3139] rounded-md focus:ring-[#FCD535] focus:border-[#FCD535]"
+                      className="w-full text-xs p-2.5 sm:p-2 border border-[#E5E5EA] rounded-lg bg-[#F2F2F7] text-[#1C1C1E] focus:bg-white focus:ring-2 focus:ring-[#007AFF]/20 focus:border-[#007AFF] transition-all"
                     >
                       <option>Kpone-Katamanso (KKMA)</option>
                     </select>
@@ -183,7 +183,7 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div>
-                    <label className="block text-xs font-medium text-[#848E9C] mb-1">Owner Name *</label>
+                    <label className="block text-xs font-medium text-[#6C6C70] mb-1.5">Owner Name *</label>
                     <input
                       required
                       type="text"
@@ -197,12 +197,12 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
                       data-form-type="other"
                       value={formData.ownerName}
                       onChange={(e) => setFormData({ ...formData, ownerName: e.target.value })}
-                      className="w-full text-xs p-2.5 sm:p-2 border border-[#2B3139] rounded-md focus:ring-[#FCD535]"
+                      className="w-full text-xs p-2.5 sm:p-2 border border-[#E5E5EA] rounded-lg bg-[#F2F2F7] text-[#1C1C1E] placeholder:text-[#8E8E93] focus:bg-white focus:ring-2 focus:ring-[#007AFF]/20 focus:border-[#007AFF] transition-all"
                       placeholder="Ratepayer Full Name"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-[#848E9C] mb-1">Owner Phone *</label>
+                    <label className="block text-xs font-medium text-[#6C6C70] mb-1.5">Owner Phone *</label>
                     <input
                       required
                       type="tel"
@@ -216,7 +216,7 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
                       data-form-type="other"
                       value={formData.ownerPhone}
                       onChange={(e) => setFormData({ ...formData, ownerPhone: e.target.value })}
-                      className="w-full text-xs p-2.5 sm:p-2 border border-[#2B3139] rounded-md focus:ring-[#FCD535]"
+                      className="w-full text-xs p-2.5 sm:p-2 border border-[#E5E5EA] rounded-lg bg-[#F2F2F7] text-[#1C1C1E] placeholder:text-[#8E8E93] focus:bg-white focus:ring-2 focus:ring-[#007AFF]/20 focus:border-[#007AFF] transition-all"
                       placeholder="024XXXXXXX"
                     />
                   </div>
@@ -224,7 +224,7 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div>
-                    <label className="block text-xs font-medium text-[#848E9C] mb-1">Digital Address (GPS)</label>
+                    <label className="block text-xs font-medium text-[#6C6C70] mb-1.5">Digital Address (GPS)</label>
                     <input
                       type="text"
                       name="cadastre_digital_gps"
@@ -237,12 +237,12 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
                       data-form-type="other"
                       value={formData.ownerDigitalAddress}
                       onChange={(e) => setFormData({ ...formData, ownerDigitalAddress: e.target.value })}
-                      className="w-full text-xs p-2.5 sm:p-2 border border-[#2B3139] rounded-md focus:ring-[#FCD535]"
+                      className="w-full text-xs p-2.5 sm:p-2 border border-[#E5E5EA] rounded-lg bg-[#F2F2F7] text-[#1C1C1E] placeholder:text-[#8E8E93] focus:bg-white focus:ring-2 focus:ring-[#007AFF]/20 focus:border-[#007AFF] transition-all"
                       placeholder="e.g. GK-0010-9395"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-[#848E9C] mb-1">Physical Location</label>
+                    <label className="block text-xs font-medium text-[#6C6C70] mb-1.5">Physical Location</label>
                     <input
                       type="text"
                       name="cadastre_physical_address"
@@ -255,22 +255,22 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
                       data-form-type="other"
                       value={formData.physicalAddress}
                       onChange={(e) => setFormData({ ...formData, physicalAddress: e.target.value })}
-                      className="w-full text-xs p-2.5 sm:p-2 border border-[#2B3139] rounded-md focus:ring-[#FCD535]"
+                      className="w-full text-xs p-2.5 sm:p-2 border border-[#E5E5EA] rounded-lg bg-[#F2F2F7] text-[#1C1C1E] placeholder:text-[#8E8E93] focus:bg-white focus:ring-2 focus:ring-[#007AFF]/20 focus:border-[#007AFF] transition-all"
                       placeholder="e.g. Near Community Center"
                     />
                   </div>
                 </div>
 
-                <div className="border-t border-[#2B3139] pt-4">
-                  <h3 className="text-xs font-semibold text-[#EAECEF] mb-3">Assessment &amp; Valuation</h3>
+                <div className="border-t border-[#E5E5EA] pt-4">
+                  <h3 className="text-xs font-semibold text-[#1C1C1E] mb-3">Assessment &amp; Valuation</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                     <div className="sm:col-span-1">
-                      <label className="block text-xs font-medium text-[#848E9C] mb-1">Classification *</label>
+                      <label className="block text-xs font-medium text-[#6C6C70] mb-1.5">Classification *</label>
                       <select
                         value={formData.propertyClassification}
                         onChange={(e) => setFormData({ ...formData, propertyClassification: e.target.value })}
                         aria-label="Select Property Classification"
-                        className="w-full text-xs p-2.5 sm:p-2 border border-[#2B3139] rounded-md focus:ring-[#FCD535]"
+                        className="w-full text-xs p-2.5 sm:p-2 border border-[#E5E5EA] rounded-lg bg-[#F2F2F7] text-[#1C1C1E] focus:bg-white focus:ring-2 focus:ring-[#007AFF]/20 focus:border-[#007AFF] transition-all"
                       >
                         <option>PRIVATE THIRD CLASS RESIDENTIAL</option>
                         <option>FIRST CLASS RESIDENTIAL</option>
@@ -280,7 +280,7 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-[#848E9C] mb-1">Rateable Value (GH₵) *</label>
+                      <label className="block text-xs font-medium text-[#6C6C70] mb-1.5">Rateable Value (GH₵) *</label>
                       <input
                         required
                         type="number"
@@ -293,11 +293,11 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
                         data-form-type="other"
                         value={formData.rateableValue}
                         onChange={(e) => setFormData({ ...formData, rateableValue: e.target.value })}
-                        className="w-full text-xs p-2.5 sm:p-2 border border-[#2B3139] rounded-md focus:ring-[#FCD535]"
+                        className="w-full text-xs p-2.5 sm:p-2 border border-[#E5E5EA] rounded-lg bg-[#F2F2F7] text-[#1C1C1E] focus:bg-white focus:ring-2 focus:ring-[#007AFF]/20 focus:border-[#007AFF] transition-all"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-[#848E9C] mb-1">Rate Imposed Factor *</label>
+                      <label className="block text-xs font-medium text-[#6C6C70] mb-1.5">Rate Imposed Factor *</label>
                       <input
                         required
                         type="number"
@@ -310,21 +310,21 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
                         data-form-type="other"
                         value={formData.rateImposed}
                         onChange={(e) => setFormData({ ...formData, rateImposed: e.target.value })}
-                        className="w-full text-xs p-2.5 sm:p-2 border border-[#2B3139] rounded-md focus:ring-[#FCD535]"
+                        className="w-full text-xs p-2.5 sm:p-2 border border-[#E5E5EA] rounded-lg bg-[#F2F2F7] text-[#1C1C1E] focus:bg-white focus:ring-2 focus:ring-[#007AFF]/20 focus:border-[#007AFF] transition-all"
                       />
                     </div>
                   </div>
                 </div>
 
                 {/* Administrator Security Authorization */}
-                <div className="border-t border-[#2B3139] pt-4 space-y-2 bg-[#1E2329] p-3.5 rounded-xl border">
+                <div className="border border-[#E5E5EA] pt-4 space-y-2.5 bg-[#F2F2F7]/70 p-4 rounded-xl">
                   <div className="flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4 text-[#FCD535]" />
-                    <label className="block text-xs font-semibold text-[#EAECEF]">
+                    <ShieldCheck className="w-4 h-4 text-[#007AFF]" />
+                    <label className="block text-xs font-semibold text-[#1C1C1E]">
                       Administrator Security Authorization *
                     </label>
                   </div>
-                  <p className="text-[11px] text-[#848E9C]">
+                  <p className="text-[11px] text-[#6C6C70]">
                     Enter your administrator password to authorize cadastral changes.
                   </p>
                   <div className="relative">
@@ -338,13 +338,13 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
                       data-form-type="other"
                       value={adminPassword}
                       onChange={(e) => setAdminPassword(e.target.value)}
-                      className="w-full text-xs p-2.5 pr-9 border border-[#2B3139] rounded-lg bg-[#1E2329] focus:outline-none focus:border-[#FCD535]"
+                      className="w-full text-xs p-2.5 pr-9 border border-[#E5E5EA] rounded-lg bg-white text-[#1C1C1E] placeholder:text-[#8E8E93] focus:outline-none focus:ring-2 focus:ring-[#007AFF]/20 focus:border-[#007AFF]"
                       placeholder="Enter administrator password (e.g. admin123)"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#848E9C] hover:text-[#EAECEF] p-1 cursor-pointer"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8E8E93] hover:text-[#1C1C1E] p-1 cursor-pointer"
                       title={showPassword ? "Hide password" : "Show password"}
                     >
                       {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
@@ -354,11 +354,11 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
               </form>
             </div>
             
-            <div className="p-3.5 sm:p-4 border-t border-[#2B3139] bg-[#181A20]/50 flex justify-end gap-2.5 sm:gap-3 shrink-0">
+            <div className="p-4 border-t border-[#E5E5EA] bg-white/80 backdrop-blur-md flex justify-end gap-3 shrink-0">
               <button
                 type="button"
                 onClick={onClose}
-                className="btn-3d-secondary h-11 sm:h-9 px-4 rounded-lg font-medium text-xs cursor-pointer flex-1 sm:flex-none"
+                className="apple-btn-secondary h-10 sm:h-9 px-4 flex-1 sm:flex-none"
               >
                 Cancel
               </button>
@@ -366,7 +366,7 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
                 type="submit"
                 form="property-form"
                 disabled={isLoading}
-                className="btn-3d-primary h-11 sm:h-9 px-4 rounded-lg font-medium text-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex-1 sm:flex-none"
+                className="apple-btn-primary h-10 sm:h-9 px-4 flex-1 sm:flex-none disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                 <span>{property ? 'Save Changes' : 'Register Property'}</span>

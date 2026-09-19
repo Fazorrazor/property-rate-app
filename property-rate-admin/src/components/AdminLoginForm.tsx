@@ -92,9 +92,9 @@ export default function AdminLoginForm() {
       {status === 'error' && errorMessage && (
         <div
           role="alert"
-          className="border-l-4 border-[#F6465D] bg-[#F6465D]/10 p-2.5 text-xs text-[#F6465D] flex items-start gap-2 rounded-r-sm"
+          className="border border-[#FF3B30]/30 bg-[#FF3B30]/10 p-3 text-xs text-[#FF3B30] flex items-start gap-2.5 rounded-xl"
         >
-          <ShieldAlert className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+          <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
           <div className="flex-1 leading-relaxed">
             <span className="font-semibold block mb-0.5">Authorization Failed</span>
             {errorMessage}
@@ -104,12 +104,12 @@ export default function AdminLoginForm() {
 
       {/* Officer Username Field */}
       <div>
-        <label htmlFor="username" className="block text-[11px] font-semibold uppercase tracking-wider text-[#848E9C] mb-1.5 font-mono">
+        <label htmlFor="username" className="block text-xs font-medium text-[#6C6C70] mb-1.5">
           Username
         </label>
         <div className="relative">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <User className="h-4 w-4 text-[#848E9C]" />
+          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+            <User className="h-4 w-4 text-[#8E8E93]" />
           </div>
           <input
             id="username"
@@ -126,7 +126,7 @@ export default function AdminLoginForm() {
             disabled={isPending}
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            className="block w-full pl-9 pr-3 py-2 bg-[#0B0E11] border border-[#2B3139] text-sm text-[#EAECEF] placeholder:text-[#848E9C] focus:outline-none focus:border-[#FCD535] focus:ring-1 focus:ring-[#FCD535]/30 disabled:opacity-60 disabled:cursor-not-allowed transition-colors rounded-sm"
+            className="block w-full pl-10 pr-3.5 h-11 bg-[#F2F2F7] border border-[#E5E5EA] text-sm text-[#1C1C1E] placeholder:text-[#8E8E93] focus:outline-none focus:bg-white focus:border-[#007AFF] focus:ring-2 focus:ring-[#007AFF]/20 disabled:opacity-60 disabled:cursor-not-allowed transition-all rounded-xl"
             placeholder="Enter username"
           />
         </div>
@@ -134,12 +134,12 @@ export default function AdminLoginForm() {
 
       {/* Password Field */}
       <div>
-        <label htmlFor="password" className="block text-[11px] font-semibold uppercase tracking-wider text-[#848E9C] mb-1.5 font-mono">
+        <label htmlFor="password" className="block text-xs font-medium text-[#6C6C70] mb-1.5">
           Password
         </label>
         <div className="relative">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Lock className="h-4 w-4 text-[#848E9C]" />
+          <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+            <Lock className="h-4 w-4 text-[#8E8E93]" />
           </div>
           <input
             id="password"
@@ -153,7 +153,7 @@ export default function AdminLoginForm() {
             disabled={isPending}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="block w-full pl-9 pr-10 py-2 bg-[#0B0E11] border border-[#2B3139] text-sm text-[#EAECEF] placeholder:text-[#848E9C] focus:outline-none focus:border-[#FCD535] focus:ring-1 focus:ring-[#FCD535]/30 disabled:opacity-60 disabled:cursor-not-allowed transition-colors rounded-sm"
+            className="block w-full pl-10 pr-11 h-11 bg-[#F2F2F7] border border-[#E5E5EA] text-sm text-[#1C1C1E] placeholder:text-[#8E8E93] focus:outline-none focus:bg-white focus:border-[#007AFF] focus:ring-2 focus:ring-[#007AFF]/20 disabled:opacity-60 disabled:cursor-not-allowed transition-all rounded-xl"
             placeholder="••••••••••••"
           />
           <button
@@ -161,7 +161,7 @@ export default function AdminLoginForm() {
             tabIndex={-1}
             disabled={isPending}
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute inset-y-0 right-0 pr-3 flex items-center text-[#848E9C] hover:text-[#EAECEF] disabled:opacity-50 cursor-pointer transition-colors"
+            className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-[#8E8E93] hover:text-[#1C1C1E] disabled:opacity-50 cursor-pointer transition-colors"
             aria-label={showPassword ? 'Hide authorization key' : 'Show authorization key'}
           >
             {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -170,37 +170,36 @@ export default function AdminLoginForm() {
       </div>
 
       {/* Remember Me */}
-      <div className="flex items-center justify-between pt-0.5">
-        <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-[#848E9C] hover:text-[#EAECEF] transition-colors">
+      <div className="flex items-center justify-between pt-1">
+        <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-[#6C6C70] hover:text-[#1C1C1E] transition-colors">
           <input
             type="checkbox"
             checked={rememberMe}
             disabled={isPending}
             onChange={(e) => setRememberMe(e.target.checked)}
-            className="w-3.5 h-3.5 rounded-none border-[#2B3139] bg-[#0B0E11] text-[#FCD535] focus:ring-[#FCD535] focus:ring-offset-0 disabled:cursor-not-allowed cursor-pointer accent-[#FCD535]"
+            className="w-4 h-4 rounded-md border-[#E5E5EA] bg-[#F2F2F7] text-[#007AFF] focus:ring-[#007AFF] focus:ring-offset-0 disabled:cursor-not-allowed cursor-pointer accent-[#007AFF]"
           />
-          <span>Remember this terminal (7 days)</span>
+          <span>Remember this session (7 days)</span>
         </label>
       </div>
 
       {/* Action Button */}
-      <div className="pt-1">
+      <div className="pt-2">
         <button
           type="submit"
           disabled={isPending}
-          className="w-full h-10 text-sm font-bold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed transition-all bg-[#FCD535] text-[#181A20] hover:bg-[#F0C921] active:scale-[0.99] rounded-sm"
+          className="w-full h-11 text-sm font-semibold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed transition-all bg-[#007AFF] text-white hover:bg-[#0071E3] active:scale-[0.98] rounded-xl shadow-xs"
         >
           {isPending ? (
             <>
-              <Loader2 className="w-4 h-4 animate-spin text-[#181A20]" />
-              <span>Logging in...</span>
+              <Loader2 className="w-4 h-4 animate-spin text-white" />
+              <span>Authorizing...</span>
             </>
           ) : (
-            <span>Login</span>
+            <span>Sign In</span>
           )}
         </button>
       </div>
     </form>
   );
 }
-

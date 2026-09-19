@@ -82,7 +82,7 @@ const SmsRolloutSimulator = dynamic(
     ssr: false,
     loading: () => (
       <div className="flex-1 flex items-center justify-center p-12">
-        <Loader2 className="w-6 h-6 animate-spin text-[#FCD535]" />
+        <Loader2 className="w-6 h-6 animate-spin text-[#007AFF]" />
       </div>
     ),
   }
@@ -1079,7 +1079,7 @@ export default function AdminDashboardPage() {
 
   return (
 
-    <div className="min-h-screen w-full bg-[#181A20] text-[#EAECEF] flex flex-col lg:flex-row font-sans relative">
+    <div className="min-h-screen w-full bg-[#F2F2F7] text-[#1C1C1E] flex flex-col lg:flex-row font-sans relative">
       {/* Mobile Slide-Over Navigation Drawer */}
       <AnimatePresence>
         {isMobileMenuOpen && (
@@ -1089,25 +1089,25 @@ export default function AdminDashboardPage() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsMobileMenuOpen(false)}
-              className="fixed inset-0 bg-black/40 z-40 lg:hidden backdrop-blur-xs"
+              className="fixed inset-0 bg-black/30 z-40 lg:hidden backdrop-blur-xs"
             />
             <motion.aside
               initial={{ x: "100%" }}
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
               transition={{ type: "spring", damping: 28, stiffness: 300 }}
-              className="fixed inset-y-0 right-0 w-4/5 max-w-xs bg-[#1E2329] border-l border-[#2B3139] shadow-xl z-50 flex flex-col font-sans lg:hidden"
+              className="fixed inset-y-0 right-0 w-4/5 max-w-xs bg-white/95 backdrop-blur-2xl border-l border-[#E5E5EA] shadow-2xl z-50 flex flex-col font-sans lg:hidden"
             >
               {/* Drawer Header */}
-              <div className="h-13 flex items-center px-4 border-b border-[#2B3139] justify-between shrink-0">
+              <div className="h-13 flex items-center px-4 border-b border-[#E5E5EA] justify-between shrink-0 bg-[#F8F9FA]">
                 <div className="flex items-center gap-2">
-                  <span className="text-base font-bold tracking-tight text-[#FCD535]">KKMA Revenue</span>
-                  <span className="text-[10px] text-[#848E9C] uppercase font-mono font-medium">Console</span>
+                  <span className="text-base font-bold tracking-tight text-[#007AFF]">KKMA Revenue</span>
+                  <span className="text-[10px] text-[#6C6C70] uppercase font-mono font-medium">Console</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => setIsMobileMenuOpen(false)}
-                  className="p-2 text-[#848E9C] hover:text-[#EAECEF] rounded-lg cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center"
+                  className="p-2 text-[#8E8E93] hover:text-[#1C1C1E] rounded-lg cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center"
                   aria-label="Close menu"
                 >
                   <X className="w-5 h-5" />
@@ -1115,15 +1115,15 @@ export default function AdminDashboardPage() {
               </div>
 
               {/* Drawer Municipality Selector */}
-              <div className="p-3 border-b border-[#2B3139] bg-[#1E2329]">
-                <label className="block text-[10px] font-semibold uppercase tracking-wider text-[#848E9C] mb-1 font-mono">
+              <div className="p-3 border-b border-[#E5E5EA] bg-[#F8F9FA]">
+                <label className="block text-[10px] font-semibold uppercase tracking-wider text-[#6C6C70] mb-1 font-mono">
                   Administrative Assembly
                 </label>
                 <select
                   value={municipalityFilter}
                   onChange={(e) => setMunicipalityFilter(e.target.value)}
                   aria-label="Select Municipal Assembly"
-                  className="w-full text-xs font-semibold text-[#EAECEF] bg-[#1E2329] border border-[#2B3139] rounded-md py-1.5 px-2 focus:outline-none focus:border-[#FCD535]"
+                  className="w-full text-xs font-semibold text-[#1C1C1E] bg-[#F2F2F7] border border-[#E5E5EA] rounded-md py-1.5 px-2 focus:outline-none focus:border-[#007AFF]"
                 >
                   <option value="Kpone-Katamanso (KKMA)">Kpone-Katamanso (KKMA)</option>
                 </select>
@@ -1131,7 +1131,7 @@ export default function AdminDashboardPage() {
 
               {/* Module Navigation Links */}
               <nav className="flex flex-col flex-1 px-3 py-3 gap-1 overflow-y-auto" aria-label="Mobile Navigation">
-                <div className="px-3 pt-1 pb-1.5 text-[10px] font-semibold tracking-wider text-[#848E9C] uppercase font-mono">
+                <div className="px-3 pt-1 pb-1.5 text-[10px] font-semibold tracking-wider text-[#6C6C70] uppercase font-mono">
                   Revenue Modules
                 </div>
                 {NAV_TABS.map((tab) => {
@@ -1146,16 +1146,16 @@ export default function AdminDashboardPage() {
                         setIsMobileMenuOpen(false);
                       }}
                       className={`relative px-3 py-2.5 text-left text-xs font-medium transition-colors cursor-pointer rounded-lg flex items-center justify-between min-h-[44px] ${isActive
-                          ? "bg-[#FCD535]/8 text-[#FCD535] font-semibold"
-                          : "text-[#848E9C] hover:text-[#EAECEF] hover:bg-[#1E2329]"
+                          ? "bg-[#007AFF]/10 text-[#007AFF] font-semibold"
+                          : "text-[#6C6C70] hover:text-[#1C1C1E] hover:bg-[#F2F2F7]"
                         }`}
                     >
                       <div className="flex items-center gap-2.5 min-w-0 pr-1">
-                        <Icon className={`w-4 h-4 shrink-0 ${isActive ? "text-[#FCD535]" : "text-[#848E9C]"}`} />
+                        <Icon className={`w-4 h-4 shrink-0 ${isActive ? "text-[#007AFF]" : "text-[#6C6C70]"}`} />
                         <span className="truncate">{tab.label}</span>
                       </div>
                       {isActive && (
-                        <span className="text-xs font-bold text-[#FCD535]">&bull;</span>
+                        <span className="text-xs font-bold text-[#007AFF]">&bull;</span>
                       )}
                     </button>
                   );
@@ -1163,10 +1163,10 @@ export default function AdminDashboardPage() {
               </nav>
 
               {/* Drawer Footer with Officer & Sign Out */}
-              <div className="p-3 border-t border-[#2B3139] shrink-0 bg-[#1E2329]">
+              <div className="p-3 border-t border-[#E5E5EA] shrink-0 bg-[#F8F9FA]">
                 <div className="px-3 py-1.5 text-xs mb-1">
-                  <span className="text-[#848E9C] block text-[10px]">Logged in Administrator</span>
-                  <span className="font-semibold text-[#EAECEF] truncate block">
+                  <span className="text-[#6C6C70] block text-[10px]">Logged in Administrator</span>
+                  <span className="font-semibold text-[#1C1C1E] truncate block">
                     {currentAdmin?.username || currentAdmin?.name || "Heinz"}
                   </span>
                 </div>
@@ -1182,11 +1182,11 @@ export default function AdminDashboardPage() {
                     }
                   }}
                   aria-label="Sign out of administration portal"
-                  className="w-full py-2 text-xs font-medium text-[#848E9C] hover:text-[#EAECEF] hover:bg-[#2B313A] rounded-lg transition-colors text-left px-3 cursor-pointer flex items-center gap-2 min-h-[44px]"
+                  className="w-full py-2 text-xs font-medium text-[#6C6C70] hover:text-[#1C1C1E] hover:bg-[#E5E5EA] rounded-lg transition-colors text-left px-3 cursor-pointer flex items-center gap-2 min-h-[44px]"
                 >
                   {isLoggingOut ? (
                     <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin text-[#FCD535]" />
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-[#007AFF]" />
                       <span>Signing out...</span>
                     </>
                   ) : (
@@ -1200,10 +1200,10 @@ export default function AdminDashboardPage() {
       </AnimatePresence>
 
       {/* Desktop Sidebar Navigation */}
-      <aside className="hidden lg:flex w-64 bg-[#1E2329] border-r border-[#2B3139] shadow-sm flex-col shrink-0 h-screen z-30 font-sans sticky top-0">
-        <div className="h-13 flex items-center px-4 border-b border-[#2B3139] shrink-0 justify-between gap-2">
+      <aside className="hidden lg:flex w-64 bg-white/90 backdrop-blur-xl border-r border-[#E5E5EA] shadow-2xs flex-col shrink-0 h-screen z-30 font-sans sticky top-0">
+        <div className="h-13 flex items-center px-4 border-b border-[#E5E5EA] shrink-0 justify-between gap-2">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-7 h-7 rounded-md bg-[#FCD535] text-[#181A20] flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
+            <div className="w-7 h-7 rounded-md bg-[#007AFF] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
               K
             </div>
             <div className="flex flex-col min-w-0">
@@ -1211,21 +1211,21 @@ export default function AdminDashboardPage() {
                 value={municipalityFilter}
                 onChange={(e) => setMunicipalityFilter(e.target.value)}
                 aria-label="Select Municipal Assembly"
-                className="text-xs font-bold text-[#EAECEF] bg-transparent border-none focus:outline-none cursor-pointer p-0 truncate hover:text-[#FCD535] transition-colors"
+                className="text-xs font-bold text-[#1C1C1E] bg-transparent border-none focus:outline-none cursor-pointer p-0 truncate hover:text-[#007AFF] transition-colors"
               >
                 <option value="Kpone-Katamanso (KKMA)">Kpone-Katamanso (KKMA)</option>
               </select>
-              <span className="text-[10px] text-[#848E9C] truncate leading-tight">
+              <span className="text-[10px] text-[#6C6C70] truncate leading-tight">
                 Property Rate Cadastre &bull; Act 936
               </span>
             </div>
           </div>
-          <span className="text-[10px] text-[#848E9C] uppercase font-mono font-medium shrink-0">Admin</span>
+          <span className="text-[10px] text-[#6C6C70] uppercase font-mono font-medium shrink-0">Admin</span>
         </div>
 
         {/* Navigation Links (Zero Pills - Clean Google Enterprise Standard) */}
         <nav className="flex flex-col flex-1 px-3 py-3 gap-1 overflow-y-auto" aria-label="Main Navigation">
-          <div className="px-3 pt-1 pb-1.5 text-[10px] font-semibold tracking-wider text-[#848E9C] uppercase font-mono select-none">
+          <div className="px-3 pt-1 pb-1.5 text-[10px] font-semibold tracking-wider text-[#6C6C70] uppercase font-mono select-none">
             Revenue Modules
           </div>
           {NAV_TABS.map((tab) => {
@@ -1237,18 +1237,18 @@ export default function AdminDashboardPage() {
                 type="button"
                 onClick={() => handleTabChange(tab.key)}
                 className={`relative px-3 py-2.5 text-left text-xs font-medium transition-colors cursor-pointer focus:outline-none rounded-lg flex items-center justify-between group ${isActive
-                    ? "bg-[#FCD535]/8 text-[#FCD535] font-semibold"
-                    : "text-[#848E9C] hover:text-[#EAECEF] hover:bg-[#1E2329]"
+                    ? "bg-[#007AFF]/10 text-[#007AFF] font-semibold"
+                    : "text-[#6C6C70] hover:text-[#1C1C1E] hover:bg-[#F2F2F7]"
                   }`}
               >
                 <div className="flex items-center gap-2.5 min-w-0 pr-1">
-                  <Icon className={`w-4 h-4 shrink-0 transition-colors ${isActive ? "text-[#FCD535]" : "text-[#848E9C] group-hover:text-[#EAECEF]"}`} />
+                  <Icon className={`w-4 h-4 shrink-0 transition-colors ${isActive ? "text-[#007AFF]" : "text-[#6C6C70] group-hover:text-[#1C1C1E]"}`} />
                   <span className="truncate whitespace-nowrap">{tab.label}</span>
                 </div>
                 {isActive && (
                   <motion.div
                     layoutId="activeTabIndicatorSidebar"
-                    className="absolute left-0 top-1.5 bottom-1.5 w-[3.5px] bg-[#FCD535] rounded-r"
+                    className="absolute left-0 top-1.5 bottom-1.5 w-[3.5px] bg-[#007AFF] rounded-r"
                     transition={{ type: "spring", stiffness: 400, damping: 30 }}
                   />
                 )}
@@ -1258,10 +1258,10 @@ export default function AdminDashboardPage() {
         </nav>
 
         {/* User & Sign Out Footer */}
-        <div className="p-3 border-t border-[#2B3139] shrink-0 bg-[#1E2329]">
+        <div className="p-3 border-t border-[#E5E5EA] shrink-0 bg-[#F8F9FA]">
           <div className="px-3 py-1.5 text-xs">
-            <span className="text-[#848E9C] block text-[10px]">Logged in Administrator</span>
-            <span className="font-semibold text-[#EAECEF] truncate block">
+            <span className="text-[#6C6C70] block text-[10px]">Logged in Administrator</span>
+            <span className="font-semibold text-[#1C1C1E] truncate block">
               {currentAdmin?.username || currentAdmin?.name || "Heinz"}
             </span>
           </div>
@@ -1277,11 +1277,11 @@ export default function AdminDashboardPage() {
               }
             }}
             aria-label="Sign out of administration portal"
-            className="w-full py-1.5 text-xs font-medium text-[#848E9C] hover:text-[#EAECEF] hover:bg-[#2B313A] rounded-lg transition-colors focus:outline-none text-left px-3 cursor-pointer flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+            className="w-full py-1.5 text-xs font-medium text-[#6C6C70] hover:text-[#1C1C1E] hover:bg-[#E5E5EA] rounded-lg transition-colors focus:outline-none text-left px-3 cursor-pointer flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {isLoggingOut ? (
               <>
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-[#FCD535]" />
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-[#007AFF]" />
                 <span>Signing out...</span>
               </>
             ) : (
@@ -1294,14 +1294,14 @@ export default function AdminDashboardPage() {
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 min-h-screen lg:h-screen lg:overflow-hidden">
         {/* Mobile App Header */}
-        <header className="bg-[#1E2329] border-b border-[#2B3139] shadow-xs px-3.5 sm:px-4 h-13 flex items-center justify-between shrink-0 lg:hidden font-sans z-20 sticky top-0">
+        <header className="bg-white/80 backdrop-blur-xl border-b border-[#E5E5EA] shadow-2xs px-3.5 sm:px-4 h-13 flex items-center justify-between shrink-0 lg:hidden font-sans z-20 sticky top-0">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-7 h-7 rounded-md bg-[#FCD535] text-[#181A20] flex items-center justify-center font-bold text-xs shrink-0">
+            <div className="w-7 h-7 rounded-md bg-[#007AFF] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
               K
             </div>
             <div className="flex flex-col min-w-0">
-              <span className="text-xs font-bold text-[#FCD535] tracking-tight truncate">KKMA Revenue</span>
-              <span className="text-[10px] text-[#848E9C] font-medium leading-none truncate">
+              <span className="text-xs font-bold text-[#007AFF] tracking-tight truncate">KKMA Revenue</span>
+              <span className="text-[10px] text-[#6C6C70] font-medium leading-none truncate">
                 {NAV_TABS.find(t => t.key === activeTab)?.shortLabel || "Console"}
               </span>
             </div>
@@ -1312,61 +1312,61 @@ export default function AdminDashboardPage() {
               <button
                 type="button"
                 onClick={() => setShowBatchModal(true)}
-                className="btn-3d-secondary h-8 px-2.5 rounded-md text-[#FCD535] font-medium text-[11px] flex items-center gap-1 cursor-pointer focus:outline-none"
+                className="h-8 px-2.5 rounded-lg border border-[#E5E5EA] bg-[#F2F2F7] hover:bg-[#E5E5EA] text-[#007AFF] font-semibold text-[11px] flex items-center gap-1 cursor-pointer focus:outline-none transition-colors"
                 title="Run Annual Billing Batch"
               >
-                <RefreshCw className="w-3 h-3 text-[#FCD535]" />
+                <RefreshCw className="w-3 h-3 text-[#007AFF]" />
                 <span className="hidden sm:inline">Batch Rollout</span>
               </button>
             )}
-            <span className="text-[11px] font-semibold text-[#EAECEF] hidden sm:inline-block">
+            <span className="text-[11px] font-semibold text-[#1C1C1E] hidden sm:inline-block">
               {currentAdmin?.username || "Heinz"}
             </span>
             <button
               type="button"
               onClick={() => setIsMobileMenuOpen(true)}
-              className="p-2 -mr-1.5 text-[#EAECEF] hover:text-[#FCD535] hover:bg-[#181A20] rounded-lg cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center focus:outline-none transition-colors"
+              className="p-2 -mr-1.5 text-[#1C1C1E] hover:text-[#007AFF] hover:bg-[#F2F2F7] rounded-lg cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center focus:outline-none transition-colors"
               aria-label="Open navigation menu"
             >
-              <Menu className="w-5 h-5 text-[#EAECEF]" />
+              <Menu className="w-5 h-5 text-[#1C1C1E]" />
             </button>
           </div>
         </header>
 
         {/* SMS Rollout Progress Bar (Slim Banner when Active) */}
         {smsJobId && smsJobProgress && (
-          <div className="bg-[#1E2329] border-b border-[#2B3139] px-4 py-2 flex items-center gap-3 shrink-0 text-xs font-sans">
+          <div className="bg-white border-b border-[#E5E5EA] px-4 py-2 flex items-center gap-3 shrink-0 text-xs font-sans shadow-2xs">
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-[11px] font-medium text-[#EAECEF] truncate flex items-center gap-1.5">
+                <span className="text-[11px] font-medium text-[#1C1C1E] truncate flex items-center gap-1.5">
                   {smsJobProgress.status === "DONE" ? (
-                    <span className="text-[#0ECB81] font-semibold flex items-center gap-1">
+                    <span className="text-[#34C759] font-semibold flex items-center gap-1">
                       <CheckCircle2 className="w-3 h-3" /> Rollout Complete
                     </span>
                   ) : smsJobProgress.status === "FAILED" ? (
-                    <span className="text-[#F6465D] font-semibold flex items-center gap-1">
+                    <span className="text-[#FF3B30] font-semibold flex items-center gap-1">
                       <AlertTriangle className="w-3 h-3" /> Rollout Failed
                     </span>
                   ) : (
                     <>
-                      <Loader2 className="w-3 h-3 animate-spin text-[#FCD535]" />
+                      <Loader2 className="w-3 h-3 animate-spin text-[#007AFF]" />
                       <span>SMS Rollout in Progress...</span>
                     </>
                   )}
                 </span>
-                <span className="text-[10px] text-[#848E9C] font-mono shrink-0 ml-2">
+                <span className="text-[10px] text-[#6C6C70] font-mono shrink-0 ml-2">
                   {smsJobProgress.sentCount} / {smsJobProgress.totalCount} sent
                   {smsJobProgress.failedCount > 0 && (
-                    <span className="text-[#F6465D] ml-1">({smsJobProgress.failedCount} failed)</span>
+                    <span className="text-[#FF3B30] ml-1">({smsJobProgress.failedCount} failed)</span>
                   )}
                 </span>
               </div>
-              <div className="w-full bg-[#2B3139] rounded-full h-1 overflow-hidden">
+              <div className="w-full bg-[#E5E5EA] rounded-full h-1 overflow-hidden">
                 <div
                   className="h-1 rounded-full transition-all duration-500"
                   style={{
                     width: smsJobProgress.totalCount > 0 ? `${Math.round((smsJobProgress.sentCount / smsJobProgress.totalCount) * 100)}%` : "0%",
-                    background: smsJobProgress.status === "DONE" ? "#0ECB81" : smsJobProgress.status === "FAILED" ? "#F6465D" : "#FCD535",
+                    background: smsJobProgress.status === "DONE" ? "#34C759" : smsJobProgress.status === "FAILED" ? "#FF3B30" : "#007AFF",
                   }}
                 />
               </div>
@@ -1374,7 +1374,7 @@ export default function AdminDashboardPage() {
             <button
               type="button"
               onClick={() => { setSmsJobId(null); setSmsJobProgress(null); }}
-              className="text-[#848E9C] hover:text-[#EAECEF] cursor-pointer shrink-0 p-1 transition-colors"
+              className="text-[#8E8E93] hover:text-[#1C1C1E] cursor-pointer shrink-0 p-1 transition-colors"
               title="Dismiss progress notification"
             >
               <X className="w-3.5 h-3.5" />
@@ -1387,59 +1387,59 @@ export default function AdminDashboardPage() {
             ? "p-0 max-w-none overflow-hidden"
             : activeTab === "SETTINGS"
               ? "p-0 max-w-none overflow-y-auto"
-              : "p-0 lg:px-6 lg:py-3 max-w-none lg:max-w-7xl lg:mx-auto gap-0 lg:gap-3 bg-[#1E2329] lg:bg-transparent overflow-y-auto pb-3"
+              : "p-0 lg:px-6 lg:py-3 max-w-none lg:max-w-7xl lg:mx-auto gap-0 lg:gap-3 bg-[#F2F2F7] lg:bg-transparent overflow-y-auto pb-3"
           }`}>
           {/* Top KPI Cards (Zero Pills - Flat Edge-to-Edge on Mobile, Cards on Desktop) */}
           {activeTab === "REGISTRY" && (
-            <section aria-label="Executive KPIs" className="shrink-0 bg-[#1E2329] border-b border-[#2B3139] lg:border-b-0 lg:bg-transparent">
-              <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-y lg:divide-x-0 lg:divide-y-0 divide-[#2B3139] lg:gap-3">
+            <section aria-label="Executive KPIs" className="shrink-0 bg-white border-b border-[#E5E5EA] lg:border-b-0 lg:bg-transparent">
+              <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-y lg:divide-x-0 lg:divide-y-0 divide-[#E5E5EA] lg:gap-3">
                 {/* 1. Total Assessed Demand */}
-                <div className="p-3.5 sm:p-4 lg:p-3 lg:bg-[#1E2329] lg:border lg:border-[#2B3139] lg:rounded-xl hover:bg-[#1E2329] lg:hover:border-[#363D47] transition-colors flex items-center justify-between lg:shadow-xs">
+                <div className="p-3.5 sm:p-4 lg:p-3 lg:bg-white lg:border lg:border-[#E5E5EA] lg:rounded-xl hover:bg-[#F8F9FA] lg:hover:border-[#D1D1D6] transition-colors flex items-center justify-between lg:shadow-2xs">
                   <div className="min-w-0 pr-2">
-                    <span className="text-[11px] text-[#848E9C] font-medium block truncate">Total Assessed Demand</span>
-                    <span className="text-base xl:text-lg font-bold text-[#EAECEF] tracking-tight whitespace-nowrap tabular-nums block">{metrics.totalBilledFormatted}</span>
+                    <span className="text-[11px] text-[#6C6C70] font-medium block truncate">Total Assessed Demand</span>
+                    <span className="text-base xl:text-lg font-bold text-[#1C1C1E] tracking-tight whitespace-nowrap tabular-nums block">{metrics.totalBilledFormatted}</span>
                   </div>
                   <div className="text-right shrink-0">
-                    <span className="text-[10px] text-[#848E9C] block font-mono">FY 2025</span>
-                    <span className="text-[10px] text-[#848E9C] block">{(data?.pagination?.total ?? metrics.totalProperties).toLocaleString()} accounts</span>
+                    <span className="text-[10px] text-[#6C6C70] block font-mono">FY 2025</span>
+                    <span className="text-[10px] text-[#6C6C70] block">{(data?.pagination?.total ?? metrics.totalProperties).toLocaleString()} accounts</span>
                   </div>
                 </div>
 
                 {/* 2. Revenue Collected */}
-                <div className="p-3.5 sm:p-4 lg:p-3 lg:bg-[#1E2329] lg:border lg:border-[#2B3139] lg:rounded-xl hover:bg-[#1E2329] lg:hover:border-[#363D47] transition-colors flex items-center justify-between lg:shadow-xs">
+                <div className="p-3.5 sm:p-4 lg:p-3 lg:bg-white lg:border lg:border-[#E5E5EA] lg:rounded-xl hover:bg-[#F8F9FA] lg:hover:border-[#D1D1D6] transition-colors flex items-center justify-between lg:shadow-2xs">
                   <div className="min-w-0 pr-2">
-                    <span className="text-[11px] text-[#848E9C] font-medium block truncate">Revenue Collected</span>
-                    <span className="text-base xl:text-lg font-bold text-[#0ECB81] tracking-tight whitespace-nowrap tabular-nums block">{metrics.totalCollectedFormatted}</span>
+                    <span className="text-[11px] text-[#6C6C70] font-medium block truncate">Revenue Collected</span>
+                    <span className="text-base xl:text-lg font-bold text-[#34C759] tracking-tight whitespace-nowrap tabular-nums block">{metrics.totalCollectedFormatted}</span>
                   </div>
                   <div className="text-right shrink-0">
-                    <span className="text-[10px] text-[#848E9C] block font-mono">Efficiency</span>
-                    <span className="text-[11px] font-semibold text-[#0ECB81] block">{metrics.collectionRateFormatted}</span>
+                    <span className="text-[10px] text-[#6C6C70] block font-mono">Efficiency</span>
+                    <span className="text-[11px] font-semibold text-[#34C759] block">{metrics.collectionRateFormatted}</span>
                   </div>
                 </div>
 
                 {/* 3. Cumulative Arrears */}
-                <div className="p-3.5 sm:p-4 lg:p-3 lg:bg-[#1E2329] lg:border lg:border-[#2B3139] lg:rounded-xl hover:bg-[#1E2329] lg:hover:border-[#363D47] transition-colors flex items-center justify-between lg:shadow-xs">
+                <div className="p-3.5 sm:p-4 lg:p-3 lg:bg-white lg:border lg:border-[#E5E5EA] lg:rounded-xl hover:bg-[#F8F9FA] lg:hover:border-[#D1D1D6] transition-colors flex items-center justify-between lg:shadow-2xs">
                   <div className="min-w-0 pr-2">
-                    <span className="text-[11px] text-[#848E9C] font-medium block truncate">Cumulative Arrears</span>
-                    <span className="text-base xl:text-lg font-bold text-[#F6465D] tracking-tight whitespace-nowrap tabular-nums block">{metrics.totalArrearsFormatted}</span>
+                    <span className="text-[11px] text-[#6C6C70] font-medium block truncate">Cumulative Arrears</span>
+                    <span className="text-base xl:text-lg font-bold text-[#FF3B30] tracking-tight whitespace-nowrap tabular-nums block">{metrics.totalArrearsFormatted}</span>
                   </div>
                   <div className="text-right shrink-0">
-                    <span className="text-[10px] text-[#848E9C] block font-mono">Prior Debt</span>
-                    <span className="text-[10px] text-[#848E9C] block">Act 936</span>
+                    <span className="text-[10px] text-[#6C6C70] block font-mono">Prior Debt</span>
+                    <span className="text-[10px] text-[#6C6C70] block">Act 936</span>
                   </div>
                 </div>
 
                 {/* 4. Accounts with Arrears */}
-                <div className="p-3.5 sm:p-4 lg:p-3 lg:bg-[#1E2329] lg:border lg:border-[#2B3139] lg:rounded-xl hover:bg-[#1E2329] lg:hover:border-[#363D47] transition-colors flex items-center justify-between lg:shadow-xs">
+                <div className="p-3.5 sm:p-4 lg:p-3 lg:bg-white lg:border lg:border-[#E5E5EA] lg:rounded-xl hover:bg-[#F8F9FA] lg:hover:border-[#D1D1D6] transition-colors flex items-center justify-between lg:shadow-2xs">
                   <div className="min-w-0 pr-2">
-                    <span className="text-[11px] text-[#848E9C] font-medium block truncate">Accounts with Arrears</span>
-                    <span className="text-base xl:text-lg font-bold text-[#EAECEF] tracking-tight whitespace-nowrap tabular-nums block">{metrics.defaultersCount.toLocaleString()}</span>
+                    <span className="text-[11px] text-[#6C6C70] font-medium block truncate">Accounts with Arrears</span>
+                    <span className="text-base xl:text-lg font-bold text-[#1C1C1E] tracking-tight whitespace-nowrap tabular-nums block">{metrics.defaultersCount.toLocaleString()}</span>
                   </div>
                   <div className="text-right shrink-0">
-                    <span className={`text-[10px] font-semibold block ${metrics.defaultersCount > 0 ? "text-[#F6465D]" : "text-[#0ECB81]"}`}>
+                    <span className={`text-[10px] font-semibold block ${metrics.defaultersCount > 0 ? "text-[#FF3B30]" : "text-[#34C759]"}`}>
                       {metrics.defaultersCount > 0 ? "Recovery Active" : "Compliant"}
                     </span>
-                    <span className="text-[10px] text-[#FCD535] hover:underline cursor-pointer" onClick={() => { setActiveTab("REGISTRY"); setStatusFilter("DEFAULTER"); }}>
+                    <span className="text-[10px] text-[#007AFF] hover:underline cursor-pointer" onClick={() => { setActiveTab("REGISTRY"); setStatusFilter("DEFAULTER"); }}>
                       Inspect
                     </span>
                   </div>
@@ -1450,31 +1450,31 @@ export default function AdminDashboardPage() {
 
           {/* TAB 1: CADASTRE & VALUATION ROLL */}
           {activeTab === "REGISTRY" && (
-            <section className="bg-[#1E2329] border-b border-[#2B3139] lg:border lg:border-[#2B3139] rounded-none lg:rounded-xl shadow-none lg:shadow-sm flex-1 min-h-0 flex flex-col overflow-hidden w-full">
-              <div className="p-3.5 border-b border-[#2B3139] space-y-2.5 shrink-0">
+            <section className="bg-white border-b border-[#E5E5EA] lg:border lg:border-[#E5E5EA] rounded-none lg:rounded-xl shadow-none flex-1 min-h-0 flex flex-col overflow-hidden w-full">
+              <div className="p-3.5 border-b border-[#E5E5EA] space-y-2.5 shrink-0 bg-white">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h2 className="text-base font-semibold text-[#EAECEF]">
+                    <h2 className="text-base font-semibold text-[#1C1C1E]">
                       Municipal Property Cadastre &amp; Valuation Roll
                     </h2>
-                    <p className="text-xs text-[#848E9C] mt-0.5">
+                    <p className="text-xs text-[#6C6C70] mt-0.5">
                       Master register of municipal property accounts, GhanaPost GPS codes, and rating valuations
                     </p>
                   </div>
 
-                  <div className="text-xs text-[#848E9C] font-medium hidden sm:block">
+                  <div className="text-xs text-[#6C6C70] font-medium hidden sm:block">
                     {(data?.pagination?.total ?? propertiesList.length).toLocaleString()} properties on record
                   </div>
                 </div>
 
                 {/* Filter & Action Bar */}
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 sm:gap-3 pt-2 border-t border-[#2B3139]">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 sm:gap-3 pt-2 border-t border-[#E5E5EA]">
                   {/* Search */}
                   <div className="relative flex items-center w-full lg:flex-1 lg:max-w-md">
                     {isSearchingProperties ? (
-                      <Loader2 className="w-4 h-4 text-[#FCD535] animate-spin absolute left-3 pointer-events-none" />
+                      <Loader2 className="w-4 h-4 text-[#007AFF] animate-spin absolute left-3 pointer-events-none" />
                     ) : (
-                      <Search className="w-4 h-4 text-[#848E9C] absolute left-3 pointer-events-none" />
+                      <Search className="w-4 h-4 text-[#8E8E93] absolute left-3 pointer-events-none" />
                     )}
                     <input
                       type="text"
@@ -1494,13 +1494,13 @@ export default function AdminDashboardPage() {
                       onKeyDown={(e) => {
                         if (e.key === "Escape") handleClearPropertySearch();
                       }}
-                      className="w-full h-8 pl-9 pr-8 rounded-lg border border-[#2B3139] bg-[#1E2329] text-xs text-[#EAECEF] placeholder:text-[#848E9C] focus:border-[#FCD535] focus:outline-none transition-colors"
+                      className="w-full h-8 pl-9 pr-8 rounded-lg border border-[#E5E5EA] bg-[#F2F2F7] text-xs text-[#1C1C1E] placeholder:text-[#8E8E93] focus:border-[#007AFF] focus:bg-white focus:outline-none transition-colors"
                     />
                     {searchQuery && (
                       <button
                         type="button"
                         onClick={handleClearPropertySearch}
-                        className="absolute right-2 text-[#848E9C] hover:text-[#EAECEF] p-1 cursor-pointer"
+                        className="absolute right-2 text-[#8E8E93] hover:text-[#1C1C1E] p-1 cursor-pointer"
                         title="Clear search"
                       >
                         <X className="w-3.5 h-3.5" />
@@ -1514,7 +1514,7 @@ export default function AdminDashboardPage() {
                       value={classificationFilter}
                       onChange={(e) => setClassificationFilter(e.target.value)}
                       aria-label="Filter by property classification"
-                      className="h-8 px-2.5 rounded-lg border border-[#2B3139] bg-[#1E2329] text-xs text-[#EAECEF] focus:outline-none focus:border-[#FCD535] shrink-0"
+                      className="h-8 px-2.5 rounded-lg border border-[#E5E5EA] bg-[#F2F2F7] text-xs text-[#1C1C1E] focus:outline-none focus:border-[#007AFF] focus:bg-white shrink-0"
                     >
                       <option value="ALL">All Property Classes</option>
                       <option value="COMMERCIAL">Commercial</option>
@@ -1536,7 +1536,7 @@ export default function AdminDashboardPage() {
                       value={statusFilter}
                       onChange={(e) => setStatusFilter(e.target.value as any)}
                       aria-label="Filter by payment status"
-                      className="h-8 px-2.5 rounded-lg border border-[#2B3139] bg-[#1E2329] text-xs text-[#EAECEF] focus:outline-none focus:border-[#FCD535] shrink-0"
+                      className="h-8 px-2.5 rounded-lg border border-[#E5E5EA] bg-[#F2F2F7] text-xs text-[#1C1C1E] focus:outline-none focus:border-[#007AFF] focus:bg-white shrink-0"
                     >
                       <option value="ALL">All Statuses</option>
                       <option value="UNPAID">Unpaid Balances</option>
@@ -1547,7 +1547,7 @@ export default function AdminDashboardPage() {
                     <button
                       type="button"
                       onClick={() => setShowPropertyModal(true)}
-                      className="btn-3d-primary h-8 px-3 rounded-lg font-medium text-xs flex items-center gap-1.5 cursor-pointer shrink-0"
+                      className="apple-btn-primary h-8 px-3 rounded-lg font-semibold text-xs flex items-center gap-1.5 cursor-pointer shrink-0"
                     >
                       <span>+ Add Property</span>
                     </button>
@@ -1555,17 +1555,17 @@ export default function AdminDashboardPage() {
                     <button
                       type="button"
                       onClick={() => setShowCsvImportModal(true)}
-                      className="btn-3d-secondary h-8 px-3 rounded-lg font-medium text-xs flex items-center gap-1.5 cursor-pointer shrink-0 text-[#FCD535] border-[#FCD535]/30"
+                      className="apple-btn-secondary h-8 px-3 rounded-lg font-medium text-xs flex items-center gap-1.5 cursor-pointer shrink-0 text-[#007AFF]"
                       title="Import Cadastre CSV"
                     >
-                      <UploadCloud className="w-3.5 h-3.5" />
+                      <UploadCloud className="w-3.5 h-3.5 text-[#007AFF]" />
                       <span>Import CSV</span>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => handleExportPropertiesCsv(selectedIds.length > 0)}
-                      className="btn-3d-secondary h-8 px-3 rounded-lg font-medium text-xs flex items-center gap-1.5 cursor-pointer shrink-0"
+                      className="apple-btn-secondary h-8 px-3 rounded-lg font-medium text-xs flex items-center gap-1.5 cursor-pointer shrink-0"
                       title="Export Professional Excel/CSV with Linked Portfolios"
                     >
                       <Download className="w-3.5 h-3.5" />
@@ -1576,17 +1576,17 @@ export default function AdminDashboardPage() {
 
                 {/* Active Cadastre Filter Summary Strip (Zero Pills) */}
                 {(classificationFilter !== "ALL" || statusFilter !== "ALL" || searchQuery.trim() !== "") && (
-                  <div className="flex items-center justify-between text-xs text-[#848E9C] pt-1.5 pb-0.5 border-t border-[#2B3139]">
+                  <div className="flex items-center justify-between text-xs text-[#6C6C70] pt-1.5 pb-0.5 border-t border-[#E5E5EA]">
                     <div className="flex items-center gap-2 flex-wrap text-[11px]">
-                      <span className="font-semibold text-[#EAECEF]">Active Filters:</span>
+                      <span className="font-semibold text-[#1C1C1E]">Active Filters:</span>
                       {searchQuery.trim() && (
-                        <span className="text-[#FCD535] font-medium">Search: &ldquo;{searchQuery.trim()}&rdquo;</span>
+                        <span className="text-[#007AFF] font-medium">Search: &ldquo;{searchQuery.trim()}&rdquo;</span>
                       )}
                       {classificationFilter !== "ALL" && (
-                        <span className="text-[#FCD535] font-medium">&bull; Class: {classificationFilter}</span>
+                        <span className="text-[#007AFF] font-medium">&bull; Class: {classificationFilter}</span>
                       )}
                       {statusFilter !== "ALL" && (
-                        <span className="text-[#FCD535] font-medium">&bull; Status: {statusFilter === "DEFAULTER" ? "Past Due Arrears" : statusFilter}</span>
+                        <span className="text-[#007AFF] font-medium">&bull; Status: {statusFilter === "DEFAULTER" ? "Past Due Arrears" : statusFilter}</span>
                       )}
                     </div>
                     <button
@@ -1596,7 +1596,7 @@ export default function AdminDashboardPage() {
                         setClassificationFilter("ALL");
                         setStatusFilter("ALL");
                       }}
-                      className="text-[11px] font-semibold text-[#FCD535] hover:underline cursor-pointer shrink-0"
+                      className="text-[11px] font-semibold text-[#007AFF] hover:underline cursor-pointer shrink-0"
                     >
                       Reset all filters
                     </button>
@@ -1611,15 +1611,15 @@ export default function AdminDashboardPage() {
                     initial={{ height: 0, opacity: 0 }}
                     animate={{ height: "auto", opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
-                    className="bg-[#181A20] border-b border-[#2B3139] px-4 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs shrink-0"
+                    className="bg-[#F2F2F7] border-b border-[#E5E5EA] px-4 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs shrink-0"
                   >
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-[#FCD535]">
+                      <span className="font-semibold text-[#007AFF]">
                         {selectedIds.length} {selectedIds.length === 1 ? "property" : "properties"} selected
                       </span>
 
                       {selectedPaidList.length > 0 && selectedUnpaidList.length > 0 && (
-                        <span className="text-[#848E9C] font-normal">
+                        <span className="text-[#6C6C70] font-normal">
                           ({selectedUnpaidList.length} with balance due, {selectedPaidList.length} settled)
                         </span>
                       )}
@@ -1627,7 +1627,7 @@ export default function AdminDashboardPage() {
                       <button
                         type="button"
                         onClick={() => setSelectedIds([])}
-                        className="text-xs text-[#848E9C] hover:text-[#EAECEF] underline cursor-pointer ml-1"
+                        className="text-xs text-[#6C6C70] hover:text-[#1C1C1E] underline cursor-pointer ml-1"
                       >
                         Deselect all
                       </button>
@@ -1644,7 +1644,7 @@ export default function AdminDashboardPage() {
                             setShowSmsAuthModal(true);
                           }}
                           disabled={isProcessing}
-                          className="btn-3d-primary h-7 px-3 rounded-md font-medium text-xs flex items-center gap-1.5 cursor-pointer"
+                          className="apple-btn-primary h-7 px-3 rounded-lg font-semibold text-xs flex items-center gap-1.5 cursor-pointer shadow-2xs"
                         >
                           <Send className="w-3 h-3" />
                           <span>
@@ -1653,7 +1653,7 @@ export default function AdminDashboardPage() {
                         </button>
                       ) : (
 
-                        <span className="text-xs text-[#0ECB81] font-medium flex items-center gap-1">
+                        <span className="text-xs text-[#34C759] font-medium flex items-center gap-1">
                           <CheckCircle2 className="w-3.5 h-3.5" />
                           <span>Selected Accounts Settled</span>
                         </span>
@@ -1671,30 +1671,30 @@ export default function AdminDashboardPage() {
               >
                 {/* Desktop Cadastre Table (>= 768px) */}
                 <table className="hidden md:table table-fixed w-full text-left text-xs border-collapse">
-                  <thead className="bg-[#1E2329] border-b border-[#2B3139] text-[#848E9C] font-semibold text-[11px] sticky top-0 z-10 shadow-xs">
+                  <thead className="bg-[#F8F9FA] border-b border-[#E5E5EA] text-[#6C6C70] font-semibold text-[11px] sticky top-0 z-10">
                     <tr>
-                      <th className="py-2.5 px-3 text-center w-8 bg-[#1E2329]">
+                      <th className="py-2.5 px-3 text-center w-8 bg-[#F8F9FA]">
                         <input
                           type="checkbox"
                           checked={selectedIds.length === filteredProperties.length && filteredProperties.length > 0}
                           onChange={toggleSelectAll}
                           aria-label="Select all properties on current page"
-                          className="rounded border-[#2B3139] text-[#FCD535] focus:ring-0 cursor-pointer"
+                          className="rounded border-[#C7C7CC] text-[#007AFF] focus:ring-0 accent-[#007AFF] cursor-pointer"
                         />
                       </th>
-                      <th className="py-2.5 px-3 w-[24%] bg-[#1E2329]">Account &amp; Cadastre</th>
-                      <th className="py-2.5 px-3 w-[23%] bg-[#1E2329]">Ratepayer Particulars</th>
-                      <th className="py-2.5 px-3 w-[15%] bg-[#1E2329] truncate">Classification</th>
-                      <th className="py-2.5 px-3 w-[13%] text-right bg-[#1E2329] whitespace-nowrap">Rateable Value</th>
-                      <th className="py-2.5 px-3 w-[14%] text-right bg-[#1E2329] whitespace-nowrap">Assessment Due</th>
-                      <th className="py-2.5 px-3 w-[11%] text-center bg-[#1E2329] whitespace-nowrap">Status</th>
+                      <th className="py-2.5 px-3 w-[24%] bg-[#F8F9FA]">Account &amp; Cadastre</th>
+                      <th className="py-2.5 px-3 w-[23%] bg-[#F8F9FA]">Ratepayer Particulars</th>
+                      <th className="py-2.5 px-3 w-[15%] bg-[#F8F9FA] truncate">Classification</th>
+                      <th className="py-2.5 px-3 w-[13%] text-right bg-[#F8F9FA] whitespace-nowrap">Rateable Value</th>
+                      <th className="py-2.5 px-3 w-[14%] text-right bg-[#F8F9FA] whitespace-nowrap">Assessment Due</th>
+                      <th className="py-2.5 px-3 w-[11%] text-center bg-[#F8F9FA] whitespace-nowrap">Status</th>
                     </tr>
                   </thead>
 
-                  <tbody className="divide-y divide-[#2B3139] bg-[#1E2329]">
+                  <tbody className="divide-y divide-[#E5E5EA] bg-white">
                     {filteredProperties.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="py-8 text-center text-[#848E9C] font-normal">
+                        <td colSpan={7} className="py-8 text-center text-[#8E8E93] font-normal">
                           No property records found matching current criteria.
                         </td>
                       </tr>
@@ -1707,7 +1707,7 @@ export default function AdminDashboardPage() {
                           <tr
                             key={prop.id}
                             onClick={() => setSelectedAccount(prop)}
-                            className={`hover:bg-[#2B313A] transition-colors cursor-pointer ${selectedAccount?.id === prop.id ? "bg-[#2B313A]" : ""
+                            className={`hover:bg-[#F8F9FA] transition-colors cursor-pointer ${selectedAccount?.id === prop.id ? "bg-[#007AFF]/8" : ""
                               }`}
                           >
                             <td className="py-2.5 px-3 text-center" onClick={(e) => e.stopPropagation()}>
@@ -1716,16 +1716,16 @@ export default function AdminDashboardPage() {
                                 checked={isSelected}
                                 onChange={() => toggleSelectRow(prop.accountNumber)}
                                 aria-label={`Select property ${prop.accountNumber}`}
-                                className="rounded border-[#2B3139] text-[#FCD535] focus:ring-0 cursor-pointer"
+                                className="rounded border-[#C7C7CC] text-[#007AFF] focus:ring-0 accent-[#007AFF] cursor-pointer"
                               />
                             </td>
                             <td className="py-2.5 px-3">
-                              <p className="font-semibold text-[#EAECEF]">{prop.accountNumber}</p>
-                              <p className="text-[#848E9C] text-[11px] mt-0.5">{prop.ownerDigitalAddress} &bull; {prop.municipality}</p>
+                              <p className="font-semibold text-[#1C1C1E]">{prop.accountNumber}</p>
+                              <p className="text-[#6C6C70] text-[11px] mt-0.5">{prop.ownerDigitalAddress} &bull; {prop.municipality}</p>
                             </td>
                             <td className="py-2.5 px-3">
                               <p 
-                                className="font-medium text-[#FCD535] hover:underline cursor-pointer transition-colors"
+                                className="font-medium text-[#007AFF] hover:underline cursor-pointer transition-colors"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   if (prop.ownerId) {
@@ -1735,27 +1735,27 @@ export default function AdminDashboardPage() {
                               >
                                 {prop.ownerName}
                               </p>
-                              <p className="text-[#848E9C] text-[11px] mt-0.5">{prop.ownerPhone}</p>
+                              <p className="text-[#6C6C70] text-[11px] mt-0.5">{prop.ownerPhone}</p>
                             </td>
-                            <td className="py-2.5 px-3 text-[#848E9C]">
+                            <td className="py-2.5 px-3 text-[#6C6C70]">
                               {prop.propertyClassification}
                             </td>
-                            <td className="py-2.5 px-3 text-right font-medium text-[#EAECEF] whitespace-nowrap tabular-nums">
+                            <td className="py-2.5 px-3 text-right font-medium text-[#1C1C1E] whitespace-nowrap tabular-nums">
                               {prop.rateableValueFormatted}
                             </td>
                             <td className="py-2.5 px-3 text-right whitespace-nowrap tabular-nums">
-                              <p className="font-semibold text-[#EAECEF] whitespace-nowrap tabular-nums">{prop.totalAmountDueFormatted}</p>
+                              <p className="font-semibold text-[#1C1C1E] whitespace-nowrap tabular-nums">{prop.totalAmountDueFormatted}</p>
                               {prop.arrears > 0 && (
-                                <p className="text-[#F6465D] text-[11px] mt-0.5 whitespace-nowrap tabular-nums">Arrears: {prop.arrearsFormatted}</p>
+                                <p className="text-[#FF3B30] text-[11px] mt-0.5 whitespace-nowrap tabular-nums">Arrears: {prop.arrearsFormatted}</p>
                               )}
                             </td>
                             <td className="py-2.5 px-3 text-center whitespace-nowrap">
                               <span
                                 className={`text-xs font-medium ${isPaid
-                                    ? "text-[#0ECB81]"
+                                    ? "text-[#34C759]"
                                     : prop.status === "PARTIALLY_PAID"
-                                      ? "text-[#FCD535]"
-                                      : "text-[#F6465D]"
+                                      ? "text-[#FF9500]"
+                                      : "text-[#FF3B30]"
                                   }`}
                               >
                                 {isPaid ? "Paid" : prop.status === "PARTIALLY_PAID" ? "Partial" : "Unpaid"}
@@ -1769,29 +1769,29 @@ export default function AdminDashboardPage() {
                     {isLoadingMore && (
                       <>
                         {[...Array(5)].map((_, i) => (
-                          <tr key={`cadastre-skel-desk-${i}`} className="animate-pulse bg-[#1E2329] border-b border-[#2B3139]">
+                          <tr key={`cadastre-skel-desk-${i}`} className="animate-pulse bg-white border-b border-[#E5E5EA]">
                             <td className="py-3 px-3 text-center">
-                              <div className="w-4 h-4 rounded bg-[#2B3139] mx-auto" />
+                              <div className="w-4 h-4 rounded bg-[#E5E5EA] mx-auto" />
                             </td>
                             <td className="py-3 px-3 space-y-1.5">
-                              <div className="h-3 bg-[#2B3139] rounded w-28" />
-                              <div className="h-2.5 bg-[#2B3139] rounded w-20" />
+                              <div className="h-3 bg-[#E5E5EA] rounded w-28" />
+                              <div className="h-2.5 bg-[#E5E5EA] rounded w-20" />
                             </td>
                             <td className="py-3 px-3 space-y-1.5">
-                              <div className="h-3 bg-[#2B3139] rounded w-36" />
-                              <div className="h-2.5 bg-[#2B3139] rounded w-28" />
+                              <div className="h-3 bg-[#E5E5EA] rounded w-36" />
+                              <div className="h-2.5 bg-[#E5E5EA] rounded w-28" />
                             </td>
                             <td className="py-3 px-3">
-                              <div className="h-3 bg-[#2B3139] rounded w-32" />
+                              <div className="h-3 bg-[#E5E5EA] rounded w-32" />
                             </td>
                             <td className="py-3 px-3 text-right">
-                              <div className="h-3 bg-[#2B3139] rounded w-20 ml-auto" />
+                              <div className="h-3 bg-[#E5E5EA] rounded w-20 ml-auto" />
                             </td>
                             <td className="py-3 px-3 text-right">
-                              <div className="h-3.5 bg-[#2B3139] rounded w-20 ml-auto" />
+                              <div className="h-3.5 bg-[#E5E5EA] rounded w-20 ml-auto" />
                             </td>
                             <td className="py-3 px-3 text-center">
-                              <div className="h-3 bg-[#2B3139] rounded w-14 mx-auto" />
+                              <div className="h-3 bg-[#E5E5EA] rounded w-14 mx-auto" />
                             </td>
                           </tr>
                         ))}
@@ -1801,9 +1801,9 @@ export default function AdminDashboardPage() {
                 </table>
 
                 {/* Mobile Cadastre Google Material List Tiles (< 768px) */}
-                <div className="block md:hidden divide-y divide-[#2B3139] bg-[#1E2329]">
+                <div className="block md:hidden divide-y divide-[#E5E5EA] bg-white">
                   {filteredProperties.length === 0 ? (
-                    <div className="py-8 text-center text-[#848E9C] font-normal text-xs px-4">
+                    <div className="py-8 text-center text-[#8E8E93] font-normal text-xs px-4">
                       No property records found matching current criteria.
                     </div>
                   ) : (
@@ -1815,7 +1815,7 @@ export default function AdminDashboardPage() {
                         <div
                           key={`mobile-prop-${prop.id}`}
                           onClick={() => setSelectedAccount(prop)}
-                          className={`px-3.5 py-3 flex items-center justify-between gap-2.5 transition-colors cursor-pointer ${selectedAccount?.id === prop.id ? "bg-[#181A20]" : "hover:bg-[#1E2329] active:bg-[#2B313A]"
+                          className={`px-3.5 py-3 flex items-center justify-between gap-2.5 transition-colors cursor-pointer ${selectedAccount?.id === prop.id ? "bg-[#007AFF]/8" : "hover:bg-[#F8F9FA] active:bg-[#F2F2F7]"
                             }`}
                         >
                           {/* Left: Selection checkbox + Account details */}
@@ -1829,28 +1829,28 @@ export default function AdminDashboardPage() {
                                 checked={isSelected}
                                 onChange={() => toggleSelectRow(prop.accountNumber)}
                                 aria-label={`Select property ${prop.accountNumber}`}
-                                className="rounded border-[#2B3139] text-[#FCD535] focus:ring-0 cursor-pointer w-4 h-4"
+                                className="rounded border-[#C7C7CC] text-[#007AFF] focus:ring-0 accent-[#007AFF] cursor-pointer w-4 h-4"
                               />
                             </div>
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2">
-                                <span className="font-semibold text-xs text-[#EAECEF] font-mono truncate">
+                                <span className="font-semibold text-xs text-[#1C1C1E] font-mono truncate">
                                   {prop.accountNumber}
                                 </span>
                                 <span
                                   className={`text-[11px] font-semibold shrink-0 ${isPaid
-                                      ? "text-[#0ECB81]"
+                                      ? "text-[#34C759]"
                                       : prop.status === "PARTIALLY_PAID"
-                                        ? "text-[#FCD535]"
-                                        : "text-[#F6465D]"
+                                        ? "text-[#FF9500]"
+                                        : "text-[#FF3B30]"
                                     }`}
                                 >
                                   &bull; {isPaid ? "Paid" : prop.status === "PARTIALLY_PAID" ? "Partial" : "Unpaid"}
                                 </span>
                               </div>
-                              <div className="text-[11px] text-[#848E9C] truncate mt-0.5">
+                              <div className="text-[11px] text-[#6C6C70] truncate mt-0.5">
                                 <span
-                                  className="text-[#FCD535] font-medium hover:underline cursor-pointer"
+                                  className="text-[#007AFF] font-medium hover:underline cursor-pointer"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     if (prop.ownerId) {
@@ -1861,7 +1861,7 @@ export default function AdminDashboardPage() {
                                   {prop.ownerName}
                                 </span>
                                 {prop.ownerDigitalAddress && (
-                                  <span className="text-[#848E9C] font-mono ml-1.5">&bull; {prop.ownerDigitalAddress}</span>
+                                  <span className="text-[#6C6C70] font-mono ml-1.5">&bull; {prop.ownerDigitalAddress}</span>
                                 )}
                               </div>
                             </div>
@@ -1870,14 +1870,14 @@ export default function AdminDashboardPage() {
                           {/* Right: Total Due Amount + Classification + Chevron */}
                           <div className="flex items-center gap-1.5 shrink-0 text-right">
                             <div>
-                              <div className="text-xs font-bold text-[#EAECEF] tabular-nums">
+                              <div className="text-xs font-bold text-[#1C1C1E] tabular-nums">
                                 {prop.totalAmountDueFormatted}
                               </div>
-                              <div className="text-[10px] text-[#848E9C] uppercase tracking-wider">
+                              <div className="text-[10px] text-[#6C6C70] uppercase tracking-wider">
                                 {prop.propertyClassification?.split(" ")[0] || "Rate"}
                               </div>
                             </div>
-                            <ChevronRight className="w-4 h-4 text-[#848E9C] shrink-0 ml-0.5" />
+                            <ChevronRight className="w-4 h-4 text-[#8E8E93] shrink-0 ml-0.5" />
                           </div>
                         </div>
                       );
@@ -1885,22 +1885,22 @@ export default function AdminDashboardPage() {
                   )}
 
                   {isLoadingMore && (
-                    <div className="divide-y divide-[#2B3139] bg-[#1E2329] animate-pulse">
+                    <div className="divide-y divide-[#E5E5EA] bg-white animate-pulse">
                       {[...Array(4)].map((_, i) => (
                         <div key={`cadastre-skel-mob-${i}`} className="px-3.5 py-3 flex items-center justify-between gap-2.5">
                           <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                            <div className="w-4 h-4 rounded bg-[#2B3139] shrink-0" />
+                            <div className="w-4 h-4 rounded bg-[#E5E5EA] shrink-0" />
                             <div className="min-w-0 flex-1 space-y-1.5">
                               <div className="flex items-center gap-2">
-                                <div className="h-3.5 bg-[#2B3139] rounded w-28" />
-                                <div className="h-2.5 bg-[#2B313A] rounded w-12" />
+                                <div className="h-3.5 bg-[#E5E5EA] rounded w-28" />
+                                <div className="h-2.5 bg-[#F2F2F7] rounded w-12" />
                               </div>
-                              <div className="h-3 bg-[#2B313A] rounded w-44" />
+                              <div className="h-3 bg-[#F2F2F7] rounded w-44" />
                             </div>
                           </div>
                           <div className="space-y-1 text-right shrink-0">
-                            <div className="h-3.5 bg-[#2B3139] rounded w-16 ml-auto" />
-                            <div className="h-2.5 bg-[#2B313A] rounded w-12 ml-auto" />
+                            <div className="h-3.5 bg-[#E5E5EA] rounded w-16 ml-auto" />
+                            <div className="h-2.5 bg-[#F2F2F7] rounded w-12 ml-auto" />
                           </div>
                         </div>
                       ))}
@@ -1910,7 +1910,7 @@ export default function AdminDashboardPage() {
                   {/* Endless Scroll Sentinel & Clean End Marker */}
                   <div ref={propertySentinelRef} className="h-2 w-full" />
                   {!hasMoreProperties && filteredProperties.length > 0 && (
-                    <div className="py-4 text-center text-[11px] text-[#848E9C] border-t border-[#2B3139]">
+                    <div className="py-4 text-center text-[11px] text-[#6C6C70] border-t border-[#E5E5EA]">
                       &bull; End of cadastre roll ({filteredProperties.length.toLocaleString()} properties loaded)
                     </div>
                   )}
@@ -1921,17 +1921,17 @@ export default function AdminDashboardPage() {
 
           {/* TAB 2: RATEPAYER DIRECTORY & CONSOLIDATED PORTFOLIOS */}
           {activeTab === "RATEPAYERS" && (
-            <section className="flex-1 flex flex-col min-h-0 bg-[#1E2329] border-b border-[#2B3139] lg:border lg:border-[#2B3139] rounded-none lg:rounded-xl shadow-none lg:shadow-xs overflow-hidden w-full">
+            <section className="apple-card flex-1 flex flex-col min-h-0 overflow-hidden w-full rounded-none lg:rounded-2xl shadow-none border-[#E5E5EA]">
               {/* Directory Header Bar */}
-              <div className="px-4 lg:px-6 py-3.5 sm:py-4 border-b border-[#2B3139] flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 shrink-0 bg-[#1E2329]">
+              <div className="px-4 lg:px-6 py-3.5 sm:py-4 border-b border-[#E5E5EA] flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 shrink-0 bg-white">
                 <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="text-base font-bold text-[#EAECEF] tracking-tight">
-                      Municipal Ratepayer Directory & Portfolios
+                    <h2 className="text-base font-semibold text-[#1C1C1E] tracking-tight">
+                      Municipal Ratepayer Directory &amp; Portfolios
                     </h2>
-                    <span className="text-xs text-[#FCD535] font-medium">&bull; Consolidated Taxpayer Profiles</span>
+                    <span className="text-xs text-[#007AFF] font-medium">&bull; Consolidated Taxpayer Profiles</span>
                   </div>
-                  <p className="text-xs text-[#848E9C] mt-0.5">
+                  <p className="text-xs text-[#6C6C70] mt-0.5">
                     Search and inspect citizen portfolios, multi-property ownerships, billing history, payment receipts, and audit logs under their name alone.
                   </p>
                 </div>
@@ -1940,7 +1940,7 @@ export default function AdminDashboardPage() {
                     type="button"
                     onClick={() => loadRatepayers(ratepayerSearchQuery, 1, false)}
                     disabled={isLoadingMoreRatepayers}
-                    className="btn-3d-secondary h-8 px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    className="apple-btn-secondary h-8 px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 cursor-pointer disabled:opacity-50 text-[#1C1C1E] border-[#E5E5EA]"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 ${isLoadingMoreRatepayers ? "animate-spin" : ""}`} />
                     <span>Refresh</span>
@@ -1949,23 +1949,23 @@ export default function AdminDashboardPage() {
               </div>
 
               {/* Filter & Search Toolbar */}
-              <div className="px-4 lg:px-6 py-2.5 bg-[#1E2329] border-b border-[#2B3139] flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 shrink-0">
+              <div className="px-4 lg:px-6 py-2.5 bg-white border-b border-[#E5E5EA] flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 shrink-0">
                 <div className="flex items-center gap-2.5 w-full sm:w-auto sm:max-w-md flex-1">
                   <div className="relative w-full">
-                    <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-[#848E9C]" />
+                    <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-[#8E8E93]" />
                     <input
                       type="text"
                       inputMode="search"
                       value={ratepayerSearchQuery}
                       onChange={(e) => setRatepayerSearchQuery(e.target.value)}
                       placeholder="Search by ratepayer name or phone number..."
-                      className="w-full pl-8 pr-8 py-1.5 bg-[#1E2329] border border-[#2B3139] rounded-lg text-xs text-[#EAECEF] placeholder-[#848E9C] focus:outline-none focus:border-[#FCD535] focus:ring-1 focus:ring-[#FCD535]"
+                      className="w-full pl-8 pr-8 py-1.5 bg-[#F2F2F7] border border-[#E5E5EA] rounded-lg text-xs text-[#1C1C1E] placeholder-[#8E8E93] focus:outline-none focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] focus:bg-white transition-colors"
                     />
                     {ratepayerSearchQuery && (
                       <button
                         type="button"
                         onClick={() => setRatepayerSearchQuery("")}
-                        className="absolute right-2.5 top-2 text-[#848E9C] hover:text-[#EAECEF] cursor-pointer"
+                        className="absolute right-2.5 top-2 text-[#8E8E93] hover:text-[#1C1C1E] cursor-pointer"
                         title="Clear search"
                       >
                         <X className="w-3.5 h-3.5" />
@@ -1977,13 +1977,13 @@ export default function AdminDashboardPage() {
                   <button
                     type="button"
                     onClick={handleExportRatepayersCsv}
-                    className="btn-3d-secondary h-8 px-3 rounded-lg font-medium text-xs flex items-center gap-1.5 cursor-pointer shrink-0 text-[#FCD535] border-[#FCD535]/30"
+                    className="apple-btn-secondary h-8 px-3 rounded-lg font-medium text-xs flex items-center gap-1.5 cursor-pointer shrink-0 text-[#007AFF] border-[#007AFF]/20 hover:bg-[#007AFF]/5 transition-colors"
                     title="Export Professional Excel/CSV with Linked Accounts Hierarchy"
                   >
                     <Download className="w-3.5 h-3.5" />
                     <span>Export Ratepayers CSV</span>
                   </button>
-                  <span className="text-xs text-[#848E9C] font-mono">
+                  <span className="text-xs text-[#6C6C70] font-mono">
                     {ratepayers.length} of {ratepayersTotal} Ratepayers
                   </span>
                 </div>
@@ -1992,7 +1992,7 @@ export default function AdminDashboardPage() {
               {/* Ratepayers Directory Table */}
               <div className="flex-1 min-h-0 overflow-auto">
                 <table className="w-full text-left border-collapse text-xs">
-                  <thead className="bg-[#1E2329] border-b border-[#2B3139] sticky top-0 z-10 font-medium text-[#848E9C]">
+                  <thead className="bg-[#F8F9FA] border-b border-[#E5E5EA] sticky top-0 z-10 font-semibold text-[#6C6C70]">
                     <tr>
                       <th className="px-4 lg:px-6 py-3">Citizen / Ratepayer</th>
                       <th className="px-4 lg:px-6 py-3">Phone Number</th>
@@ -2003,17 +2003,17 @@ export default function AdminDashboardPage() {
                       <th className="px-4 lg:px-6 py-3 text-right">Action</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#2B3139] bg-[#1E2329]">
+                  <tbody className="divide-y divide-[#E5E5EA] bg-white">
                     {isLoadingMoreRatepayers && ratepayers.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="px-6 py-12 text-center text-[#848E9C]">
-                          <Loader2 className="w-6 h-6 animate-spin mx-auto text-[#FCD535] mb-2" />
+                        <td colSpan={7} className="px-6 py-12 text-center text-[#6C6C70]">
+                          <Loader2 className="w-6 h-6 animate-spin mx-auto text-[#007AFF] mb-2" />
                           <span>Loading ratepayer profiles...</span>
                         </td>
                       </tr>
                     ) : ratepayers.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="px-6 py-12 text-center text-[#848E9C]">
+                        <td colSpan={7} className="px-6 py-12 text-center text-[#6C6C70]">
                           No ratepayer records match your query.
                         </td>
                       </tr>
@@ -2022,46 +2022,46 @@ export default function AdminDashboardPage() {
                         <tr
                           key={rp.id}
                           onClick={() => handleOpenRatepayerDossier(rp.id, rp)}
-                          className="hover:bg-[#181A20]/40 cursor-pointer transition-colors group"
+                          className="hover:bg-[#F8F9FA] cursor-pointer transition-colors group"
                         >
                           <td className="px-4 lg:px-6 py-3.5">
                             <div className="flex items-center gap-2.5">
-                              <div className="w-7 h-7 rounded-md bg-[#FCD535]/10 text-[#FCD535] flex items-center justify-center font-bold text-xs shrink-0">
+                              <div className="w-7 h-7 rounded-lg bg-[#007AFF]/10 text-[#007AFF] flex items-center justify-center font-bold text-xs shrink-0">
                                 {rp.name.charAt(0).toUpperCase()}
                               </div>
                               <div className="min-w-0">
-                                <span className="font-semibold text-[#EAECEF] group-hover:text-[#FCD535] block truncate">
+                                <span className="font-semibold text-[#1C1C1E] group-hover:text-[#007AFF] block truncate transition-colors">
                                   {rp.name}
                                 </span>
-                                <span className="text-[11px] text-[#848E9C] block">
+                                <span className="text-[11px] text-[#6C6C70] block">
                                   Member since {rp.createdAtFormatted}
                                 </span>
                               </div>
                             </div>
                           </td>
-                          <td className="px-4 lg:px-6 py-3.5 font-mono text-[#EAECEF]">
+                          <td className="px-4 lg:px-6 py-3.5 font-mono text-[#1C1C1E]">
                             {rp.phoneNumber}
                           </td>
                           <td className="px-4 lg:px-6 py-3.5 text-center">
-                            <span className="font-semibold text-[#EAECEF]">
+                            <span className="font-semibold text-[#1C1C1E]">
                               {rp.propertyCount} {rp.propertyCount === 1 ? "property" : "properties"}
                             </span>
                           </td>
-                          <td className="px-4 lg:px-6 py-3.5 text-right font-mono font-medium text-[#F6465D]">
+                          <td className="px-4 lg:px-6 py-3.5 text-right font-mono font-medium text-[#FF3B30]">
                             {rp.totalArrearsFormatted}
                           </td>
-                          <td className="px-4 lg:px-6 py-3.5 text-right font-mono font-semibold text-[#EAECEF]">
+                          <td className="px-4 lg:px-6 py-3.5 text-right font-mono font-semibold text-[#1C1C1E]">
                             {rp.totalDueFormatted}
                           </td>
                           <td className="px-4 lg:px-6 py-3.5 text-center">
                             {rp.status === "DEFAULTER" ? (
-                              <span className="text-xs font-semibold text-[#F6465D]">&bull; Defaulter</span>
+                              <span className="text-xs font-semibold text-[#FF3B30]">&bull; Defaulter</span>
                             ) : rp.status === "SETTLED" ? (
-                              <span className="text-xs font-semibold text-[#0ECB81]">&bull; Settled</span>
+                              <span className="text-xs font-semibold text-[#34C759]">&bull; Settled</span>
                             ) : rp.status === "NO_PROPERTIES" ? (
-                              <span className="text-xs text-[#848E9C]">&bull; No Parcels</span>
+                              <span className="text-xs text-[#8E8E93]">&bull; No Parcels</span>
                             ) : (
-                              <span className="text-xs font-semibold text-[#E37400]">&bull; Outstanding</span>
+                              <span className="text-xs font-semibold text-[#FF9500]">&bull; Outstanding</span>
                             )}
                           </td>
                           <td className="px-4 lg:px-6 py-3.5 text-right">
@@ -2071,7 +2071,7 @@ export default function AdminDashboardPage() {
                                 e.stopPropagation();
                                 handleOpenRatepayerDossier(rp.id, rp);
                               }}
-                              className="text-xs font-medium text-[#FCD535] hover:underline cursor-pointer inline-flex items-center gap-1"
+                              className="text-xs font-medium text-[#007AFF] hover:underline cursor-pointer inline-flex items-center gap-1"
                             >
                               <span>Inspect Dossier</span>
                               <ChevronRight className="w-3.5 h-3.5" />
@@ -2086,12 +2086,12 @@ export default function AdminDashboardPage() {
 
               {/* Pagination Bar */}
               {hasMoreRatepayers && (
-                <div className="p-3 border-t border-[#2B3139] bg-[#1E2329] flex justify-center shrink-0">
+                <div className="p-3 border-t border-[#E5E5EA] bg-white flex justify-center shrink-0">
                   <button
                     type="button"
                     onClick={() => loadRatepayers(ratepayerSearchQuery, currentRatepayerPage + 1, true)}
                     disabled={isLoadingMoreRatepayers}
-                    className="btn-3d-secondary px-4 py-1.5 text-xs font-medium text-[#FCD535] flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    className="apple-btn-secondary px-4 py-1.5 text-xs font-medium text-[#007AFF] flex items-center gap-1.5 cursor-pointer disabled:opacity-50 border-[#E5E5EA]"
                   >
                     {isLoadingMoreRatepayers && <Loader2 className="w-3 h-3 animate-spin" />}
                     <span>Load More Ratepayers</span>
@@ -2118,24 +2118,24 @@ export default function AdminDashboardPage() {
 
           {/* TAB 5: TREASURY RECONCILIATION */}
           {activeTab === "TREASURY" && (
-            <section className="bg-[#1E2329] border-b border-[#2B3139] lg:border lg:border-[#2B3139] rounded-none lg:rounded-xl shadow-none lg:shadow-sm flex-1 min-h-0 flex flex-col overflow-hidden w-full">
-              <div className="p-3.5 border-b border-[#2B3139] flex flex-col gap-3 shrink-0">
+            <section className="apple-card flex-1 min-h-0 flex flex-col overflow-hidden w-full rounded-none lg:rounded-2xl shadow-none border-[#E5E5EA]">
+              <div className="px-4 lg:px-6 py-3.5 border-b border-[#E5E5EA] bg-white flex flex-col gap-3 shrink-0">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div>
-                    <h2 className="text-sm font-semibold text-[#EAECEF]">Municipal Treasury Collections &amp; GCR Audit Log</h2>
-                    <p className="text-xs text-[#848E9C] mt-0.5">
+                    <h2 className="text-base font-semibold text-[#1C1C1E] tracking-tight">Municipal Treasury Collections &amp; GCR Audit Log</h2>
+                    <p className="text-xs text-[#6C6C70] mt-0.5">
                       Real-time transaction logs of all rate payments settled across Mobile Money, Card, and Counter Cash Treasury.
                     </p>
                   </div>
-                  <span className="text-xs font-semibold text-[#0ECB81]">
+                  <span className="text-xs font-semibold text-[#34C759]">
                     Total Reconciled: {metrics.totalCollectedFormatted}
                   </span>
                 </div>
 
                 {/* Treasury Dynamic Search & Filter Bar */}
-                <div className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 pt-2 border-t border-[#2B3139]">
+                <div className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 pt-2.5 border-t border-[#E5E5EA]">
                   <div className="relative flex items-center w-full lg:flex-1 lg:max-w-md">
-                    <Search className="w-4 h-4 text-[#848E9C] absolute left-3 pointer-events-none" />
+                    <Search className="w-4 h-4 text-[#8E8E93] absolute left-3 pointer-events-none" />
                     <input
                       type="text"
                       inputMode="search"
@@ -2154,13 +2154,13 @@ export default function AdminDashboardPage() {
                       onKeyDown={(e) => {
                         if (e.key === "Escape") setTreasurySearchQuery("");
                       }}
-                      className="w-full h-8 pl-9 pr-8 rounded-lg border border-[#2B3139] bg-[#1E2329] text-xs text-[#EAECEF] placeholder:text-[#848E9C] focus:border-[#FCD535] focus:outline-none transition-colors"
+                      className="w-full h-8 pl-9 pr-8 rounded-lg border border-[#E5E5EA] bg-[#F2F2F7] text-xs text-[#1C1C1E] placeholder:text-[#8E8E93] focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] focus:bg-white focus:outline-none transition-colors"
                     />
                     {treasurySearchQuery && (
                       <button
                         type="button"
                         onClick={() => setTreasurySearchQuery("")}
-                        className="absolute right-2 text-[#848E9C] hover:text-[#EAECEF] p-1 cursor-pointer"
+                        className="absolute right-2 text-[#8E8E93] hover:text-[#1C1C1E] p-1 cursor-pointer"
                         title="Clear search"
                       >
                         <X className="w-3.5 h-3.5" />
@@ -2173,7 +2173,7 @@ export default function AdminDashboardPage() {
                       value={treasuryMethodFilter}
                       onChange={(e) => setTreasuryMethodFilter(e.target.value)}
                       aria-label="Filter by payment channel"
-                      className="h-8 px-2.5 rounded-lg border border-[#2B3139] bg-[#1E2329] text-xs text-[#EAECEF] focus:outline-none focus:border-[#FCD535]"
+                      className="h-8 px-2.5 rounded-lg border border-[#E5E5EA] bg-[#F2F2F7] text-xs text-[#1C1C1E] focus:outline-none focus:border-[#007AFF] transition-colors"
                     >
                       <option value="ALL">All Payment Channels</option>
                       <option value="Mobile Money">Mobile Money (MTN / Telecel)</option>
@@ -2183,13 +2183,13 @@ export default function AdminDashboardPage() {
                     <button
                       type="button"
                       onClick={handleExportTreasuryCsv}
-                      className="btn-3d-secondary h-8 px-3 rounded-lg font-medium text-xs flex items-center gap-1.5 cursor-pointer shrink-0 text-[#FCD535] border-[#FCD535]/30"
+                      className="apple-btn-secondary h-8 px-3 rounded-lg font-medium text-xs flex items-center gap-1.5 cursor-pointer shrink-0 text-[#007AFF] border-[#007AFF]/20 hover:bg-[#007AFF]/5 transition-colors"
                       title="Export Professional Treasury Reconciliation CSV"
                     >
                       <Download className="w-3.5 h-3.5" />
                       <span>Export Treasury CSV</span>
                     </button>
-                    <span className="text-xs text-[#848E9C] font-medium shrink-0">
+                    <span className="text-xs text-[#6C6C70] font-medium shrink-0">
                       {filteredTreasuryReceipts.length} record{filteredTreasuryReceipts.length === 1 ? "" : "s"}
                     </span>
                   </div>
@@ -2199,43 +2199,43 @@ export default function AdminDashboardPage() {
               <div className="w-full flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
                 {/* Desktop Treasury Table (>= 768px) */}
                 <table className="hidden md:table table-fixed w-full text-left text-xs border-collapse">
-                  <thead className="bg-[#1E2329] border-b border-[#2B3139] text-[#848E9C] font-semibold text-[11px] sticky top-0 z-10 shadow-xs">
+                  <thead className="bg-[#F8F9FA] border-b border-[#E5E5EA] text-[#6C6C70] font-semibold text-[11px] sticky top-0 z-10">
                     <tr>
-                      <th className="py-2.5 px-3 w-[20%] bg-[#1E2329] whitespace-nowrap">Receipt Reference</th>
-                      <th className="py-2.5 px-3 w-[25%] bg-[#1E2329]">Account Head &amp; Ratepayer</th>
-                      <th className="py-2.5 px-3 w-[14%] bg-[#1E2329] whitespace-nowrap">Settlement Date</th>
-                      <th className="py-2.5 px-3 w-[16%] bg-[#1E2329] whitespace-nowrap">Payment Channel</th>
-                      <th className="py-2.5 px-3 w-[13%] text-right bg-[#1E2329] whitespace-nowrap">Amount Settled</th>
-                      <th className="py-2.5 px-3 w-[12%] text-center bg-[#1E2329] whitespace-nowrap">Audit Status</th>
+                      <th className="py-2.5 px-3 w-[20%] bg-[#F8F9FA] whitespace-nowrap">Receipt Reference</th>
+                      <th className="py-2.5 px-3 w-[25%] bg-[#F8F9FA]">Account Head &amp; Ratepayer</th>
+                      <th className="py-2.5 px-3 w-[14%] bg-[#F8F9FA] whitespace-nowrap">Settlement Date</th>
+                      <th className="py-2.5 px-3 w-[16%] bg-[#F8F9FA] whitespace-nowrap">Payment Channel</th>
+                      <th className="py-2.5 px-3 w-[13%] text-right bg-[#F8F9FA] whitespace-nowrap">Amount Settled</th>
+                      <th className="py-2.5 px-3 w-[12%] text-center bg-[#F8F9FA] whitespace-nowrap">Audit Status</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#2B3139] bg-[#1E2329]">
+                  <tbody className="divide-y divide-[#E5E5EA] bg-white">
                     {filteredTreasuryReceipts.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="py-8 text-center text-[#848E9C] italic font-normal">
+                        <td colSpan={6} className="py-8 text-center text-[#6C6C70] italic font-normal">
                           No treasury receipts match your search query.
                         </td>
                       </tr>
                     ) : (
                       filteredTreasuryReceipts.map((receipt) => (
-                        <tr key={receipt.id} className="hover:bg-[#1E2329] transition-colors">
-                          <td className="py-2.5 px-3 font-semibold text-[#EAECEF] whitespace-nowrap">
+                        <tr key={receipt.id} className="hover:bg-[#F8F9FA] transition-colors">
+                          <td className="py-2.5 px-3 font-semibold text-[#1C1C1E] whitespace-nowrap">
                             {receipt.receiptNumber}
                           </td>
-                          <td className="py-2.5 px-3 text-[#848E9C]">
-                            <span className="font-mono font-medium text-[#EAECEF]">{receipt.accountNumber}</span>
-                            {receipt.ownerName && <p className="text-[11px] text-[#848E9C]">{receipt.ownerName}</p>}
+                          <td className="py-2.5 px-3 text-[#6C6C70]">
+                            <span className="font-mono font-medium text-[#1C1C1E]">{receipt.accountNumber}</span>
+                            {receipt.ownerName && <p className="text-[11px] text-[#6C6C70]">{receipt.ownerName}</p>}
                           </td>
-                          <td className="py-2.5 px-3 text-[#848E9C] whitespace-nowrap">
+                          <td className="py-2.5 px-3 text-[#6C6C70] whitespace-nowrap">
                             {receipt.datePaid}
                           </td>
-                          <td className="py-2.5 px-3 text-[#EAECEF] whitespace-nowrap">
+                          <td className="py-2.5 px-3 text-[#1C1C1E] whitespace-nowrap">
                             {receipt.paymentMethod}
                           </td>
-                          <td className="py-2.5 px-3 text-right font-semibold text-[#0ECB81] whitespace-nowrap tabular-nums">
+                          <td className="py-2.5 px-3 text-right font-semibold text-[#34C759] whitespace-nowrap tabular-nums">
                             {receipt.amountFormatted}
                           </td>
-                          <td className="py-2.5 px-3 text-center font-medium text-[#0ECB81] whitespace-nowrap">
+                          <td className="py-2.5 px-3 text-center font-medium text-[#34C759] whitespace-nowrap">
                             &bull; Reconciled
                           </td>
                         </tr>
@@ -2244,38 +2244,38 @@ export default function AdminDashboardPage() {
                   </tbody>
                 </table>
 
-                {/* Mobile Treasury Google Material List Tiles (< 768px) */}
-                <div className="block md:hidden divide-y divide-[#2B3139] bg-[#1E2329]">
+                {/* Mobile Treasury List (< 768px) */}
+                <div className="block md:hidden divide-y divide-[#E5E5EA] bg-white">
                   {filteredTreasuryReceipts.length === 0 ? (
-                    <div className="py-8 text-center text-[#848E9C] italic font-normal text-xs px-4">
+                    <div className="py-8 text-center text-[#6C6C70] italic font-normal text-xs px-4">
                       No treasury receipts match your search query.
                     </div>
                   ) : (
                     filteredTreasuryReceipts.map((receipt) => (
                       <div
                         key={`mobile-receipt-${receipt.id}`}
-                        className="px-3.5 py-3 flex items-center justify-between gap-2.5 hover:bg-[#1E2329] transition-colors"
+                        className="px-3.5 py-3 flex items-center justify-between gap-2.5 hover:bg-[#F8F9FA] transition-colors"
                       >
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
-                            <span className="font-semibold text-xs text-[#EAECEF] font-mono">
+                            <span className="font-semibold text-xs text-[#1C1C1E] font-mono">
                               {receipt.receiptNumber}
                             </span>
-                            <span className="text-[11px] font-semibold text-[#0ECB81]">
+                            <span className="text-[11px] font-semibold text-[#34C759]">
                               &bull; Reconciled
                             </span>
                           </div>
-                          <div className="text-[11px] text-[#848E9C] truncate mt-0.5">
-                            <span className="font-mono text-[#848E9C]">{receipt.accountNumber}</span>
+                          <div className="text-[11px] text-[#6C6C70] truncate mt-0.5">
+                            <span className="font-mono text-[#6C6C70]">{receipt.accountNumber}</span>
                             {receipt.ownerName && <span className="ml-1.5">&bull; {receipt.ownerName}</span>}
                           </div>
                         </div>
 
                         <div className="text-right shrink-0">
-                          <span className="text-xs font-bold text-[#0ECB81] tabular-nums block">
+                          <span className="text-xs font-bold text-[#34C759] tabular-nums block">
                             {receipt.amountFormatted}
                           </span>
-                          <span className="text-[10px] text-[#848E9C] block mt-0.5">
+                          <span className="text-[10px] text-[#6C6C70] block mt-0.5">
                             {receipt.paymentMethod} &bull; {receipt.datePaid}
                           </span>
                         </div>
@@ -2286,7 +2286,7 @@ export default function AdminDashboardPage() {
               </div>
 
               {/* Treasury Status Bar */}
-              <div className="px-4 py-2 border-t border-[#2B3139] bg-[#1E2329] flex items-center justify-between text-xs text-[#848E9C] shrink-0">
+              <div className="px-4 py-2 border-t border-[#E5E5EA] bg-white flex items-center justify-between text-xs text-[#6C6C70] shrink-0">
                 <span>Value Book &amp; GCR Reconciled Ledger</span>
                 <span>{filteredTreasuryReceipts.length} entries shown</span>
               </div>
@@ -2295,17 +2295,17 @@ export default function AdminDashboardPage() {
 
           {/* TAB: SYSTEM AUDIT TRAIL */}
           {activeTab === "AUDIT_LOGS" && (
-            <section className="flex-1 flex flex-col min-h-0 bg-[#1E2329] border-b border-[#2B3139] lg:border lg:border-[#2B3139] rounded-none lg:rounded-xl shadow-none lg:shadow-xs overflow-hidden w-full">
+            <section className="apple-card flex-1 flex flex-col min-h-0 overflow-hidden w-full rounded-none lg:rounded-2xl shadow-none border-[#E5E5EA]">
               {/* Audit Header Bar */}
-              <div className="px-4 lg:px-6 py-3.5 sm:py-4 border-b border-[#2B3139] flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 shrink-0 bg-[#1E2329]">
+              <div className="px-4 lg:px-6 py-3.5 sm:py-4 border-b border-[#E5E5EA] flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 shrink-0 bg-white">
                 <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="text-base font-bold text-[#EAECEF] tracking-tight">
+                    <h2 className="text-base font-semibold text-[#1C1C1E] tracking-tight">
                       Municipal Revenue Directorate — Master Audit Trail
                     </h2>
-                    <span className="text-xs text-[#0ECB81] font-medium">&bull; Immutable Ledger</span>
+                    <span className="text-xs text-[#34C759] font-medium">&bull; Immutable Ledger</span>
                   </div>
-                  <p className="text-xs text-[#848E9C] mt-0.5">
+                  <p className="text-xs text-[#6C6C70] mt-0.5">
                     Chronological audit event logs for manual settlements, rate revisions, SMS bill rollouts, and assembly administrative overrides under Act 936.
                   </p>
                 </div>
@@ -2314,7 +2314,7 @@ export default function AdminDashboardPage() {
                     type="button"
                     onClick={() => loadAuditLogs(auditLogSearchQuery, auditLogActionFilter, 1)}
                     disabled={isLoadingAuditLogs}
-                    className="btn-3d-secondary h-8 px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    className="apple-btn-secondary h-8 px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 cursor-pointer disabled:opacity-50 text-[#1C1C1E] border-[#E5E5EA]"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 ${isLoadingAuditLogs ? "animate-spin" : ""}`} />
                     <span>Refresh</span>
@@ -2322,7 +2322,7 @@ export default function AdminDashboardPage() {
                   <button
                     type="button"
                     onClick={handleExportAuditLogsCsv}
-                    className="btn-3d-secondary h-8 px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 cursor-pointer text-[#FCD535] border-[#FCD535]/30"
+                    className="apple-btn-secondary h-8 px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 cursor-pointer text-[#007AFF] border-[#007AFF]/20 hover:bg-[#007AFF]/5 transition-colors"
                   >
                     <Download className="w-3.5 h-3.5" />
                     <span>Export Audit Log (CSV)</span>
@@ -2331,10 +2331,10 @@ export default function AdminDashboardPage() {
               </div>
 
               {/* Filter Toolbar */}
-              <div className="px-4 lg:px-6 py-2.5 bg-[#1E2329] border-b border-[#2B3139] flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 shrink-0">
+              <div className="px-4 lg:px-6 py-2.5 bg-white border-b border-[#E5E5EA] flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 shrink-0">
                 <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 sm:gap-3 w-full lg:flex-1">
                   <div className="relative flex-1 w-full sm:w-auto max-w-none sm:max-w-md">
-                    <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-[#848E9C]" />
+                    <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-[#8E8E93]" />
                     <input
                       type="text"
                       inputMode="search"
@@ -2353,13 +2353,13 @@ export default function AdminDashboardPage() {
                       onKeyDown={(e) => {
                         if (e.key === "Escape") handleClearAuditLogSearch();
                       }}
-                      className="w-full pl-8 pr-8 py-1.5 bg-[#1E2329] border border-[#2B3139] rounded-lg text-xs text-[#EAECEF] focus:outline-none focus:border-[#FCD535]"
+                      className="w-full pl-8 pr-8 py-1.5 bg-[#F2F2F7] border border-[#E5E5EA] rounded-lg text-xs text-[#1C1C1E] placeholder:text-[#8E8E93] focus:outline-none focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] focus:bg-white transition-colors"
                     />
                     {auditLogSearchQuery && (
                       <button
                         type="button"
                         onClick={handleClearAuditLogSearch}
-                        className="absolute right-2.5 top-2 text-[#848E9C] hover:text-[#EAECEF] p-0.5 cursor-pointer"
+                        className="absolute right-2.5 top-2 text-[#8E8E93] hover:text-[#1C1C1E] p-0.5 cursor-pointer"
                         title="Clear search"
                       >
                         <X className="w-3.5 h-3.5" />
@@ -2375,7 +2375,7 @@ export default function AdminDashboardPage() {
                       loadAuditLogs(auditLogSearchQuery, val, 1);
                     }}
                     aria-label="Filter audit logs by action"
-                    className="h-8 px-3 bg-[#1E2329] border border-[#2B3139] rounded-lg text-xs text-[#EAECEF] focus:outline-none focus:border-[#FCD535] cursor-pointer"
+                    className="h-8 px-3 bg-[#F2F2F7] border border-[#E5E5EA] rounded-lg text-xs text-[#1C1C1E] focus:outline-none focus:border-[#007AFF] cursor-pointer transition-colors"
                   >
                     <option value="ALL">All Recorded Actions</option>
                     <option value="RECORD_PAYMENT">Cash Settlements (RECORD_PAYMENT)</option>
@@ -2391,13 +2391,13 @@ export default function AdminDashboardPage() {
                   <button
                     type="button"
                     onClick={handleExportAuditLogsCsv}
-                    className="btn-3d-secondary h-8 px-3 rounded-lg font-medium text-xs flex items-center gap-1.5 cursor-pointer shrink-0 text-[#FCD535] border-[#FCD535]/30"
+                    className="apple-btn-secondary h-8 px-3 rounded-lg font-medium text-xs flex items-center gap-1.5 cursor-pointer shrink-0 text-[#007AFF] border-[#007AFF]/20 hover:bg-[#007AFF]/5 transition-colors"
                     title="Export System Audit Trail CSV"
                   >
                     <Download className="w-3.5 h-3.5" />
                     <span>Export Audit Logs CSV</span>
                   </button>
-                  <div className="text-xs text-[#848E9C] font-medium">
+                  <div className="text-xs text-[#6C6C70] font-medium">
                     {auditLogsTotal} event{auditLogsTotal === 1 ? "" : "s"} logged
                   </div>
                 </div>
@@ -2410,23 +2410,23 @@ export default function AdminDashboardPage() {
               >
                 {/* Desktop Audit Trail Table (>= 768px) */}
                 <table className="hidden md:table table-fixed w-full text-left text-xs border-collapse">
-                  <thead className="bg-[#1E2329] border-b border-[#2B3139] text-[#848E9C] font-semibold text-[11px] sticky top-0 z-10 shadow-xs">
+                  <thead className="bg-[#F8F9FA] border-b border-[#E5E5EA] text-[#6C6C70] font-semibold text-[11px] sticky top-0 z-10">
                     <tr>
-                      <th className="py-2.5 px-3 w-[14%] bg-[#1E2329] whitespace-nowrap">Date &amp; Time</th>
-                      <th className="py-2.5 px-3 w-[19%] bg-[#1E2329] whitespace-nowrap">Administrative Action</th>
-                      <th className="py-2.5 px-3 w-[13%] bg-[#1E2329] whitespace-nowrap">Target Entity</th>
-                      <th className="py-2.5 px-3 w-[16%] bg-[#1E2329] whitespace-nowrap">Authorized Actor</th>
-                      <th className="py-2.5 px-3 w-[26%] bg-[#1E2329]">Audit Narrative &amp; Scope</th>
-                      <th className="py-2.5 px-3 w-[12%] text-right bg-[#1E2329] whitespace-nowrap">Tamper Status</th>
+                      <th className="py-2.5 px-3 w-[14%] bg-[#F8F9FA] whitespace-nowrap">Date &amp; Time</th>
+                      <th className="py-2.5 px-3 w-[19%] bg-[#F8F9FA] whitespace-nowrap">Administrative Action</th>
+                      <th className="py-2.5 px-3 w-[13%] bg-[#F8F9FA] whitespace-nowrap">Target Entity</th>
+                      <th className="py-2.5 px-3 w-[16%] bg-[#F8F9FA] whitespace-nowrap">Authorized Actor</th>
+                      <th className="py-2.5 px-3 w-[26%] bg-[#F8F9FA]">Audit Narrative &amp; Scope</th>
+                      <th className="py-2.5 px-3 w-[12%] text-right bg-[#F8F9FA] whitespace-nowrap">Tamper Status</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#2B3139] bg-[#1E2329] font-sans">
+                  <tbody className="divide-y divide-[#E5E5EA] bg-white font-sans">
                     {filteredAuditLogs.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="py-12 text-center text-[#848E9C]">
+                        <td colSpan={6} className="py-12 text-center text-[#6C6C70]">
                           {isLoadingAuditLogs ? (
                             <div className="flex justify-center items-center py-4">
-                              <Loader2 className="w-5 h-5 animate-spin text-[#FCD535]" />
+                              <Loader2 className="w-5 h-5 animate-spin text-[#007AFF]" />
                             </div>
                           ) : (
                             <span className="italic">No audit trail records found matching your filter.</span>
@@ -2435,38 +2435,38 @@ export default function AdminDashboardPage() {
                       </tr>
                     ) : (
                       filteredAuditLogs.map((log) => (
-                        <tr key={log.id} className="hover:bg-[#1E2329] transition-colors">
+                        <tr key={log.id} className="hover:bg-[#F8F9FA] transition-colors">
                           <td className="py-2.5 px-3 whitespace-nowrap">
-                            <span className="font-medium text-[#EAECEF]">{log.createdAtFormatted}</span>
-                            <span className="text-[11px] text-[#848E9C] block font-mono">{log.timeFormatted}</span>
+                            <span className="font-medium text-[#1C1C1E]">{log.createdAtFormatted}</span>
+                            <span className="text-[11px] text-[#6C6C70] block font-mono">{log.timeFormatted}</span>
                           </td>
                           <td className="py-2.5 px-3 whitespace-nowrap">
-                            <span className="flex items-center gap-1.5 font-medium text-[#EAECEF]">
+                            <span className="flex items-center gap-1.5 font-medium text-[#1C1C1E]">
                               <span
                                 className="w-2 h-2 rounded-full shrink-0"
                                 style={{ backgroundColor: log.actionBadgeColor }}
                               />
                               {log.actionLabel}
                             </span>
-                            <span className="text-[10px] text-[#848E9C] font-mono block pl-3.5">{log.action}</span>
+                            <span className="text-[10px] text-[#6C6C70] font-mono block pl-3.5">{log.action}</span>
                           </td>
-                          <td className="py-2.5 px-3 whitespace-nowrap text-[#848E9C]">
-                            <span className="font-medium text-[#EAECEF]">{log.entityType}</span>
+                          <td className="py-2.5 px-3 whitespace-nowrap text-[#6C6C70]">
+                            <span className="font-medium text-[#1C1C1E]">{log.entityType}</span>
                             {log.entityId && (
-                              <span className="text-[11px] text-[#848E9C] font-mono block truncate max-w-[120px]">
+                              <span className="text-[11px] text-[#6C6C70] font-mono block truncate max-w-[120px]">
                                 #{log.entityId}
                               </span>
                             )}
                           </td>
                           <td className="py-2.5 px-3 whitespace-nowrap">
-                            <span className="font-semibold text-[#EAECEF]">{log.adminName}</span>
-                            <span className="text-[11px] text-[#848E9C] block">{log.adminRole}</span>
+                            <span className="font-semibold text-[#1C1C1E]">{log.adminName}</span>
+                            <span className="text-[11px] text-[#6C6C70] block">{log.adminRole}</span>
                           </td>
-                          <td className="py-2.5 px-3 text-[#EAECEF] leading-relaxed break-words">
+                          <td className="py-2.5 px-3 text-[#1C1C1E] leading-relaxed break-words">
                             {log.details}
                           </td>
                           <td className="py-2.5 px-3 text-right whitespace-nowrap">
-                            <span className="text-[11px] font-medium text-[#0ECB81]">
+                            <span className="text-[11px] font-medium text-[#34C759]">
                               &bull; Verified Immutable
                             </span>
                           </td>
@@ -2477,12 +2477,12 @@ export default function AdminDashboardPage() {
                 </table>
 
                 {/* Mobile Audit Trail Cards (< 768px) */}
-                <div className="block md:hidden divide-y divide-[#2B3139] bg-[#1E2329] font-sans">
+                <div className="block md:hidden divide-y divide-[#E5E5EA] bg-white font-sans">
                   {filteredAuditLogs.length === 0 ? (
-                    <div className="py-12 text-center text-[#848E9C] text-xs px-4">
+                    <div className="py-12 text-center text-[#6C6C70] text-xs px-4">
                       {isLoadingAuditLogs ? (
                         <div className="flex justify-center items-center py-4">
-                          <Loader2 className="w-5 h-5 animate-spin text-[#FCD535]" />
+                          <Loader2 className="w-5 h-5 animate-spin text-[#007AFF]" />
                         </div>
                       ) : (
                         <span className="italic">No audit trail records found matching your filter.</span>
@@ -2492,29 +2492,29 @@ export default function AdminDashboardPage() {
                     filteredAuditLogs.map((log) => (
                       <div
                         key={`mobile-audit-${log.id}`}
-                        className="p-3.5 space-y-2 hover:bg-[#1E2329] transition-colors"
+                        className="p-3.5 space-y-2 hover:bg-[#F8F9FA] transition-colors"
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <span className="flex items-center gap-1.5 font-medium text-xs text-[#EAECEF]">
+                          <span className="flex items-center gap-1.5 font-medium text-xs text-[#1C1C1E]">
                             <span
                               className="w-2 h-2 rounded-full shrink-0"
                               style={{ backgroundColor: log.actionBadgeColor }}
                             />
                             {log.actionLabel}
                           </span>
-                          <span className="text-[11px] font-medium text-[#0ECB81]">
+                          <span className="text-[11px] font-medium text-[#34C759]">
                             &bull; Immutable
                           </span>
                         </div>
 
-                        <div className="text-xs text-[#EAECEF] leading-relaxed break-words">
+                        <div className="text-xs text-[#1C1C1E] leading-relaxed break-words">
                           {log.details}
                         </div>
 
-                        <div className="pt-1.5 border-t border-[#2B3139] flex items-center justify-between text-[11px] text-[#848E9C]">
+                        <div className="pt-1.5 border-t border-[#E5E5EA] flex items-center justify-between text-[11px] text-[#6C6C70]">
                           <div>
-                            <span className="font-semibold text-[#EAECEF]">{log.adminName}</span>
-                            <span className="text-[#848E9C] ml-1">({log.adminRole})</span>
+                            <span className="font-semibold text-[#1C1C1E]">{log.adminName}</span>
+                            <span className="text-[#6C6C70] ml-1">({log.adminRole})</span>
                           </div>
                           <span className="font-mono text-[10px]">
                             {log.createdAtFormatted} {log.timeFormatted}
@@ -2527,7 +2527,7 @@ export default function AdminDashboardPage() {
               </div>
 
               {/* Status Bar */}
-              <div className="px-4 py-2 border-t border-[#2B3139] bg-[#1E2329] flex items-center justify-between text-xs text-[#848E9C] shrink-0">
+              <div className="px-4 py-2 border-t border-[#E5E5EA] bg-white flex items-center justify-between text-xs text-[#6C6C70] shrink-0">
                 <span>Local Governance Act, 2016 (Act 936) &bull; Official Treasury Audit Log</span>
                 <span>{auditLogs.length} of {auditLogsTotal} records shown</span>
               </div>
@@ -2541,7 +2541,7 @@ export default function AdminDashboardPage() {
         </main>
 
         {/* Static Grounded Footer */}
-        <footer className="shrink-0 h-8 bg-[#1E2329] border-t border-[#2B3139] px-6 hidden lg:flex items-center justify-between text-[11px] text-[#848E9C] font-sans">
+        <footer className="shrink-0 h-8 bg-white/80 backdrop-blur-md border-t border-[#E5E5EA] px-6 hidden lg:flex items-center justify-between text-[11px] text-[#8E8E93] font-sans">
           <span>Kpone-Katamanso Municipal Assembly (KKMA) &bull; Revenue Administration Platform</span>
           <span>Local Governance Act, 2016 (Act 936)</span>
         </footer>
@@ -2556,7 +2556,7 @@ export default function AdminDashboardPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/35"
+              className="fixed inset-0 bg-black/30 backdrop-blur-xs"
               onClick={() => setSelectedAccount(null)}
             />
 
@@ -2565,26 +2565,26 @@ export default function AdminDashboardPage() {
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 280 }}
-              className="relative z-10 w-full max-w-lg bg-[#1E2329] h-full shadow-2xl flex flex-col border-l border-[#2B3139] font-sans"
+              className="relative z-10 w-full max-w-lg bg-white/95 backdrop-blur-2xl h-full shadow-2xl flex flex-col border-l border-[#E5E5EA] font-sans"
             >
-              <div className="px-6 py-4 border-b border-[#2B3139] flex items-center justify-between shrink-0 bg-[#1E2329]">
+              <div className="px-6 py-4 border-b border-[#E5E5EA] flex items-center justify-between shrink-0 bg-white/80 backdrop-blur-md">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[11px] text-[#848E9C] font-semibold uppercase tracking-wider">
+                    <span className="text-[11px] text-[#8E8E93] font-semibold uppercase tracking-wider">
                       Property Assessment Dossier
                     </span>
                     <span
                       className={`text-[11px] font-semibold ${selectedAccount.status === "PAID"
-                          ? "text-[#0ECB81]"
+                          ? "text-[#34C759]"
                           : selectedAccount.status === "PARTIALLY_PAID"
-                            ? "text-[#FCD535]"
-                            : "text-[#F6465D]"
+                            ? "text-[#FF9500]"
+                            : "text-[#FF3B30]"
                         }`}
                     >
                       &bull; {selectedAccount.status === "PAID" ? "Settled" : selectedAccount.status === "PARTIALLY_PAID" ? "Partial" : "Unpaid Demand"}
                     </span>
                   </div>
-                  <h3 className="text-lg font-semibold text-[#EAECEF] mt-0.5">
+                  <h3 className="text-lg font-semibold text-[#1C1C1E] mt-0.5">
                     {selectedAccount.accountNumber}
                   </h3>
                 </div>
@@ -2592,98 +2592,98 @@ export default function AdminDashboardPage() {
                 <button
                   type="button"
                   onClick={() => setSelectedAccount(null)}
-                  className="p-1.5 rounded-lg text-[#848E9C] hover:text-[#EAECEF] transition-colors cursor-pointer"
+                  className="p-1.5 rounded-lg text-[#8E8E93] hover:text-[#1C1C1E] hover:bg-[#F2F2F7] transition-colors cursor-pointer"
                   aria-label="Close dossier"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6 text-xs divide-y divide-[#2B3139]">
+              <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6 text-xs divide-y divide-[#E5E5EA]">
                 <div className="space-y-3">
-                  <h4 className="text-xs font-semibold text-[#EAECEF] uppercase tracking-wider">
+                  <h4 className="text-xs font-semibold text-[#1C1C1E] uppercase tracking-wider">
                     Ratepayer &amp; Cadastre Location
                   </h4>
                   <dl className="grid grid-cols-2 gap-y-3 gap-x-4 text-xs">
                     <div>
-                      <dt className="text-[#848E9C]">Account Head (Owner)</dt>
-                      <dd className="font-medium text-[#EAECEF] mt-0.5">{selectedAccount.ownerName}</dd>
+                      <dt className="text-[#6C6C70]">Account Head (Owner)</dt>
+                      <dd className="font-medium text-[#1C1C1E] mt-0.5">{selectedAccount.ownerName}</dd>
                     </div>
                     <div>
-                      <dt className="text-[#848E9C]">Telephone No.</dt>
-                      <dd className="font-medium text-[#EAECEF] mt-0.5">{selectedAccount.ownerPhone}</dd>
+                      <dt className="text-[#6C6C70]">Telephone No.</dt>
+                      <dd className="font-medium text-[#1C1C1E] mt-0.5">{selectedAccount.ownerPhone}</dd>
                     </div>
                     <div>
-                      <dt className="text-[#848E9C]">GhanaPost GPS Code</dt>
-                      <dd className="font-mono font-medium text-[#EAECEF] mt-0.5">{selectedAccount.ownerDigitalAddress}</dd>
+                      <dt className="text-[#6C6C70]">GhanaPost GPS Code</dt>
+                      <dd className="font-mono font-medium text-[#1C1C1E] mt-0.5">{selectedAccount.ownerDigitalAddress}</dd>
                     </div>
                     <div>
-                      <dt className="text-[#848E9C]">Assembly (MMDA)</dt>
-                      <dd className="font-medium text-[#EAECEF] mt-0.5">{selectedAccount.municipality}</dd>
+                      <dt className="text-[#6C6C70]">Assembly (MMDA)</dt>
+                      <dd className="font-medium text-[#1C1C1E] mt-0.5">{selectedAccount.municipality}</dd>
                     </div>
                     <div className="col-span-2">
-                      <dt className="text-[#848E9C]">Zoning Classification</dt>
-                      <dd className="font-medium text-[#EAECEF] mt-0.5">{selectedAccount.propertyClassification}</dd>
+                      <dt className="text-[#6C6C70]">Zoning Classification</dt>
+                      <dd className="font-medium text-[#1C1C1E] mt-0.5">{selectedAccount.propertyClassification}</dd>
                     </div>
                   </dl>
                 </div>
 
                 <div className="pt-5 space-y-3">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-semibold text-[#EAECEF] uppercase tracking-wider">
+                    <h4 className="text-xs font-semibold text-[#1C1C1E] uppercase tracking-wider">
                       Valuation &amp; Statement of Account
                     </h4>
-                    <span className="text-xs text-[#848E9C]">FY {selectedAccount.billYear}</span>
+                    <span className="text-xs text-[#6C6C70]">FY {selectedAccount.billYear}</span>
                   </div>
 
                   <dl className="space-y-2 text-xs">
-                    <div className="flex justify-between py-1 border-b border-[#2B3139]">
-                      <dt className="text-[#848E9C]">Rateable Valuation Roll</dt>
-                      <dd className="font-medium text-[#EAECEF] whitespace-nowrap tabular-nums">{selectedAccount.rateableValueFormatted}</dd>
+                    <div className="flex justify-between py-1 border-b border-[#E5E5EA]">
+                      <dt className="text-[#6C6C70]">Rateable Valuation Roll</dt>
+                      <dd className="font-medium text-[#1C1C1E] whitespace-nowrap tabular-nums">{selectedAccount.rateableValueFormatted}</dd>
                     </div>
-                    <div className="flex justify-between py-1 border-b border-[#2B3139]">
-                      <dt className="text-[#848E9C]">Rate Imposed</dt>
-                      <dd className="text-[#EAECEF] whitespace-nowrap tabular-nums">{selectedAccount.rateImposed}</dd>
+                    <div className="flex justify-between py-1 border-b border-[#E5E5EA]">
+                      <dt className="text-[#6C6C70]">Rate Imposed</dt>
+                      <dd className="text-[#1C1C1E] whitespace-nowrap tabular-nums">{selectedAccount.rateImposed}</dd>
                     </div>
-                    <div className="flex justify-between py-1 border-b border-[#2B3139]">
-                      <dt className="text-[#848E9C]">Previous Year Assessment</dt>
-                      <dd className="text-[#EAECEF] whitespace-nowrap tabular-nums">{selectedAccount.previousYearBillFormatted}</dd>
+                    <div className="flex justify-between py-1 border-b border-[#E5E5EA]">
+                      <dt className="text-[#6C6C70]">Previous Year Assessment</dt>
+                      <dd className="text-[#1C1C1E] whitespace-nowrap tabular-nums">{selectedAccount.previousYearBillFormatted}</dd>
                     </div>
-                    <div className="flex justify-between py-1 border-b border-[#2B3139]">
-                      <dt className="text-[#848E9C]">Carried Cumulative Arrears</dt>
-                      <dd className={`font-medium whitespace-nowrap tabular-nums ${selectedAccount.arrears > 0 ? "text-[#F6465D]" : "text-[#EAECEF]"}`}>
+                    <div className="flex justify-between py-1 border-b border-[#E5E5EA]">
+                      <dt className="text-[#6C6C70]">Carried Cumulative Arrears</dt>
+                      <dd className={`font-medium whitespace-nowrap tabular-nums ${selectedAccount.arrears > 0 ? "text-[#FF3B30]" : "text-[#1C1C1E]"}`}>
                         {selectedAccount.arrearsFormatted}
                       </dd>
                     </div>
-                    <div className="flex justify-between py-1 border-b border-[#2B3139]">
-                      <dt className="text-[#848E9C]">2025 Current Rate Assessment</dt>
-                      <dd className="font-medium text-[#EAECEF] whitespace-nowrap tabular-nums">{selectedAccount.currentFeeFormatted}</dd>
+                    <div className="flex justify-between py-1 border-b border-[#E5E5EA]">
+                      <dt className="text-[#6C6C70]">2025 Current Rate Assessment</dt>
+                      <dd className="font-medium text-[#1C1C1E] whitespace-nowrap tabular-nums">{selectedAccount.currentFeeFormatted}</dd>
                     </div>
                     <div className="flex justify-between pt-2 text-sm font-semibold">
-                      <dt className="text-[#EAECEF]">Total Amount Due</dt>
-                      <dd className="text-[#EAECEF] whitespace-nowrap tabular-nums">{selectedAccount.totalAmountDueFormatted}</dd>
+                      <dt className="text-[#1C1C1E]">Total Amount Due</dt>
+                      <dd className="text-[#1C1C1E] whitespace-nowrap tabular-nums">{selectedAccount.totalAmountDueFormatted}</dd>
                     </div>
                   </dl>
                 </div>
 
                 <div className="pt-5 space-y-3">
-                  <h4 className="text-xs font-semibold text-[#EAECEF] uppercase tracking-wider">
+                  <h4 className="text-xs font-semibold text-[#1C1C1E] uppercase tracking-wider">
                     GCR Receipt Trail ({selectedAccount.receipts.length})
                   </h4>
                   {selectedAccount.receipts.length === 0 ? (
-                    <p className="text-[#848E9C] text-xs py-2 italic">No payments recorded for this assessment cycle.</p>
+                    <p className="text-[#6C6C70] text-xs py-2 italic">No payments recorded for this assessment cycle.</p>
                   ) : (
                     <div className="space-y-2">
                       {selectedAccount.receipts.map((r) => (
                         <div
                           key={r.id}
-                          className="p-3 rounded-lg bg-[#1E2329] border border-[#2B3139] flex items-center justify-between text-xs"
+                          className="p-3 rounded-xl bg-[#F8F9FA] border border-[#E5E5EA] flex items-center justify-between text-xs"
                         >
                           <div>
-                            <p className="font-semibold text-[#EAECEF]">{r.receiptNumber}</p>
-                            <p className="text-[#848E9C] text-[11px] mt-0.5">{r.paymentMethod} &bull; {r.datePaid}</p>
+                            <p className="font-semibold text-[#1C1C1E]">{r.receiptNumber}</p>
+                            <p className="text-[#6C6C70] text-[11px] mt-0.5">{r.paymentMethod} &bull; {r.datePaid}</p>
                           </div>
-                          <span className="font-semibold text-[#0ECB81]">{r.amountFormatted}</span>
+                          <span className="font-semibold text-[#34C759]">{r.amountFormatted}</span>
                         </div>
                       ))}
                     </div>
@@ -2691,11 +2691,11 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
 
-              <div className="px-6 py-3.5 border-t border-[#2B3139] bg-[#1E2329] flex items-center justify-between gap-2 shrink-0">
+              <div className="px-6 py-3.5 border-t border-[#E5E5EA] bg-white flex items-center justify-between gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => setShowPaymentModal(true)}
-                  className="btn-3d-secondary h-9 px-3.5 rounded-lg font-medium text-xs cursor-pointer"
+                  className="apple-btn-secondary h-9 px-3.5 rounded-lg font-medium text-xs cursor-pointer text-[#1C1C1E] border-[#E5E5EA]"
                 >
                   Record Counter Payment
                 </button>
@@ -2710,7 +2710,7 @@ export default function AdminDashboardPage() {
                       setShowSmsAuthModal(true);
                     }}
                     disabled={isProcessing}
-                    className="btn-3d-primary h-9 px-3.5 rounded-lg font-medium text-xs flex items-center gap-1.5 cursor-pointer"
+                    className="apple-btn-primary h-9 px-3.5 rounded-lg font-medium text-xs flex items-center gap-1.5 cursor-pointer bg-[#007AFF] text-white hover:bg-[#0062CC]"
                   >
                     <Send className="w-3.5 h-3.5" />
                     <span>Send SMS Notice</span>
@@ -2753,7 +2753,7 @@ export default function AdminDashboardPage() {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
               onClick={() => setShowBatchModal(false)}
-              className="fixed inset-0 bg-black/50 backdrop-blur-xs"
+              className="fixed inset-0 bg-black/30 backdrop-blur-xs"
             />
 
             {/* Bottom-to-Top Sliding Modal Sheet */}
@@ -2762,9 +2762,9 @@ export default function AdminDashboardPage() {
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: "100%", opacity: 0 }}
               transition={{ type: "spring", damping: 28, stiffness: 300 }}
-              className="relative z-10 bg-[#1E2329] rounded-t-2xl sm:rounded-2xl border-t sm:border border-[#2B3139] shadow-2xl p-4 sm:p-6 max-w-md w-full font-sans max-h-[92vh] sm:max-h-[90vh] overflow-y-auto"
+              className="relative z-10 bg-white/95 backdrop-blur-2xl rounded-t-2xl sm:rounded-2xl border-t sm:border border-[#E5E5EA] shadow-2xl p-4 sm:p-6 max-w-md w-full font-sans max-h-[92vh] sm:max-h-[90vh] overflow-y-auto"
             >
-              <div className="w-10 h-1 bg-[#2B3139] rounded-full mx-auto mb-3 sm:hidden shrink-0" />
+              <div className="w-10 h-1 bg-[#D1D1D6] rounded-full mx-auto mb-3 sm:hidden shrink-0" />
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -2779,81 +2779,81 @@ export default function AdminDashboardPage() {
                 {/* Anti-autofill Decoy Honeypot */}
                 <input type="text" name="prevent_autofill_user" tabIndex={-1} aria-hidden="true" style={{ position: "absolute", top: -9999, left: -9999, opacity: 0, height: 0, width: 0, pointerEvents: "none" }} />
                 <input type="password" name="prevent_autofill_pass" tabIndex={-1} aria-hidden="true" style={{ position: "absolute", top: -9999, left: -9999, opacity: 0, height: 0, width: 0, pointerEvents: "none" }} />
-                <div className="flex items-center justify-between pb-3 border-b border-[#2B3139]">
+                <div className="flex items-center justify-between pb-3 border-b border-[#E5E5EA]">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-[#181A20] text-[#FCD535] flex items-center justify-center">
+                    <div className="w-8 h-8 rounded-lg bg-[#007AFF]/10 text-[#007AFF] flex items-center justify-center">
                       <RefreshCw className="w-4 h-4" />
                     </div>
                     <div>
-                      <h3 className="text-sm font-semibold text-[#EAECEF]">
+                      <h3 className="text-sm font-semibold text-[#1C1C1E]">
                         Annual Batch Billing Rollout
                       </h3>
-                      <p className="text-xs text-[#848E9C]">Statutory Assessment Cycle</p>
+                      <p className="text-xs text-[#6C6C70]">Statutory Assessment Cycle</p>
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={() => setShowBatchModal(false)}
-                    className="text-[#848E9C] hover:text-[#EAECEF] p-1 rounded-lg cursor-pointer"
+                    className="text-[#8E8E93] hover:text-[#1C1C1E] hover:bg-[#F2F2F7] p-1 rounded-lg cursor-pointer transition-colors"
                     aria-label="Close modal"
                   >
                     <X className="w-4 h-4" />
                   </button>
                 </div>
 
-                <div className="p-3.5 rounded-xl bg-[#181A20] text-xs text-[#EAECEF] space-y-2">
-                  <p className="font-semibold text-[#FCD535]">
+                <div className="p-3.5 rounded-xl bg-[#F8F9FA] border border-[#E5E5EA] text-xs text-[#1C1C1E] space-y-2">
+                  <p className="font-semibold text-[#007AFF]">
                     Execute Annual Rollout for {properties.length} Properties
                   </p>
                   <div className="space-y-3 pt-2">
                     <div className="space-y-1">
-                      <label className="text-[#848E9C] font-medium block">Residential Rate Factor</label>
+                      <label className="text-[#6C6C70] font-medium block">Residential Rate Factor</label>
                       <input
                         type="number"
                         step="0.001"
                         value={residentialRate}
                         onChange={(e) => setResidentialRate(e.target.value)}
                         aria-label="Residential Rate Factor"
-                        className="w-full h-9 px-3 rounded-md border border-[#2B3139] text-xs focus:outline-none focus:border-[#FCD535]"
+                        className="w-full h-9 px-3 rounded-lg border border-[#E5E5EA] bg-white text-xs text-[#1C1C1E] focus:outline-none focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] transition-colors"
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[#848E9C] font-medium block">Commercial Rate Factor</label>
+                      <label className="text-[#6C6C70] font-medium block">Commercial Rate Factor</label>
                       <input
                         type="number"
                         step="0.001"
                         value={commercialRate}
                         onChange={(e) => setCommercialRate(e.target.value)}
                         aria-label="Commercial Rate Factor"
-                        className="w-full h-9 px-3 rounded-md border border-[#2B3139] text-xs focus:outline-none focus:border-[#FCD535]"
+                        className="w-full h-9 px-3 rounded-lg border border-[#E5E5EA] bg-white text-xs text-[#1C1C1E] focus:outline-none focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] transition-colors"
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[#848E9C] font-medium block">Statutory Due Date</label>
+                      <label className="text-[#6C6C70] font-medium block">Statutory Due Date</label>
                       <input
                         type="text"
                         value={dueDate}
                         onChange={(e) => setDueDate(e.target.value)}
                         aria-label="Statutory Due Date"
-                        className="w-full h-9 px-3 rounded-md border border-[#2B3139] text-xs focus:outline-none focus:border-[#FCD535]"
+                        className="w-full h-9 px-3 rounded-lg border border-[#E5E5EA] bg-white text-xs text-[#1C1C1E] focus:outline-none focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] transition-colors"
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[#848E9C] font-medium block">Dual-Link SMS Notice Template</label>
+                      <label className="text-[#6C6C70] font-medium block">Dual-Link SMS Notice Template</label>
                       <textarea
                         value={messageTemplate}
                         onChange={(e) => setMessageTemplate(e.target.value)}
                         aria-label="Dual-Link SMS Notice Template"
                         rows={4}
-                        className="w-full p-2.5 rounded-md border border-[#2B3139] text-xs focus:outline-none focus:border-[#FCD535] resize-none"
+                        className="w-full p-2.5 rounded-lg border border-[#E5E5EA] bg-white text-xs text-[#1C1C1E] focus:outline-none focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] resize-none transition-colors"
                       />
                     </div>
 
                     {/* Security Authorization Password */}
-                    <div className="space-y-1 pt-2 border-t border-[#E8D4E2]">
+                    <div className="space-y-1 pt-2 border-t border-[#E5E5EA]">
                       <div className="flex items-center gap-1.5">
-                        <ShieldCheck className="w-3.5 h-3.5 text-[#FCD535]" />
-                        <label className="text-[#FCD535] font-semibold text-xs block">Administrator Authorization Password *</label>
+                        <ShieldCheck className="w-3.5 h-3.5 text-[#007AFF]" />
+                        <label className="text-[#007AFF] font-semibold text-xs block">Administrator Authorization Password *</label>
                       </div>
                       <div className="relative">
                         <input
@@ -2867,12 +2867,12 @@ export default function AdminDashboardPage() {
                           onChange={(e) => setBatchAdminPassword(e.target.value)}
                           aria-label="Administrator Authorization Password"
                           placeholder="Enter admin password (e.g. admin123)"
-                          className="w-full h-9 px-3 pr-9 rounded-md border border-[#2B3139] bg-[#1E2329] text-xs text-[#EAECEF] focus:outline-none focus:border-[#FCD535] [&:-webkit-autofill]:shadow-[inset_0_0_0_1000px_white] [&:-webkit-autofill]:text-fill-[#2C2C2C]"
+                          className="w-full h-9 px-3 pr-9 rounded-lg border border-[#E5E5EA] bg-white text-xs text-[#1C1C1E] focus:outline-none focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] transition-colors"
                         />
                         <button
                           type="button"
                           onClick={() => setShowBatchPassword(!showBatchPassword)}
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#848E9C] hover:text-[#EAECEF] p-1 cursor-pointer"
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8E8E93] hover:text-[#1C1C1E] p-1 cursor-pointer"
                         >
                           {showBatchPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                         </button>
@@ -2881,12 +2881,12 @@ export default function AdminDashboardPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#2B3139]">
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#E5E5EA]">
                   <button
                     type="button"
                     onClick={() => setShowBatchModal(false)}
                     disabled={isProcessing}
-                    className="h-11 sm:h-9 px-3.5 rounded-lg border border-[#2B3139] text-[#EAECEF] font-medium text-xs cursor-pointer flex-1 sm:flex-none"
+                    className="apple-btn-secondary h-11 sm:h-9 px-3.5 rounded-lg text-[#1C1C1E] border-[#E5E5EA] font-medium text-xs cursor-pointer flex-1 sm:flex-none"
                   >
                     Cancel
                   </button>
@@ -2894,7 +2894,7 @@ export default function AdminDashboardPage() {
                   <button
                     type="submit"
                     disabled={isProcessing}
-                    className="btn-3d-primary h-11 sm:h-9 px-4 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 flex-1 sm:flex-none"
+                    className="apple-btn-primary h-11 sm:h-9 px-4 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 flex-1 sm:flex-none bg-[#007AFF] text-white hover:bg-[#0062CC]"
                   >
                     {isProcessing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
                     <span>Confirm &amp; Rollout Bills</span>
@@ -2917,7 +2917,7 @@ export default function AdminDashboardPage() {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
               onClick={() => setShowPaymentModal(false)}
-              className="fixed inset-0 bg-black/50 backdrop-blur-xs"
+              className="fixed inset-0 bg-black/30 backdrop-blur-xs"
             />
 
             {/* Bottom-to-Top Sliding Modal Sheet */}
@@ -2931,34 +2931,34 @@ export default function AdminDashboardPage() {
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: "100%", opacity: 0 }}
               transition={{ type: "spring", damping: 28, stiffness: 300 }}
-              className="relative z-10 bg-[#1E2329] rounded-t-2xl sm:rounded-xl border-t sm:border border-[#2B3139] shadow-xl p-4 sm:p-5 max-w-md w-full space-y-3.5 text-xs font-sans max-h-[92vh] sm:max-h-[90vh] overflow-y-auto"
+              className="relative z-10 bg-white/95 backdrop-blur-2xl rounded-t-2xl sm:rounded-2xl border-t sm:border border-[#E5E5EA] shadow-2xl p-4 sm:p-5 max-w-md w-full space-y-3.5 text-xs font-sans max-h-[92vh] sm:max-h-[90vh] overflow-y-auto"
             >
               {/* Anti-autofill Decoy Honeypot */}
               <input type="text" name="prevent_autofill_user" tabIndex={-1} aria-hidden="true" style={{ position: "absolute", top: -9999, left: -9999, opacity: 0, height: 0, width: 0, pointerEvents: "none" }} />
               <input type="password" name="prevent_autofill_pass" tabIndex={-1} aria-hidden="true" style={{ position: "absolute", top: -9999, left: -9999, opacity: 0, height: 0, width: 0, pointerEvents: "none" }} />
-              <div className="w-10 h-1 bg-[#2B3139] rounded-full mx-auto mb-2 sm:hidden shrink-0" />
-              <div className="flex items-center justify-between border-b border-[#2B3139] pb-2.5">
-                <h3 className="text-sm font-semibold text-[#EAECEF]">
+              <div className="w-10 h-1 bg-[#D1D1D6] rounded-full mx-auto mb-2 sm:hidden shrink-0" />
+              <div className="flex items-center justify-between border-b border-[#E5E5EA] pb-2.5">
+                <h3 className="text-sm font-semibold text-[#1C1C1E]">
                   Record Manual Assembly Payment
                 </h3>
                 <button
                   type="button"
                   onClick={() => setShowPaymentModal(false)}
                   disabled={isProcessing}
-                  className="text-[#848E9C] hover:text-[#EAECEF] p-1 cursor-pointer"
+                  className="text-[#8E8E93] hover:text-[#1C1C1E] hover:bg-[#F2F2F7] p-1 rounded-lg cursor-pointer transition-colors"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
               <div className="space-y-1">
-                <span className="text-[#848E9C]">Account Head</span>
-                <p className="font-semibold text-[#EAECEF]">{selectedAccount.accountNumber} ({selectedAccount.ownerName})</p>
-                <p className="text-[#848E9C]">Total Outstanding Due: {selectedAccount.totalAmountDueFormatted}</p>
+                <span className="text-[#6C6C70]">Account Head</span>
+                <p className="font-semibold text-[#1C1C1E]">{selectedAccount.accountNumber} ({selectedAccount.ownerName})</p>
+                <p className="text-[#6C6C70]">Total Outstanding Due: {selectedAccount.totalAmountDueFormatted}</p>
               </div>
 
               <div className="space-y-1">
-                <label className="text-[#848E9C] font-medium">Payment Amount (GH₵)</label>
+                <label className="text-[#6C6C70] font-medium">Payment Amount (GH₵)</label>
                 <input
                   type="number"
                   step="0.01"
@@ -2967,17 +2967,17 @@ export default function AdminDashboardPage() {
                   value={manualAmount}
                   onChange={(e) => setManualAmount(e.target.value)}
                   aria-label="Payment Amount in Ghanaian Cedi"
-                  className="w-full h-10 px-3 rounded-lg border border-[#2B3139] bg-[#1E2329] text-xs font-semibold text-[#EAECEF] focus:outline-none focus:border-[#FCD535]"
+                  className="w-full h-10 px-3 rounded-lg border border-[#E5E5EA] bg-white text-xs font-semibold text-[#1C1C1E] focus:outline-none focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] transition-colors"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-[#848E9C] font-medium">Payment Channel</label>
+                <label className="text-[#6C6C70] font-medium">Payment Channel</label>
                 <select
                   value={manualMethod}
                   onChange={(e) => setManualMethod(e.target.value)}
                   aria-label="Select Payment Channel"
-                  className="w-full h-10 px-3 rounded-lg border border-[#2B3139] bg-[#1E2329] text-xs text-[#EAECEF] focus:outline-none focus:border-[#FCD535]"
+                  className="w-full h-10 px-3 rounded-lg border border-[#E5E5EA] bg-white text-xs text-[#1C1C1E] focus:outline-none focus:border-[#007AFF] transition-colors"
                 >
                   <option>Counter Cash Treasury</option>
                   <option>Assembly Direct Cheque</option>
@@ -2987,10 +2987,10 @@ export default function AdminDashboardPage() {
               </div>
 
               {/* Security Authorization Password */}
-              <div className="space-y-1 pt-2 border-t border-[#2B3139]">
+              <div className="space-y-1 pt-2 border-t border-[#E5E5EA]">
                 <div className="flex items-center gap-1.5">
-                  <ShieldCheck className="w-3.5 h-3.5 text-[#FCD535]" />
-                  <label className="text-[#FCD535] font-semibold text-xs block">Administrator Authorization Password *</label>
+                  <ShieldCheck className="w-3.5 h-3.5 text-[#007AFF]" />
+                  <label className="text-[#007AFF] font-semibold text-xs block">Administrator Authorization Password *</label>
                 </div>
                 <div className="relative">
                   <input
@@ -3004,24 +3004,24 @@ export default function AdminDashboardPage() {
                     onChange={(e) => setPaymentAdminPassword(e.target.value)}
                     aria-label="Administrator Authorization Password"
                     placeholder="Enter admin password (e.g. admin123)"
-                    className="w-full h-10 px-3 pr-9 rounded-lg border border-[#2B3139] bg-[#1E2329] text-xs font-semibold text-[#EAECEF] focus:outline-none focus:border-[#FCD535] [&:-webkit-autofill]:shadow-[inset_0_0_0_1000px_white] [&:-webkit-autofill]:text-fill-[#2C2C2C]"
+                    className="w-full h-10 px-3 pr-9 rounded-lg border border-[#E5E5EA] bg-white text-xs font-semibold text-[#1C1C1E] focus:outline-none focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] transition-colors"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPaymentPassword(!showPaymentPassword)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#848E9C] hover:text-[#EAECEF] p-1 cursor-pointer"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8E8E93] hover:text-[#1C1C1E] p-1 cursor-pointer"
                   >
                     {showPaymentPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                   </button>
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#2B3139]">
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#E5E5EA]">
                 <button
                   type="button"
                   onClick={() => setShowPaymentModal(false)}
                   disabled={isProcessing}
-                  className="h-11 sm:h-9 px-3.5 rounded-lg border border-[#2B3139] text-[#EAECEF] font-medium transition-colors cursor-pointer flex-1 sm:flex-none"
+                  className="apple-btn-secondary h-11 sm:h-9 px-3.5 rounded-lg border-[#E5E5EA] text-[#1C1C1E] font-medium transition-colors cursor-pointer flex-1 sm:flex-none"
                 >
                   Cancel
                 </button>
@@ -3029,7 +3029,7 @@ export default function AdminDashboardPage() {
                 <button
                   type="submit"
                   disabled={isProcessing}
-                  className="btn-3d-primary h-11 sm:h-9 px-4 rounded-lg font-medium flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 flex-1 sm:flex-none"
+                  className="apple-btn-primary h-11 sm:h-9 px-4 rounded-lg font-medium flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 flex-1 sm:flex-none bg-[#007AFF] text-white hover:bg-[#0062CC]"
                 >
                   {isProcessing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
                   <span>Issue &amp; Reconcile GCR</span>
@@ -3040,7 +3040,7 @@ export default function AdminDashboardPage() {
         )}
       </AnimatePresence>
 
-      {/* Systematic Google-Style Notification Toast */}
+      {/* Systematic Notification Toast */}
       <AnimatePresence>
         {toast && (
           <motion.div
@@ -3048,26 +3048,26 @@ export default function AdminDashboardPage() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
-            className="fixed bottom-6 left-6 z-50 max-w-md w-[calc(100%-3rem)] bg-[#1E2329] text-[#EAECEF] px-4 py-3 rounded-lg shadow-2xl border border-[#2B3139] flex items-center justify-between gap-3 text-xs font-medium font-sans"
+            className="fixed bottom-6 left-6 z-50 max-w-md w-[calc(100%-3rem)] bg-white/95 backdrop-blur-xl text-[#1C1C1E] px-4 py-3 rounded-2xl shadow-xl border border-[#E5E5EA] flex items-center justify-between gap-3 text-xs font-medium font-sans"
             role="status"
           >
             <div className="flex items-center gap-2.5 min-w-0">
               {toast.type === "success" && (
-                <CheckCircle2 className="w-4 h-4 text-[#81C995] shrink-0" />
+                <CheckCircle2 className="w-4 h-4 text-[#34C759] shrink-0" />
               )}
               {toast.type === "error" && (
-                <AlertTriangle className="w-4 h-4 text-[#F28B82] shrink-0" />
+                <AlertTriangle className="w-4 h-4 text-[#FF3B30] shrink-0" />
               )}
               {toast.type === "info" && (
-                <Info className="w-4 h-4 text-[#8AB4F8] shrink-0" />
+                <Info className="w-4 h-4 text-[#007AFF] shrink-0" />
               )}
-              <span className="text-[#F3F4F4] leading-snug">{toast.message}</span>
+              <span className="text-[#1C1C1E] leading-snug">{toast.message}</span>
             </div>
 
             <button
               type="button"
               onClick={() => setToast(null)}
-              className="text-[#9AA0A6] hover:text-white p-1 rounded transition-colors shrink-0 cursor-pointer"
+              className="text-[#8E8E93] hover:text-[#1C1C1E] p-1 rounded-lg transition-colors shrink-0 cursor-pointer"
               aria-label="Dismiss notification"
             >
               <X className="w-3.5 h-3.5" />
@@ -3101,7 +3101,7 @@ export default function AdminDashboardPage() {
                 setSmsAuthPassword("");
                 setSmsAuthError(null);
               }}
-              className="fixed inset-0 bg-black/50 backdrop-blur-xs"
+              className="fixed inset-0 bg-black/30 backdrop-blur-xs"
             />
 
             {/* Bottom-to-Top Sliding Modal Sheet */}
@@ -3110,23 +3110,23 @@ export default function AdminDashboardPage() {
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: "100%", opacity: 0 }}
               transition={{ type: "spring", damping: 28, stiffness: 300 }}
-              className="relative z-10 bg-[#1E2329] rounded-t-2xl sm:rounded-2xl border-t sm:border border-[#2B3139] shadow-2xl p-4 sm:p-6 max-w-lg w-full space-y-4 max-h-[92vh] sm:max-h-[90vh] overflow-y-auto"
+              className="relative z-10 bg-white/95 backdrop-blur-2xl rounded-t-2xl sm:rounded-2xl border-t sm:border border-[#E5E5EA] shadow-2xl p-4 sm:p-6 max-w-lg w-full space-y-4 max-h-[92vh] sm:max-h-[90vh] overflow-y-auto"
             >
               {/* Anti-autofill Decoy Honeypot */}
               <input type="text" name="prevent_autofill_user" tabIndex={-1} aria-hidden="true" style={{ position: "absolute", top: -9999, left: -9999, opacity: 0, height: 0, width: 0, pointerEvents: "none" }} />
               <input type="password" name="prevent_autofill_pass" tabIndex={-1} aria-hidden="true" style={{ position: "absolute", top: -9999, left: -9999, opacity: 0, height: 0, width: 0, pointerEvents: "none" }} />
-              <div className="w-10 h-1 bg-[#2B3139] rounded-full mx-auto mb-2 sm:hidden shrink-0" />
+              <div className="w-10 h-1 bg-[#D1D1D6] rounded-full mx-auto mb-2 sm:hidden shrink-0" />
               {/* Header */}
-              <div className="flex items-center justify-between pb-3 border-b border-[#2B3139]">
+              <div className="flex items-center justify-between pb-3 border-b border-[#E5E5EA]">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-lg bg-[#181A20] text-[#FCD535] flex items-center justify-center">
-                    <ShieldCheck className="w-5 h-5 text-[#FCD535]" />
+                  <div className="w-9 h-9 rounded-lg bg-[#007AFF]/10 text-[#007AFF] flex items-center justify-center">
+                    <ShieldCheck className="w-5 h-5 text-[#007AFF]" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-semibold text-[#EAECEF]">
+                    <h3 className="text-sm font-semibold text-[#1C1C1E]">
                       Authorize SMS Rollout Transmission
                     </h3>
-                    <p className="text-xs text-[#848E9C]">Communications Directorate &bull; Act 936</p>
+                    <p className="text-xs text-[#6C6C70]">Communications Directorate &bull; Act 936</p>
                   </div>
                 </div>
 
@@ -3137,47 +3137,47 @@ export default function AdminDashboardPage() {
                     setSmsAuthPassword("");
                     setSmsAuthError(null);
                   }}
-                  className="w-7 h-7 rounded-lg text-[#848E9C] hover:text-[#EAECEF] hover:bg-[#2B313A] flex items-center justify-center cursor-pointer"
+                  className="w-7 h-7 rounded-lg text-[#8E8E93] hover:text-[#1C1C1E] hover:bg-[#F2F2F7] flex items-center justify-center cursor-pointer transition-colors"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
               {/* Target Audience Summary */}
-              <div className="bg-[#1E2329] rounded-xl p-3.5 border border-[#2B3139] space-y-2 text-xs">
+              <div className="bg-[#F8F9FA] rounded-xl p-3.5 border border-[#E5E5EA] space-y-2 text-xs">
                 <div className="flex items-center justify-between">
-                  <span className="text-[#848E9C] font-medium">Target Recipients:</span>
-                  <span className="font-semibold text-[#EAECEF]">
+                  <span className="text-[#6C6C70] font-medium">Target Recipients:</span>
+                  <span className="font-semibold text-[#1C1C1E]">
                     {smsAuthTargetAccounts.length} {smsAuthTargetAccounts.length === 1 ? "Taxpayer Account" : "Taxpayer Accounts"}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-[#848E9C] font-medium">Total Balance to Notify:</span>
-                  <span className="font-semibold text-[#F6465D]">
+                  <span className="text-[#6C6C70] font-medium">Total Balance to Notify:</span>
+                  <span className="font-semibold text-[#FF3B30]">
                     GH₵ {smsAuthTargetAccounts.reduce((acc, curr) => acc + (curr.totalAmountDue || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-[#848E9C] font-medium">Outbound Gateway:</span>
-                  <span className="font-medium text-[#0ECB81]">Arkesel SMS Gateway (Sender ID: Arnold)</span>
+                  <span className="text-[#6C6C70] font-medium">Outbound Gateway:</span>
+                  <span className="font-medium text-[#34C759]">Arkesel SMS Gateway (Sender ID: Arnold)</span>
                 </div>
               </div>
 
               {/* Recipient Details List */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-[#EAECEF] block">
+                <label className="text-xs font-semibold text-[#1C1C1E] block">
                   Recipient Roster ({smsAuthTargetAccounts.length})
                 </label>
-                <div className="max-h-36 overflow-y-auto rounded-lg border border-[#2B3139] divide-y divide-[#2B3139] bg-[#1E2329] text-xs">
+                <div className="max-h-36 overflow-y-auto rounded-lg border border-[#E5E5EA] divide-y divide-[#E5E5EA] bg-[#F8F9FA] text-xs">
                   {smsAuthTargetAccounts.map((t) => (
-                    <div key={t.id} className="p-2.5 flex items-center justify-between hover:bg-[#1E2329]">
+                    <div key={t.id} className="p-2.5 flex items-center justify-between hover:bg-[#F2F2F7] transition-colors">
                       <div>
-                        <span className="font-semibold text-[#EAECEF]">{t.ownerName}</span>
-                        <p className="text-[11px] text-[#848E9C] font-mono">{t.accountNumber} &bull; {t.ownerPhone}</p>
+                        <span className="font-semibold text-[#1C1C1E]">{t.ownerName}</span>
+                        <p className="text-[11px] text-[#6C6C70] font-mono">{t.accountNumber} &bull; {t.ownerPhone}</p>
                       </div>
                       <div className="text-right">
-                        <span className="font-semibold text-[#EAECEF]">{t.totalAmountDueFormatted}</span>
-                        <p className="text-[10px] text-[#F6465D]">Due</p>
+                        <span className="font-semibold text-[#1C1C1E]">{t.totalAmountDueFormatted}</span>
+                        <p className="text-[10px] text-[#FF3B30]">Due</p>
                       </div>
                     </div>
                   ))}
@@ -3185,13 +3185,13 @@ export default function AdminDashboardPage() {
               </div>
 
               {/* Password Challenge Field */}
-              <div className="space-y-1.5 pt-2 border-t border-[#2B3139]">
-                <label className="text-xs font-semibold text-[#EAECEF] flex items-center justify-between">
+              <div className="space-y-1.5 pt-2 border-t border-[#E5E5EA]">
+                <label className="text-xs font-semibold text-[#1C1C1E] flex items-center justify-between">
                   <span>Enter Administrator Security Password</span>
-                  <span className="text-[10px] text-[#848E9C] font-normal">Required for authorization</span>
+                  <span className="text-[10px] text-[#6C6C70] font-normal">Required for authorization</span>
                 </label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#848E9C]">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#8E8E93]">
                     <Lock className="w-3.5 h-3.5" />
                   </div>
                   <input
@@ -3213,12 +3213,12 @@ export default function AdminDashboardPage() {
                       }
                     }}
                     placeholder="Enter admin password (e.g. admin123)"
-                    className="w-full h-10 pl-9 pr-10 rounded-lg border border-[#2B3139] text-xs text-[#EAECEF] focus:outline-none focus:border-[#FCD535] transition-colors"
+                    className="w-full h-10 pl-9 pr-10 rounded-lg border border-[#E5E5EA] bg-white text-xs text-[#1C1C1E] focus:outline-none focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] transition-colors"
                   />
                   <button
                     type="button"
                     onClick={() => setShowSmsAuthPassword(!showSmsAuthPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-[#848E9C] hover:text-[#EAECEF] cursor-pointer"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-[#8E8E93] hover:text-[#1C1C1E] cursor-pointer"
                   >
                     {showSmsAuthPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                   </button>
@@ -3228,7 +3228,7 @@ export default function AdminDashboardPage() {
                   <motion.p
                     initial={{ opacity: 0, y: -4 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="text-xs text-[#F6465D] font-medium flex items-center gap-1 mt-1"
+                    className="text-xs text-[#FF3B30] font-medium flex items-center gap-1 mt-1"
                   >
                     <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                     <span>{smsAuthError}</span>
@@ -3237,7 +3237,7 @@ export default function AdminDashboardPage() {
               </div>
 
               {/* Modal Actions */}
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[#2B3139]">
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[#E5E5EA]">
                 <button
                   type="button"
                   onClick={() => {
@@ -3246,7 +3246,7 @@ export default function AdminDashboardPage() {
                     setSmsAuthError(null);
                   }}
                   disabled={isProcessing}
-                  className="btn-3d-secondary h-11 sm:h-9 px-4 rounded-lg text-xs font-medium cursor-pointer flex-1 sm:flex-none"
+                  className="apple-btn-secondary h-11 sm:h-9 px-4 rounded-lg text-xs font-medium cursor-pointer flex-1 sm:flex-none text-[#1C1C1E] border-[#E5E5EA]"
                 >
                   Cancel
                 </button>
@@ -3254,7 +3254,7 @@ export default function AdminDashboardPage() {
                   type="button"
                   onClick={handleExecuteSmsDispatch}
                   disabled={isProcessing || !smsAuthPassword.trim()}
-                  className="btn-3d-primary h-11 sm:h-9 px-4 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 flex-1 sm:flex-none"
+                  className="apple-btn-primary h-11 sm:h-9 px-4 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 flex-1 sm:flex-none bg-[#007AFF] text-white hover:bg-[#0062CC]"
                 >
                   {isProcessing ? (
                     <>

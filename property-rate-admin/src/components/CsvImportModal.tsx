@@ -150,7 +150,7 @@ export function CsvImportModal({ isOpen, onClose, onSuccess }: CsvImportModalPro
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/50 backdrop-blur-xs"
+            className="fixed inset-0 bg-black/30 backdrop-blur-xs"
           />
 
           {/* Bottom-to-Top Sliding Modal Sheet */}
@@ -159,211 +159,213 @@ export function CsvImportModal({ isOpen, onClose, onSuccess }: CsvImportModalPro
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: "100%", opacity: 0 }}
             transition={{ type: "spring", damping: 28, stiffness: 300 }}
-            className="relative z-10 bg-[#1E2329] rounded-t-2xl sm:rounded-2xl border-t sm:border border-[#2B3139] shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[90vh]"
+            className="relative z-10 bg-white rounded-t-2xl sm:rounded-2xl border border-[#E5E5EA] shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[90vh]"
           >
             {/* Anti-autofill Decoy Honeypot */}
             <input type="text" name="prevent_autofill_user" tabIndex={-1} aria-hidden="true" style={{ position: "absolute", top: -9999, left: -9999, opacity: 0, height: 0, width: 0, pointerEvents: "none" }} />
             <input type="password" name="prevent_autofill_pass" tabIndex={-1} aria-hidden="true" style={{ position: "absolute", top: -9999, left: -9999, opacity: 0, height: 0, width: 0, pointerEvents: "none" }} />
-            <div className="w-10 h-1 bg-[#2B3139] rounded-full mx-auto my-2 sm:hidden shrink-0" />
-        {/* Header */}
-        <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-[#2B3139] flex items-center justify-between shrink-0 bg-[#1E2329]">
-          <div>
-            <h3 className="text-sm font-bold text-[#EAECEF] tracking-tight">
-              Bulk Cadastre &amp; Valuation Roll Importer
-            </h3>
-            <p className="text-xs text-[#848E9C] mt-0.5">
-              Ingest municipal cadastre valuation rolls into the KKMA assembly database.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1 rounded-lg text-[#848E9C] hover:text-[#EAECEF] hover:bg-[#2B313A] cursor-pointer"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Content Body */}
-        <div className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1 text-xs">
-          {/* File Dropzone */}
-          {!file ? (
-            <div
-              onDragOver={(e) => {
-                e.preventDefault();
-                setIsDragging(true);
-              }}
-              onDragLeave={() => setIsDragging(false)}
-              onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
-              className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors flex flex-col items-center justify-center gap-2 ${
-                isDragging
-                  ? "border-[#FCD535] bg-[#FCD535]/5"
-                  : "border-[#2B3139] hover:border-[#FCD535] hover:bg-[#1E2329]"
-              }`}
-            >
-              <UploadCloud className="w-8 h-8 text-[#FCD535]" />
-              <div className="space-y-0.5">
-                <span className="font-semibold text-[#EAECEF] block">
-                  Click to browse or drag &amp; drop your Cadastre CSV
-                </span>
-                <span className="text-[11px] text-[#848E9C] block">
-                  Supports LVD exports with Account Number, Rateable Value, Owner, and GPS Digital Address
-                </span>
-              </div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv"
-                className="hidden"
-                onChange={(e) => {
-                  if (e.target.files && e.target.files[0]) {
-                    handleFileChange(e.target.files[0]);
-                  }
-                }}
-              />
-            </div>
-          ) : (
-            <div className="p-3 bg-[#1E2329] border border-[#2B3139] rounded-xl flex items-center justify-between">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <FileText className="w-5 h-5 text-[#FCD535] shrink-0" />
-                <div className="truncate">
-                  <span className="font-medium text-[#EAECEF] truncate block">{file.name}</span>
-                  <span className="text-[11px] text-[#848E9C]">
-                    {(file.size / 1024).toFixed(1)} KB &bull; {parsedRows.length} records parsed
-                  </span>
-                </div>
+            <div className="w-10 h-1 bg-[#D1D1D6] rounded-full mx-auto my-2 sm:hidden shrink-0" />
+            
+            {/* Header */}
+            <div className="px-4 sm:px-6 py-4 border-b border-[#E5E5EA] flex items-center justify-between shrink-0 bg-white/80 backdrop-blur-md">
+              <div>
+                <h3 className="text-sm font-bold text-[#1C1C1E] tracking-tight">
+                  Bulk Cadastre &amp; Valuation Roll Importer
+                </h3>
+                <p className="text-xs text-[#6C6C70] mt-0.5">
+                  Ingest municipal cadastre valuation rolls into the KKMA assembly database.
+                </p>
               </div>
               <button
                 type="button"
-                onClick={handleReset}
-                className="text-xs text-[#EA4335] hover:underline font-medium cursor-pointer shrink-0 ml-3"
+                onClick={onClose}
+                className="p-1.5 rounded-lg text-[#8E8E93] hover:text-[#1C1C1E] hover:bg-[#F2F2F7] cursor-pointer transition-colors"
+                aria-label="Close modal"
               >
-                Change File
+                <X className="w-4 h-4" />
               </button>
             </div>
-          )}
 
-          {/* Pre-Import Preview Table */}
-          {previewRows.length > 0 && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-[#EAECEF]">
-                  Parsed Preview (First 5 of {parsedRows.length} parcels)
-                </span>
-                <span className="text-[11px] text-[#0ECB81] font-medium">
-                  &bull; Schema Headers Matched
-                </span>
-              </div>
-
-              <div className="border border-[#2B3139] rounded-lg overflow-hidden overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead className="bg-[#1E2329] border-b border-[#2B3139] text-[#848E9C] text-[11px]">
-                    <tr>
-                      <th className="py-2 px-3 whitespace-nowrap">Account #</th>
-                      <th className="py-2 px-3 whitespace-nowrap">Owner / Taxpayer</th>
-                      <th className="py-2 px-3 whitespace-nowrap">Digital Address</th>
-                      <th className="py-2 px-3 whitespace-nowrap">Classification</th>
-                      <th className="py-2 px-3 text-right whitespace-nowrap">Rateable Value</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#2B3139] bg-[#1E2329]">
-                    {previewRows.map((r, idx) => {
-                      const acc = r.accountNumber || r["Account Number"] || r["account_no"] || r["Account"] || "N/A";
-                      const owner = r.ownerName || r["Owner Name"] || r["owner_name"] || r["Name"] || "Municipal Ratepayer";
-                      const gps = r.ownerDigitalAddress || r["Digital Address"] || r["digital_address"] || r["GPS"] || "N/A";
-                      const cls = r.propertyClassification || r["Classification"] || r["classification"] || "RESIDENTIAL";
-                      const val = parseFloat(r.rateableValue || r["Rateable Value"] || r["rateable_value"] || r["Value"] || 0) || 0;
-
-                      return (
-                        <tr key={idx} className="hover:bg-[#1E2329]">
-                          <td className="py-2 px-3 font-mono font-medium text-[#EAECEF] whitespace-nowrap">{acc}</td>
-                          <td className="py-2 px-3 text-[#EAECEF] whitespace-nowrap">{owner}</td>
-                          <td className="py-2 px-3 font-mono text-[#848E9C] whitespace-nowrap">{gps}</td>
-                          <td className="py-2 px-3 text-[#848E9C] whitespace-nowrap">{cls}</td>
-                          <td className="py-2 px-3 text-right font-medium text-[#EAECEF] whitespace-nowrap tabular-nums">
-                            GH₵ {val.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* Error Message */}
-          {errorMsg && (
-            <div className="p-3 bg-[#EA4335]/10 border border-[#EA4335]/30 rounded-xl text-xs text-[#EA4335] flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 shrink-0" />
-              <span>{errorMsg}</span>
-            </div>
-          )}
-
-          {/* Administrator Password Challenge */}
-          {parsedRows.length > 0 && (
-            <div className="p-4 bg-[#1E2329] border border-[#2B3139] rounded-xl space-y-2">
-              <label className="text-xs font-semibold text-[#EAECEF] block">
-                Administrator Authorization Password
-              </label>
-              <p className="text-[11px] text-[#848E9C]">
-                Enter your administrative security password to confirm ingestion into the official cadastre.
-              </p>
-              <div className="relative">
-                <input
-                  type={showPassword ? "text" : "password"}
-                  name="csv_import_admin_security_key"
-                  autoComplete="new-password"
-                  data-lpignore="true"
-                  data-1p-ignore="true"
-                  data-form-type="other"
-                  placeholder="Enter administrator password"
-                  value={adminPassword}
-                  onChange={(e) => setAdminPassword(e.target.value)}
-                  className="w-full h-9 pl-3 pr-9 rounded-lg border border-[#2B3139] bg-[#1E2329] text-xs text-[#EAECEF] focus:outline-none focus:border-[#FCD535]"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-2.5 top-2 text-[#848E9C] hover:text-[#EAECEF] p-0.5 cursor-pointer"
+            {/* Content Body */}
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1 text-xs">
+              {/* File Dropzone */}
+              {!file ? (
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsDragging(true);
+                  }}
+                  onDragLeave={() => setIsDragging(false)}
+                  onDrop={handleDrop}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2.5 ${
+                    isDragging
+                      ? "border-[#007AFF] bg-[#007AFF]/5"
+                      : "border-[#C7C7CC] hover:border-[#007AFF] bg-[#F2F2F7]/50"
+                  }`}
                 >
-                  {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
+                  <UploadCloud className="w-8 h-8 text-[#007AFF]" />
+                  <div className="space-y-0.5">
+                    <span className="font-semibold text-[#1C1C1E] block">
+                      Click to browse or drag &amp; drop your Cadastre CSV
+                    </span>
+                    <span className="text-[11px] text-[#6C6C70] block">
+                      Supports LVD exports with Account Number, Rateable Value, Owner, and GPS Digital Address
+                    </span>
+                  </div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".csv"
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        handleFileChange(e.target.files[0]);
+                      }
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="p-3 bg-[#F2F2F7] border border-[#E5E5EA] rounded-xl flex items-center justify-between">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <FileText className="w-5 h-5 text-[#007AFF] shrink-0" />
+                    <div className="truncate">
+                      <span className="font-medium text-[#1C1C1E] truncate block">{file.name}</span>
+                      <span className="text-[11px] text-[#6C6C70]">
+                        {(file.size / 1024).toFixed(1)} KB &bull; {parsedRows.length} records parsed
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleReset}
+                    className="text-xs text-[#FF3B30] hover:underline font-medium cursor-pointer shrink-0 ml-3"
+                  >
+                    Change File
+                  </button>
+                </div>
+              )}
 
-        {/* Modal Actions */}
-        <div className="px-4 sm:px-6 py-3.5 border-t border-[#2B3139] bg-[#1E2329] flex items-center justify-between gap-2.5 shrink-0">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isProcessing}
-            className="btn-3d-secondary h-11 sm:h-8 px-4 rounded-lg text-xs font-medium cursor-pointer flex-1 sm:flex-none"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleExecuteImport}
-            disabled={isProcessing || parsedRows.length === 0 || !adminPassword.trim()}
-            className="btn-3d-primary h-11 sm:h-8 px-4 rounded-lg text-xs font-medium cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50 flex-1 sm:flex-none"
-          >
-            {isProcessing ? (
-              <>
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Ingesting Parcels...</span>
-              </>
-            ) : (
-              <span>Import {parsedRows.length > 0 ? `${parsedRows.length} Parcels` : "Cadastre Roll"}</span>
-            )}
-          </button>
+              {/* Pre-Import Preview Table */}
+              {previewRows.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-[#1C1C1E]">
+                      Parsed Preview (First 5 of {parsedRows.length} parcels)
+                    </span>
+                    <span className="text-[11px] text-[#34C759] font-medium">
+                      &bull; Schema Headers Matched
+                    </span>
+                  </div>
+
+                  <div className="border border-[#E5E5EA] rounded-xl overflow-hidden overflow-x-auto">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead className="bg-[#F8F9FA] border-b border-[#E5E5EA] text-[#6C6C70] text-[11px]">
+                        <tr>
+                          <th className="py-2.5 px-3 whitespace-nowrap">Account #</th>
+                          <th className="py-2.5 px-3 whitespace-nowrap">Owner / Taxpayer</th>
+                          <th className="py-2.5 px-3 whitespace-nowrap">Digital Address</th>
+                          <th className="py-2.5 px-3 whitespace-nowrap">Classification</th>
+                          <th className="py-2.5 px-3 text-right whitespace-nowrap">Rateable Value</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#F2F2F7] bg-white text-[#1C1C1E]">
+                        {previewRows.map((r, idx) => {
+                          const acc = r.accountNumber || r["Account Number"] || r["account_no"] || r["Account"] || "N/A";
+                          const owner = r.ownerName || r["Owner Name"] || r["owner_name"] || r["Name"] || "Municipal Ratepayer";
+                          const gps = r.ownerDigitalAddress || r["Digital Address"] || r["digital_address"] || r["GPS"] || "N/A";
+                          const cls = r.propertyClassification || r["Classification"] || r["classification"] || "RESIDENTIAL";
+                          const val = parseFloat(r.rateableValue || r["Rateable Value"] || r["rateable_value"] || r["Value"] || 0) || 0;
+
+                          return (
+                            <tr key={idx} className="hover:bg-[#F8F9FA] transition-colors">
+                              <td className="py-2.5 px-3 font-mono font-medium text-[#1C1C1E] whitespace-nowrap">{acc}</td>
+                              <td className="py-2.5 px-3 text-[#1C1C1E] whitespace-nowrap">{owner}</td>
+                              <td className="py-2.5 px-3 font-mono text-[#6C6C70] whitespace-nowrap">{gps}</td>
+                              <td className="py-2.5 px-3 text-[#6C6C70] whitespace-nowrap">{cls}</td>
+                              <td className="py-2.5 px-3 text-right font-medium text-[#1C1C1E] whitespace-nowrap tabular-nums">
+                                GH₵ {val.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Error Message */}
+              {errorMsg && (
+                <div className="p-3 bg-[#FF3B30]/10 border border-[#FF3B30]/30 rounded-xl text-xs text-[#FF3B30] flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  <span>{errorMsg}</span>
+                </div>
+              )}
+
+              {/* Administrator Password Challenge */}
+              {parsedRows.length > 0 && (
+                <div className="p-4 bg-[#F2F2F7]/70 border border-[#E5E5EA] rounded-xl space-y-2">
+                  <label className="text-xs font-semibold text-[#1C1C1E] block">
+                    Administrator Authorization Password
+                  </label>
+                  <p className="text-[11px] text-[#6C6C70]">
+                    Enter your administrative security password to confirm ingestion into the official cadastre.
+                  </p>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      name="csv_import_admin_security_key"
+                      autoComplete="new-password"
+                      data-lpignore="true"
+                      data-1p-ignore="true"
+                      data-form-type="other"
+                      placeholder="Enter administrator password"
+                      value={adminPassword}
+                      onChange={(e) => setAdminPassword(e.target.value)}
+                      className="w-full h-10 pl-3.5 pr-10 rounded-lg border border-[#E5E5EA] bg-white text-xs text-[#1C1C1E] focus:outline-none focus:ring-2 focus:ring-[#007AFF]/20 focus:border-[#007AFF]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-2.5 text-[#8E8E93] hover:text-[#1C1C1E] p-0.5 cursor-pointer"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Actions */}
+            <div className="px-4 sm:px-6 py-4 border-t border-[#E5E5EA] bg-white/80 backdrop-blur-md flex items-center justify-between gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={isProcessing}
+                className="apple-btn-secondary h-10 sm:h-9 px-4 flex-1 sm:flex-none"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteImport}
+                disabled={isProcessing || parsedRows.length === 0 || !adminPassword.trim()}
+                className="apple-btn-primary h-10 sm:h-9 px-4 flex-1 sm:flex-none disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isProcessing ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Ingesting Parcels...</span>
+                  </>
+                ) : (
+                  <span>Import {parsedRows.length > 0 ? `${parsedRows.length} Parcels` : "Cadastre Roll"}</span>
+                )}
+              </button>
+            </div>
+          </motion.div>
         </div>
-      </motion.div>
-    </div>
-  )}
-</AnimatePresence>
-);
+      )}
+    </AnimatePresence>
+  );
 }

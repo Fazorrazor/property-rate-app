@@ -227,14 +227,7 @@ export function SmsRolloutSimulator({
   const [totalAudienceDueFormatted, setTotalAudienceDueFormatted] = useState("GH₵ 0.00");
   const audienceSentinelRef = useRef<HTMLTableRowElement | null>(null);
 
-  // Carousel Edge Fade Horizontal Scroll Detection
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(false);
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
-
-  // Delivery Logs Carousel Edge Fade
-  const [canLogsScrollLeft, setCanLogsScrollLeft] = useState(false);
-  const [canLogsScrollRight, setCanLogsScrollRight] = useState(false);
   const logsTableContainerRef = useRef<HTMLDivElement | null>(null);
 
   // Delivery Logs Endless Scrolling State
@@ -449,49 +442,6 @@ export function SmsRolloutSimulator({
     };
   }, [targetMunicipality, targetClassification, targetStatus, requiredFields, accountSearchQuery]);
 
-  const checkScrollEdges = () => {
-    const el = tableContainerRef.current;
-    if (!el) return;
-    const { scrollLeft, scrollWidth, clientWidth } = el;
-    setCanScrollLeft(scrollLeft > 4);
-    setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 4);
-  };
-
-  const handleCombinedAudienceScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    handleAudienceTableScroll(e);
-    checkScrollEdges();
-  };
-
-  const checkLogsScrollEdges = () => {
-    const el = logsTableContainerRef.current;
-    if (!el) return;
-    const { scrollLeft, scrollWidth, clientWidth } = el;
-    setCanLogsScrollLeft(scrollLeft > 4);
-    setCanLogsScrollRight(scrollLeft < scrollWidth - clientWidth - 4);
-  };
-
-  const handleCombinedLogsScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    handleLogsTableScroll(e);
-    checkLogsScrollEdges();
-  };
-
-  useEffect(() => {
-    const el = tableContainerRef.current;
-    if (!el) return;
-    checkScrollEdges();
-    const ro = new ResizeObserver(() => checkScrollEdges());
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [liveAudience, isHierarchicalView]);
-
-  useEffect(() => {
-    const el = logsTableContainerRef.current;
-    if (!el) return;
-    checkLogsScrollEdges();
-    const ro = new ResizeObserver(() => checkLogsScrollEdges());
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [logsList]);
 
   // Proactive pagination loader for Audience (Cadastre & Property Roll pattern)
   const loadNextAudiencePage = async () => {
@@ -867,31 +817,31 @@ export function SmsRolloutSimulator({
   };
 
   return (
-    <div className="relative w-full h-full flex-1 min-h-0 overflow-hidden flex flex-col font-sans bg-[#181A20] text-[#EAECEF]">
+    <div className="relative w-full h-full flex-1 min-h-0 overflow-hidden flex flex-col font-sans bg-[#F2F2F7] text-[#1C1C1E]">
       <motion.div
         className="w-[200%] h-full flex flex-row flex-1 min-h-0"
         animate={{ x: activeView === "SIMULATOR" ? "0%" : "-50%" }}
         transition={{ type: "spring", damping: 26, stiffness: 220, mass: 0.8 }}
       >
         {/* PANE 1: SMS ROLLOUT ENGINE */}
-        <div className="w-1/2 h-full flex flex-col min-h-0 p-0 overflow-hidden relative bg-[#181A20]">
+        <div className="w-1/2 h-full flex flex-col min-h-0 p-0 overflow-hidden relative bg-[#F2F2F7]">
           <div className="w-full h-full min-h-0 flex flex-col overflow-hidden">
 
             {/* Audience & Field Selection */}
-            <div className="bg-[#181A20] border-0 rounded-none shadow-none flex-1 min-h-0 flex flex-col">
-              <div className="p-3.5 border-b border-[#2B3139] shrink-0 space-y-2.5 bg-[#1E2329] relative z-20">
+            <div className="bg-white border-0 rounded-none shadow-none flex-1 min-h-0 flex flex-col">
+              <div className="p-3.5 border-b border-[#E5E5EA] shrink-0 space-y-2.5 bg-white relative z-20">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-semibold text-[#EAECEF] flex items-center gap-1.5">
-                    <Filter className="w-3.5 h-3.5 text-[#FCD535]" />
-                    <span className="text-[#EAECEF] font-bold">Target Ratepayer Audience</span>
+                  <h3 className="text-xs font-semibold text-[#1C1C1E] flex items-center gap-1.5">
+                    <Filter className="w-3.5 h-3.5 text-[#007AFF]" />
+                    <span className="text-[#1C1C1E] font-bold">Target Ratepayer Audience</span>
                   </h3>
                   <div className="flex items-center gap-2.5">
-                    {isLoadingAudience && <Loader2 className="w-3 h-3 animate-spin text-[#FCD535]" />}
-                    <span className="text-[11px] text-[#848E9C] font-medium">
+                    {isLoadingAudience && <Loader2 className="w-3 h-3 animate-spin text-[#007AFF]" />}
+                    <span className="text-[11px] text-[#6C6C70] font-medium">
                       {(totalAudienceCount || eligibleProperties.length).toLocaleString()} active properties matched
                     </span>
 
-                    <div className="h-3.5 w-px bg-[#2B3139]" />
+                    <div className="h-3.5 w-px bg-[#E5E5EA]" />
 
                     {/* Delivery Logs Action Button with Floating Metric Tooltip on Hover */}
                     <div className="relative group shrink-0">
@@ -899,19 +849,19 @@ export function SmsRolloutSimulator({
                         type="button"
                         onClick={() => setActiveView("LOGS")}
                         aria-label="View SMS Delivery Logs"
-                        className="w-7 h-7 rounded-full border border-[#2B3139] bg-[#2B313A] hover:bg-[#363D47] hover:border-[#FCD535] text-[#EAECEF] shadow-xs flex items-center justify-center transition-all cursor-pointer focus:outline-none"
+                        className="w-7 h-7 rounded-full border border-[#E5E5EA] bg-[#F2F2F7] hover:bg-[#E5E5EA] hover:border-[#007AFF] text-[#1C1C1E] shadow-2xs flex items-center justify-center transition-all cursor-pointer focus:outline-none"
                       >
-                        <ChevronRight className="w-3.5 h-3.5 text-[#848E9C] group-hover:text-[#FCD535] group-hover:translate-x-0.5 transition-transform" />
+                        <ChevronRight className="w-3.5 h-3.5 text-[#6C6C70] group-hover:text-[#007AFF] group-hover:translate-x-0.5 transition-transform" />
                       </button>
 
                       {/* Floating Tooltip Card (Appears on Hover) - iOS Liquid Glass */}
                       <div className="absolute right-0 top-full mt-2 hidden group-hover:flex flex-col items-end pointer-events-none z-50 animate-in fade-in zoom-in-95 duration-150">
                         {/* Tooltip Caret Arrow */}
-                        <div className="w-2.5 h-2.5 bg-[#0B0E11]/95 backdrop-blur-xl border-l border-t border-[#2B3139] rotate-45 -mb-1 mr-2.5" />
-                        <div className="bg-[#0B0E11]/95 backdrop-blur-xl border border-[#2B3139] text-[#EAECEF] text-xs px-3 py-1.5 rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.5)] whitespace-nowrap flex items-center gap-2">
-                          <span className="font-semibold text-[#EAECEF]">Delivery Logs</span>
-                          <span className="text-[#848E9C] text-[10px]">&bull;</span>
-                          <span className="text-[#EAECEF] text-[11px] font-mono tabular-nums">
+                        <div className="w-2.5 h-2.5 bg-white/95 backdrop-blur-xl border-l border-t border-[#E5E5EA] rotate-45 -mb-1 mr-2.5" />
+                        <div className="bg-white/95 backdrop-blur-xl border border-[#E5E5EA] text-[#1C1C1E] text-xs px-3 py-1.5 rounded-lg shadow-xl whitespace-nowrap flex items-center gap-2">
+                          <span className="font-semibold text-[#1C1C1E]">Delivery Logs</span>
+                          <span className="text-[#8E8E93] text-[10px]">&bull;</span>
+                          <span className="text-[#1C1C1E] text-[11px] font-mono tabular-nums">
                             {smsLogs.length.toLocaleString()} records
                           </span>
                         </div>
@@ -923,7 +873,7 @@ export function SmsRolloutSimulator({
                 {/* Search, Classification, Fields Filter & Action Toolbar */}
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="relative flex-1 min-w-[180px]">
-                    <Search className="w-3.5 h-3.5 text-[#848E9C] absolute left-2.5 top-1/2 -translate-y-1/2 z-10" />
+                    <Search className="w-3.5 h-3.5 text-[#8E8E93] absolute left-2.5 top-1/2 -translate-y-1/2 z-10" />
 
                   <input
                     type="text"
@@ -933,14 +883,14 @@ export function SmsRolloutSimulator({
                     autoComplete="off"
                     autoCorrect="off"
                     spellCheck="false"
-                    className="w-full h-8 pl-8 pr-8 rounded-lg border border-[#2B3139] bg-[#0B0E11] text-xs text-[#EAECEF] focus:outline-none focus:border-[#FCD535] placeholder-[#848E9C]"
+                    className="w-full h-8 pl-8 pr-8 rounded-lg border border-[#E5E5EA] bg-[#F2F2F7] text-xs text-[#1C1C1E] focus:outline-none focus:border-[#007AFF] focus:bg-white placeholder-[#8E8E93] transition-colors"
                   />
 
                   {accountSearchQuery && (
                     <button
                       type="button"
                       onClick={() => setAccountSearchQuery("")}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-[#848E9C] p-1 cursor-pointer z-10 hover:text-[#EAECEF]"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-[#8E8E93] p-1 cursor-pointer z-10 hover:text-[#1C1C1E]"
                     >
                       <X className="w-3 h-3" />
                     </button>
@@ -954,8 +904,8 @@ export function SmsRolloutSimulator({
                     type="button"
                     onClick={handleOpenFieldsFilter}
                     className={`h-8 px-3 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${requiredFields.length > 0
-                      ? "bg-[#FCD535] text-[#181A20] font-bold border-[#FCD535] shadow-xs"
-                      : "bg-[#2B313A] text-[#EAECEF] border-[#2B3139] hover:bg-[#363D47]"
+                      ? "bg-[#007AFF] text-white font-medium border-[#007AFF] shadow-xs"
+                      : "bg-[#F2F2F7] text-[#1C1C1E] border-[#E5E5EA] hover:bg-[#E5E5EA]"
                       }`}
                   >
                     <SlidersHorizontal className="w-3.5 h-3.5" />
@@ -972,25 +922,25 @@ export function SmsRolloutSimulator({
                   {showFieldsFilter && (
                     <div
                       ref={fieldsFilterRef}
-                      className="absolute right-0 top-full mt-1.5 w-[340px] sm:w-[380px] max-w-[calc(100vw-32px)] z-50 rounded-xl border border-[#2B3139] bg-[#1E2329] shadow-2xl p-3 flex flex-col font-sans max-h-[340px] overflow-hidden"
+                      className="absolute right-0 top-full mt-1.5 w-[340px] sm:w-[380px] max-w-[calc(100vw-32px)] z-50 rounded-xl border border-[#E5E5EA] bg-white/95 backdrop-blur-xl shadow-xl p-3 flex flex-col font-sans max-h-[340px] overflow-hidden"
                     >
-                      <div className="flex items-center justify-between border-b border-[#2B3139] pb-2 shrink-0">
+                      <div className="flex items-center justify-between border-b border-[#E5E5EA] pb-2 shrink-0">
                         <div className="flex items-center gap-1.5">
-                          <SlidersHorizontal className="w-3.5 h-3.5 text-[#FCD535]" />
-                          <span className="text-xs font-bold text-[#EAECEF]">Required Field Criteria</span>
-                          <span className="text-[10px] text-[#848E9C]">({availableFieldFilters.length} fields)</span>
+                          <SlidersHorizontal className="w-3.5 h-3.5 text-[#007AFF]" />
+                          <span className="text-xs font-bold text-[#1C1C1E]">Required Field Criteria</span>
+                          <span className="text-[10px] text-[#6C6C70]">({availableFieldFilters.length} fields)</span>
                         </div>
                         <button
                           type="button"
                           onClick={() => setShowFieldsFilter(false)}
-                          className="text-[#848E9C] hover:text-[#EAECEF] p-0.5 rounded cursor-pointer"
+                          className="text-[#8E8E93] hover:text-[#1C1C1E] p-0.5 rounded cursor-pointer"
                         >
                           <X className="w-3.5 h-3.5" />
                         </button>
                       </div>
 
                       <div className="relative shrink-0 pt-2">
-                        <Search className="w-3 h-3 text-[#848E9C] absolute left-2 top-1/2 -translate-y-1/2" />
+                        <Search className="w-3 h-3 text-[#8E8E93] absolute left-2 top-1/2 -translate-y-1/2" />
                         <input
                           type="text"
                           value={fieldsSearchQuery}
@@ -999,7 +949,7 @@ export function SmsRolloutSimulator({
                           autoComplete="off"
                           autoCorrect="off"
                           spellCheck="false"
-                          className="w-full h-7 pl-7 pr-2 rounded-md border border-[#2B3139] bg-[#0B0E11] text-[11px] text-[#EAECEF] focus:outline-none focus:border-[#FCD535]"
+                          className="w-full h-7 pl-7 pr-2 rounded-md border border-[#E5E5EA] bg-[#F2F2F7] text-[11px] text-[#1C1C1E] focus:outline-none focus:border-[#007AFF] focus:bg-white"
                         />
                       </div>
 
@@ -1008,15 +958,15 @@ export function SmsRolloutSimulator({
                           <button
                             type="button"
                             onClick={handleSelectAllFields}
-                            className="text-[#FCD535] hover:underline font-semibold cursor-pointer"
+                            className="text-[#007AFF] hover:underline font-semibold cursor-pointer"
                           >
                             Select All
                           </button>
-                          <span className="text-[#2B3139]">&bull;</span>
+                          <span className="text-[#E5E5EA]">&bull;</span>
                           <button
                             type="button"
                             onClick={handleClearAllFields}
-                            className="text-[#848E9C] hover:underline font-medium cursor-pointer"
+                            className="text-[#6C6C70] hover:underline font-medium cursor-pointer"
                           >
                             Clear
                           </button>
@@ -1024,38 +974,38 @@ export function SmsRolloutSimulator({
                         <button
                           type="button"
                           onClick={handleResetDefaultFields}
-                          className="text-[#0ECB81] hover:underline font-semibold cursor-pointer flex items-center gap-1"
+                          className="text-[#34C759] hover:underline font-semibold cursor-pointer flex items-center gap-1"
                         >
                           <span>Recommended for SMS</span>
                         </button>
                       </div>
 
-                      <div className="flex-1 min-h-[140px] overflow-y-auto divide-y divide-[#2B3139] rounded-lg border border-[#2B3139] bg-[#0B0E11]">
+                      <div className="flex-1 min-h-[140px] overflow-y-auto divide-y divide-[#E5E5EA] rounded-lg border border-[#E5E5EA] bg-[#F2F2F7]/50">
                         {filteredAvailableFields.map((field) => {
                           const isChecked = draftRequiredFields.includes(field.key);
                           return (
                             <label
                               key={field.key}
                               onClick={() => handleToggleDraftField(field.key)}
-                              className={`px-2.5 py-1.5 flex items-center justify-between text-xs cursor-pointer hover:bg-[#2B313A]/50 transition-colors ${
-                                isChecked ? "bg-[#2B313A]/60 font-medium text-[#FCD535]" : "text-[#EAECEF]"
+                              className={`px-2.5 py-1.5 flex items-center justify-between text-xs cursor-pointer hover:bg-white transition-colors ${
+                                isChecked ? "bg-[#007AFF]/8 font-medium text-[#007AFF]" : "text-[#1C1C1E]"
                               }`}
                             >
                               <div className="flex items-center gap-2 min-w-0 pr-2">
                                 <div
                                   className={`w-3.5 h-3.5 rounded shrink-0 flex items-center justify-center border transition-colors ${
                                     isChecked
-                                      ? "bg-[#FCD535] border-[#FCD535] text-[#181A20]"
-                                      : "border-[#2B3139] bg-[#1E2329]"
+                                      ? "bg-[#007AFF] border-[#007AFF] text-white"
+                                      : "border-[#C7C7CC] bg-white"
                                   }`}
                                 >
                                   {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
                                 </div>
-                                <span className="text-[11px] text-[#EAECEF] truncate">
+                                <span className="text-[11px] text-[#1C1C1E] truncate">
                                   {field.label}
                                 </span>
                               </div>
-                              <span className="text-[9px] text-[#848E9C] uppercase tracking-wide shrink-0">
+                              <span className="text-[9px] text-[#6C6C70] uppercase tracking-wide shrink-0">
                                 {field.category}
                               </span>
                             </label>
@@ -1063,20 +1013,20 @@ export function SmsRolloutSimulator({
                         })}
                       </div>
 
-                      <div className="pt-2 border-t border-[#2B3139] flex items-center justify-between text-[10px] text-[#848E9C] shrink-0">
+                      <div className="pt-2 border-t border-[#E5E5EA] flex items-center justify-between text-[10px] text-[#6C6C70] shrink-0">
                         <span>{draftRequiredFields.length} field{draftRequiredFields.length === 1 ? "" : "s"} required</span>
                         <div className="flex items-center gap-1.5">
                           <button
                             type="button"
                             onClick={() => setShowFieldsFilter(false)}
-                            className="h-6 px-2 rounded border border-[#2B3139] text-[#848E9C] hover:bg-[#2B313A] font-medium cursor-pointer transition-colors"
+                            className="h-6 px-2 rounded border border-[#E5E5EA] text-[#6C6C70] hover:bg-[#F2F2F7] font-medium cursor-pointer transition-colors"
                           >
                             Cancel
                           </button>
                           <button
                             type="button"
                             onClick={handleApplyFieldsFilter}
-                            className="h-6 px-2.5 rounded bg-[#FCD535] text-[#181A20] font-bold cursor-pointer hover:bg-[#FCD535]/90 transition-colors"
+                            className="h-6 px-2.5 rounded bg-[#007AFF] text-white font-semibold cursor-pointer hover:bg-[#007AFF]/90 transition-colors shadow-2xs"
                           >
                             Apply Filter
                           </button>
@@ -1089,7 +1039,7 @@ export function SmsRolloutSimulator({
                 <select
                   value={targetStatus}
                   onChange={(e) => handleStatusChange(e.target.value as any)}
-                  className="shrink-0 h-8 px-2 rounded-lg border border-[#2B3139] bg-[#0B0E11] text-[11px] text-[#EAECEF] focus:outline-none focus:border-[#FCD535] cursor-pointer font-medium"
+                  className="shrink-0 h-8 px-2 rounded-lg border border-[#E5E5EA] bg-[#F2F2F7] text-[11px] text-[#1C1C1E] focus:outline-none focus:border-[#007AFF] focus:bg-white cursor-pointer font-medium"
                 >
                   <option value="UNPAID">Unpaid Balances Only</option>
                   <option value="PAID">Paid / Settled</option>
@@ -1101,12 +1051,12 @@ export function SmsRolloutSimulator({
                 <button
                   type="button"
                   onClick={() => setShowTemplateModal(true)}
-                  className="h-8 px-2.5 rounded-lg border border-[#2B3139] bg-[#2B313A] hover:bg-[#363D47] hover:border-[#FCD535] text-xs font-semibold text-[#EAECEF] flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
+                  className="h-8 px-2.5 rounded-lg border border-[#E5E5EA] bg-[#F2F2F7] hover:bg-[#E5E5EA] hover:border-[#007AFF] text-xs font-semibold text-[#1C1C1E] flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
                   title="Configure SMS Message Template"
                 >
-                  <FileText className="w-3.5 h-3.5 text-[#848E9C]" />
+                  <FileText className="w-3.5 h-3.5 text-[#6C6C70]" />
                   <span>Message Template</span>
-                  <span className="text-[10px] text-[#848E9C]">({currentTemplate.length} chars)</span>
+                  <span className="text-[10px] text-[#6C6C70]">({currentTemplate.length} chars)</span>
                 </button>
 
                 {/* Rollout Action Button with Floating Metric Tooltip on Hover */}
@@ -1115,7 +1065,7 @@ export function SmsRolloutSimulator({
                     type="button"
                     onClick={handleOpenAuthModal}
                     disabled={isProcessing || effectiveRolloutCount === 0}
-                    className="h-8 px-3.5 rounded-lg font-bold text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all shadow-xs bg-[#FCD535] hover:bg-[#FCD535]/90 text-[#181A20]"
+                    className="h-8 px-3.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all shadow-xs bg-[#007AFF] hover:bg-[#007AFF]/90 text-white"
                   >
                     <Send className="w-3.5 h-3.5" />
                     <span>
@@ -1125,31 +1075,31 @@ export function SmsRolloutSimulator({
 
                   {/* Floating Tooltip Card (Appears on Hover) - iOS Liquid Glass */}
                   <div className="absolute right-0 bottom-full mb-2 hidden group-hover:flex flex-col items-center pointer-events-none z-50 animate-in fade-in zoom-in-95 duration-150">
-                    <div className="bg-[#0B0E11]/95 backdrop-blur-xl border border-[#2B3139] text-[#EAECEF] text-xs px-3 py-1.5 rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.5)] whitespace-nowrap flex items-center gap-2">
-                      <span className="font-semibold text-[#FCD535]">
+                    <div className="bg-white/95 backdrop-blur-xl border border-[#E5E5EA] text-[#1C1C1E] text-xs px-3 py-1.5 rounded-lg shadow-xl whitespace-nowrap flex items-center gap-2">
+                      <span className="font-semibold text-[#007AFF]">
                         {effectiveRolloutCount.toLocaleString()}
                       </span>
-                      <span className="text-[#848E9C] text-[11px]">
+                      <span className="text-[#6C6C70] text-[11px]">
                         {audienceScope === "SELECTED" ? "accounts selected" : "accounts matching filter criteria"}
                       </span>
-                      <span className="text-[#2B3139] text-[10px]">&bull;</span>
-                      <span className="text-[#EAECEF] text-[11px] font-mono tabular-nums">
+                      <span className="text-[#E5E5EA] text-[10px]">&bull;</span>
+                      <span className="text-[#1C1C1E] text-[11px] font-mono tabular-nums">
                         {effectiveRolloutTotalDueFormatted}
                       </span>
                     </div>
                     {/* Tooltip Caret Arrow */}
-                    <div className="w-2.5 h-2.5 bg-[#0B0E11]/95 backdrop-blur-xl border-r border-b border-[#2B3139] rotate-45 -mt-1" />
+                    <div className="w-2.5 h-2.5 bg-white/95 backdrop-blur-xl border-r border-b border-[#E5E5EA] rotate-45 -mt-1" />
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Matched Audience Rollout Queue Table (Consumes All Vertical Space) */}
-            <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-[#181A20]">
-              <div className="px-3.5 py-2 border-b border-[#2B3139] bg-[#1E2329] flex items-center justify-between gap-3 shrink-0">
+            <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-white">
+              <div className="px-3.5 py-2 border-b border-[#E5E5EA] bg-[#F8F9FA] flex items-center justify-between gap-3 shrink-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-bold text-[#EAECEF]">Matched Audience Rollout Queue</span>
-                  <span className="text-[11px] text-[#848E9C]">
+                  <span className="text-xs font-bold text-[#1C1C1E]">Matched Audience Rollout Queue</span>
+                  <span className="text-[11px] text-[#6C6C70]">
                     ({ratepayerGroups.length.toLocaleString()} ratepayers &bull; {liveAudience.length.toLocaleString()} properties
                     {multiPropertyRatepayersCount > 0 && ` &bull; ${multiPropertyRatepayersCount} multi-account portfolios`})
                   </span>
@@ -1159,7 +1109,7 @@ export function SmsRolloutSimulator({
                     <button
                       type="button"
                       onClick={handleToggleCollapseAll}
-                      className="text-[11px] text-[#848E9C] hover:text-[#EAECEF] cursor-pointer"
+                      className="text-[11px] text-[#6C6C70] hover:text-[#1C1C1E] cursor-pointer"
                     >
                       {collapsedGroupKeys.size > 0 ? "Expand All" : "Collapse All"}
                     </button>
@@ -1169,8 +1119,8 @@ export function SmsRolloutSimulator({
                     onClick={() => setIsHierarchicalView(!isHierarchicalView)}
                     className={`h-6.5 px-2 rounded-md border text-[11px] font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
                       isHierarchicalView
-                        ? "border-[#FCD535] bg-[#FCD535]/15 text-[#FCD535]"
-                        : "border-[#2B3139] bg-[#2B313A] text-[#848E9C] hover:text-[#EAECEF]"
+                        ? "border-[#007AFF] bg-[#007AFF]/10 text-[#007AFF]"
+                        : "border-[#E5E5EA] bg-[#F2F2F7] text-[#6C6C70] hover:text-[#1C1C1E]"
                     }`}
                     title="Toggle between Ratepayer Portfolio Grouping and Flat Property rows"
                   >
@@ -1180,17 +1130,17 @@ export function SmsRolloutSimulator({
                   <button
                     type="button"
                     onClick={handleExportAudience}
-                    className="h-6.5 px-2 rounded-md border border-[#2B3139] bg-[#2B313A] text-[#848E9C] hover:text-[#EAECEF] hover:border-[#FCD535]/40 text-[11px] font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                    className="h-6.5 px-2 rounded-md border border-[#E5E5EA] bg-[#F2F2F7] text-[#6C6C70] hover:text-[#1C1C1E] hover:border-[#007AFF]/40 text-[11px] font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
                     title="Export Audience CSV with Linked Portfolios"
                   >
-                    <Download className="w-3 h-3 text-[#FCD535]" />
+                    <Download className="w-3 h-3 text-[#007AFF]" />
                     <span>Export Audience CSV</span>
                   </button>
-                  <div className="h-3 w-px bg-[#2B3139]" />
+                  <div className="h-3 w-px bg-[#E5E5EA]" />
                   <button
                     type="button"
                     onClick={() => setShowTemplateModal(true)}
-                    className="text-[11px] font-semibold text-[#FCD535] hover:underline cursor-pointer flex items-center gap-1"
+                    className="text-[11px] font-semibold text-[#007AFF] hover:underline cursor-pointer flex items-center gap-1"
                   >
                     <Edit3 className="w-3 h-3" />
                     <span>Edit Template Body</span>
@@ -1198,31 +1148,16 @@ export function SmsRolloutSimulator({
                 </div>
               </div>
 
-              {/* Carousel Edge Fade Horizontal Scroll Container with Depth */}
-              <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
-                {/* Left Edge Fade Overlay with Depth */}
-                <div
-                  className={`pointer-events-none absolute left-0 top-0 bottom-0 w-8 z-30 transition-opacity duration-300 bg-gradient-to-r from-[#181A20] via-[#181A20]/50 to-transparent shadow-[inset_12px_0_16px_-6px_rgba(0,0,0,0.65)] ${
-                    canScrollLeft ? "opacity-100" : "opacity-0"
-                  }`}
-                />
-
-                {/* Right Edge Fade Overlay with Depth */}
-                <div
-                  className={`pointer-events-none absolute right-0 top-0 bottom-0 w-10 z-30 transition-opacity duration-300 bg-gradient-to-l from-[#181A20] via-[#181A20]/50 to-transparent shadow-[inset_-12px_0_16px_-6px_rgba(0,0,0,0.65)] ${
-                    canScrollRight ? "opacity-100" : "opacity-0"
-                  }`}
-                />
-
-                <div
-                  ref={tableContainerRef}
-                  onScroll={handleCombinedAudienceScroll}
-                  className="flex-1 min-h-0 overflow-y-auto overflow-x-auto"
-                >
-                  <table className="w-full text-left text-xs border-collapse">
-                  <thead className="bg-[#1E2329] border-b border-[#2B3139] text-[#848E9C] font-semibold text-[11px] sticky top-0 z-20 shadow-xs">
+              {/* Audience Table Container */}
+              <div
+                ref={tableContainerRef}
+                onScroll={handleAudienceTableScroll}
+                className="flex-1 min-h-0 overflow-y-auto overflow-x-auto"
+              >
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead className="bg-[#F8F9FA] border-b border-[#E5E5EA] text-[#6C6C70] font-semibold text-[11px] sticky top-0 z-20">
                     <tr>
-                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#1E2329] w-10 text-center border-l-4 border-[#1E2329]">
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA] w-10 text-center border-l-4 border-[#F8F9FA]">
                         <input
                           type="checkbox"
                           checked={audienceScope === "SELECTED" && liveAudience.length > 0 && selectedSpecificAccounts.length === liveAudience.length}
@@ -1240,36 +1175,36 @@ export function SmsRolloutSimulator({
                               setAudienceScope("DATABASE_FILTER");
                             }
                           }}
-                          className="w-3.5 h-3.5 rounded border-[#2B3139] text-[#FCD535] focus:ring-[#FCD535] accent-[#FCD535] cursor-pointer"
+                          className="w-3.5 h-3.5 rounded border-[#C7C7CC] text-[#007AFF] focus:ring-[#007AFF] accent-[#007AFF] cursor-pointer"
                         />
                       </th>
-                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#1E2329]">Account No</th>
-                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#1E2329]">Name</th>
-                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#1E2329]">Telephone</th>
-                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#1E2329]">ID</th>
-                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#1E2329]">Owner Digital Address</th>
-                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#1E2329]">House No</th>
-                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#1E2329]">Plot No</th>
-                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#1E2329]">Valuation No</th>
-                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#1E2329]">Municipality</th>
-                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#1E2329]">Property Cat</th>
-                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#1E2329]">Bill Year</th>
-                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#1E2329]">Bill Date</th>
-                      <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#1E2329]">Rateable Value</th>
-                      <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#1E2329]">Rate Imposed</th>
-                      <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#1E2329]">Previous Year Bill</th>
-                      <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#1E2329]">Amount Paid</th>
-                      <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#1E2329]">Arrears</th>
-                      <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#1E2329]">Current Bill</th>
-                      <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#1E2329]">Bill Amount</th>
-                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#1E2329]">Electoral Area</th>
-                      <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#1E2329]">Outstanding Amt</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA]">Account No</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA]">Name</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA]">Telephone</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA]">ID</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA]">Owner Digital Address</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA]">House No</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA]">Plot No</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA]">Valuation No</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA]">Municipality</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA]">Property Cat</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA]">Bill Year</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA]">Bill Date</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#F8F9FA]">Rateable Value</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#F8F9FA]">Rate Imposed</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#F8F9FA]">Previous Year Bill</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#F8F9FA]">Amount Paid</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#F8F9FA]">Arrears</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#F8F9FA]">Current Bill</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#F8F9FA]">Bill Amount</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA]">Electoral Area</th>
+                      <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#F8F9FA]">Outstanding Amt</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#2B3139] bg-[#181A20]">
+                  <tbody className="divide-y divide-[#E5E5EA] bg-white">
                     {liveAudience.length === 0 ? (
                       <tr>
-                        <td colSpan={22} className="py-12 text-center text-[#848E9C] italic text-xs">
+                        <td colSpan={22} className="py-12 text-center text-[#8E8E93] italic text-xs">
                           No properties match the selected audience filters.
                         </td>
                       </tr>
@@ -1289,9 +1224,9 @@ export function SmsRolloutSimulator({
                             <Fragment key={`group-frag-${group.key}`}>
                               {/* Ratepayer Portfolio Group Header */}
                               <tr
-                                className="bg-[#1E2329] border-t border-b border-[#2B3139] transition-colors select-none hover:bg-[#2B313A]/50"
+                                className="bg-[#F8F9FA] border-t border-b border-[#E5E5EA] transition-colors select-none hover:bg-[#F2F2F7]"
                               >
-                                <td className="py-2.5 px-3 text-center w-10 border-l-4 border-[#FCD535]">
+                                <td className="py-2.5 px-3 text-center w-10 border-l-4 border-[#007AFF]">
                                   <input
                                     type="checkbox"
                                     checked={isAllGroupSelected}
@@ -1320,7 +1255,7 @@ export function SmsRolloutSimulator({
                                         setAudienceScope("SELECTED");
                                       }
                                     }}
-                                    className="w-3.5 h-3.5 rounded border-[#2B3139] text-[#FCD535] focus:ring-[#FCD535] accent-[#FCD535] cursor-pointer"
+                                    className="w-3.5 h-3.5 rounded border-[#C7C7CC] text-[#007AFF] focus:ring-[#007AFF] accent-[#007AFF] cursor-pointer"
                                   />
                                 </td>
                                 <td colSpan={20} className="py-2 px-3">
@@ -1335,36 +1270,36 @@ export function SmsRolloutSimulator({
                                               e.stopPropagation();
                                               toggleGroupCollapse(group.key);
                                             }}
-                                            className="w-5 h-5 rounded border border-[#2B3139] bg-[#1E2329] text-[#EAECEF] hover:bg-[#2B313A] hover:border-[#FCD535] flex items-center justify-center transition-colors shrink-0 shadow-2xs cursor-pointer"
+                                            className="w-5 h-5 rounded border border-[#E5E5EA] bg-white text-[#1C1C1E] hover:bg-[#F2F2F7] hover:border-[#007AFF] flex items-center justify-center transition-colors shrink-0 shadow-2xs cursor-pointer"
                                           >
                                             <motion.div
                                               animate={{ rotate: isExpanded ? 0 : -90 }}
                                               transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
                                               className="flex items-center justify-center"
                                             >
-                                              <ChevronDown className="w-3.5 h-3.5 text-[#EAECEF]" />
+                                              <ChevronDown className="w-3.5 h-3.5 text-[#1C1C1E]" />
                                             </motion.div>
                                           </button>
                                           {isExpanded && (
-                                            <div className="absolute left-[9.5px] top-full h-2.5 w-px border-l border-dashed border-[#2B3139]" />
+                                            <div className="absolute left-[9.5px] top-full h-2.5 w-px border-l border-dashed border-[#E5E5EA]" />
                                           )}
                                         </div>
-                                      <span className="font-bold text-xs text-[#EAECEF]">
+                                      <span className="font-bold text-xs text-[#1C1C1E]">
                                         {group.ownerName}
                                       </span>
-                                      <span className="text-[11px] font-mono text-[#848E9C]">
+                                      <span className="text-[11px] font-mono text-[#6C6C70]">
                                         &bull; {cleanDash(group.phone)}
                                       </span>
 
-                                      <span className="text-[#2B3139] mx-0.5">|</span>
-                                      <span className="text-[11px] font-semibold text-[#EAECEF]">
+                                      <span className="text-[#E5E5EA] mx-0.5">|</span>
+                                      <span className="text-[11px] font-semibold text-[#1C1C1E]">
                                         {group.properties.length} Accounts
                                       </span>
 
                                       {group.totalArrears > 0 && (
                                         <>
-                                          <span className="text-[#2B3139] mx-0.5">|</span>
-                                          <span className="text-[11px] font-semibold text-[#F6465D]">
+                                          <span className="text-[#E5E5EA] mx-0.5">|</span>
+                                          <span className="text-[11px] font-semibold text-[#FF3B30]">
                                             Arrears: GH₵{" "}
                                             {group.totalArrears.toLocaleString("en-US", {
                                               minimumFractionDigits: 2,
@@ -1376,10 +1311,10 @@ export function SmsRolloutSimulator({
                                 </td>
                                 <td
                                   onClick={() => toggleGroupCollapse(group.key)}
-                                  className="py-2.5 px-3 text-right whitespace-nowrap font-bold text-xs text-[#EAECEF] tabular-nums cursor-pointer relative"
+                                  className="py-2.5 px-3 text-right whitespace-nowrap font-bold text-xs text-[#1C1C1E] tabular-nums cursor-pointer relative"
                                 >
                                   {isExpanded && (
-                                    <div className="absolute left-3 bottom-0 h-2.5 w-px border-l border-dashed border-[#2B3139]" />
+                                    <div className="absolute left-3 bottom-0 h-2.5 w-px border-l border-dashed border-[#E5E5EA]" />
                                   )}
                                   GH₵{" "}
                                   {group.totalAmountDue.toLocaleString("en-US", {
@@ -1427,8 +1362,8 @@ export function SmsRolloutSimulator({
                                             setAudienceScope("SELECTED");
                                           }
                                         }}
-                                        className={`transition-colors cursor-pointer border-b border-[#2B3139] ${
-                                          isSelected ? "bg-[#2B313A]" : "bg-[#0B0E11] hover:bg-[#2B313A]/40"
+                                        className={`transition-colors cursor-pointer border-b border-[#E5E5EA] ${
+                                          isSelected ? "bg-[#007AFF]/10" : "bg-white hover:bg-[#F8F9FA]"
                                         }`}
                                       >
                                       <td className="py-2.5 px-3 text-center w-10 border-l-4 border-transparent">
@@ -1436,48 +1371,48 @@ export function SmsRolloutSimulator({
                                           type="checkbox"
                                           checked={isSelected}
                                           readOnly
-                                          className="w-3.5 h-3.5 rounded border-[#2B3139] text-[#FCD535] focus:ring-[#FCD535] accent-[#FCD535] cursor-pointer pointer-events-none"
+                                          className="w-3.5 h-3.5 rounded border-[#C7C7CC] text-[#007AFF] focus:ring-[#007AFF] accent-[#007AFF] cursor-pointer pointer-events-none"
                                         />
                                       </td>
-                                      <td className="py-2.5 px-3 whitespace-nowrap font-mono font-bold text-[#FCD535] text-[11px] relative">
+                                      <td className="py-2.5 px-3 whitespace-nowrap font-mono font-bold text-[#007AFF] text-[11px] relative">
                                         {/* Tree Guide Lines: Continuous Vertical Line & Horizontal Branch */}
                                         <div
-                                          className={`absolute left-[22px] w-px border-l border-dashed border-[#2B3139] ${
+                                          className={`absolute left-[22px] w-px border-l border-dashed border-[#E5E5EA] ${
                                             isLast ? "top-0 h-1/2" : "top-0 h-full"
                                           }`}
                                         />
-                                        <div className="absolute left-[22px] top-1/2 w-4 border-t border-dashed border-[#2B3139]" />
-                                        <span className="pl-8 inline-block font-mono font-bold text-[#FCD535] text-[11px]">
+                                        <div className="absolute left-[22px] top-1/2 w-4 border-t border-dashed border-[#E5E5EA]" />
+                                        <span className="pl-8 inline-block font-mono font-bold text-[#007AFF] text-[11px]">
                                           {cleanDash(prop.accountNumber)}
                                         </span>
                                       </td>
-                                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] max-w-[150px] truncate">{cleanDash(prop.ownerName)}</td>
-                                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.ownerPhone)}</td>
-                                      <td className="py-2.5 px-3 whitespace-nowrap font-mono font-medium text-[11px] text-[#EAECEF]">{cleanDash(prop.id)}</td>
-                                      <td className="py-2.5 px-3 whitespace-nowrap font-mono font-medium text-[11px] text-[#EAECEF]">{cleanDash(prop.ownerDigitalAddress)}</td>
-                                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.houseNo)}</td>
-                                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.plotNo)}</td>
-                                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.valuationNo)}</td>
-                                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.municipality)}</td>
-                                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.propertyClassification)}</td>
-                                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{prop.billYear || "—"}</td>
-                                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{prop.billDateFormatted || "—"}</td>
-                                      <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums">{prop.rateableValueFormatted || "—"}</td>
-                                      <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums">{prop.rateImposed ?? "—"}</td>
-                                      <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums">{prop.previousYearBillFormatted || "—"}</td>
-                                      <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums">GH₵ {(Number(prop.amountPaidLastYear || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
-                                      <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums"><span className={prop.arrears > 0 ? "text-[#F6465D] font-semibold" : ""}>{prop.arrearsFormatted || "—"}</span></td>
-                                      <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums">GH₵ {(Number(prop.currentFee || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
-                                      <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums">GH₵ {(Number(prop.totalAmountDue || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
-                                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.electoralArea)}</td>
-                                      <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] text-[#848E9C] tabular-nums font-normal relative">
+                                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] max-w-[150px] truncate">{cleanDash(prop.ownerName)}</td>
+                                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.ownerPhone)}</td>
+                                      <td className="py-2.5 px-3 whitespace-nowrap font-mono font-medium text-[11px] text-[#1C1C1E]">{cleanDash(prop.id)}</td>
+                                      <td className="py-2.5 px-3 whitespace-nowrap font-mono font-medium text-[11px] text-[#1C1C1E]">{cleanDash(prop.ownerDigitalAddress)}</td>
+                                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.houseNo)}</td>
+                                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.plotNo)}</td>
+                                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.valuationNo)}</td>
+                                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.municipality)}</td>
+                                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.propertyClassification)}</td>
+                                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{prop.billYear || "—"}</td>
+                                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{prop.billDateFormatted || "—"}</td>
+                                      <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums">{prop.rateableValueFormatted || "—"}</td>
+                                      <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums">{prop.rateImposed ?? "—"}</td>
+                                      <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums">{prop.previousYearBillFormatted || "—"}</td>
+                                      <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums">GH₵ {(Number(prop.amountPaidLastYear || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                                      <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums"><span className={prop.arrears > 0 ? "text-[#FF3B30] font-semibold" : ""}>{prop.arrearsFormatted || "—"}</span></td>
+                                      <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums">GH₵ {(Number(prop.currentFee || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                                      <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums">GH₵ {(Number(prop.totalAmountDue || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.electoralArea)}</td>
+                                      <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] text-[#6C6C70] tabular-nums font-normal relative">
                                         {/* Tree Guide Lines for Outstanding Amt */}
                                         <div
-                                          className={`absolute left-3 w-px border-l border-dashed border-[#2B3139] ${
+                                          className={`absolute left-3 w-px border-l border-dashed border-[#E5E5EA] ${
                                             isLast ? "top-0 h-1/2" : "top-0 h-full"
                                           }`}
                                         />
-                                        <div className="absolute left-3 top-1/2 w-3 border-t border-dashed border-[#2B3139]" />
+                                        <div className="absolute left-3 top-1/2 w-3 border-t border-dashed border-[#E5E5EA]" />
                                         <span>
                                           GH₵ {(Number(prop.totalAmountDue || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}
                                         </span>
@@ -1516,37 +1451,37 @@ export function SmsRolloutSimulator({
                                 setAudienceScope("SELECTED");
                               }
                             }}
-                            className={`transition-colors cursor-pointer ${isSelected ? "bg-[#2B313A]" : "bg-[#181A20] hover:bg-[#2B313A]/40"}`}
+                            className={`transition-colors cursor-pointer border-b border-[#E5E5EA] ${isSelected ? "bg-[#007AFF]/10" : "bg-white hover:bg-[#F8F9FA]"}`}
                           >
                             <td className="py-2.5 px-3 text-center w-10 border-l-4 border-transparent">
                               <input
                                 type="checkbox"
                                 checked={isSelected}
                                 readOnly
-                                className="w-3.5 h-3.5 rounded border-[#2B3139] text-[#FCD535] focus:ring-[#FCD535] accent-[#FCD535] cursor-pointer pointer-events-none"
+                                className="w-3.5 h-3.5 rounded border-[#C7C7CC] text-[#007AFF] focus:ring-[#007AFF] accent-[#007AFF] cursor-pointer pointer-events-none"
                               />
                             </td>
-                            <td className="py-2.5 px-3 whitespace-nowrap font-mono font-bold text-[#FCD535] text-[11px]">{cleanDash(prop.accountNumber)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] max-w-[150px] truncate">{cleanDash(prop.ownerName)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.ownerPhone)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap font-mono font-medium text-[11px] text-[#EAECEF]">{cleanDash(prop.id)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap font-mono font-medium text-[11px] text-[#EAECEF]">{cleanDash(prop.ownerDigitalAddress)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.houseNo)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.plotNo)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.valuationNo)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.municipality)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.propertyClassification)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.billYear)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.billDateFormatted)}</td>
-                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums">{prop.rateableValueFormatted || "—"}</td>
-                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums">{prop.rateImposed ?? "—"}</td>
-                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums">{prop.previousYearBillFormatted || "—"}</td>
-                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums">GH₵ {(Number(prop.amountPaidLastYear || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
-                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums"><span className={prop.arrears > 0 ? "text-[#F6465D] font-semibold" : ""}>{prop.arrearsFormatted || "—"}</span></td>
-                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums">GH₵ {(Number(prop.currentFee || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
-                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums">GH₵ {(Number(prop.totalAmountDue || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.electoralArea)}</td>
-                            <td className="py-2.5 px-3 text-right whitespace-nowrap font-bold text-[#EAECEF] text-[11px] tabular-nums">GH₵ {(Number(prop.totalAmountDue || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap font-mono font-bold text-[#007AFF] text-[11px]">{cleanDash(prop.accountNumber)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] max-w-[150px] truncate">{cleanDash(prop.ownerName)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.ownerPhone)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap font-mono font-medium text-[11px] text-[#1C1C1E]">{cleanDash(prop.id)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap font-mono font-medium text-[11px] text-[#1C1C1E]">{cleanDash(prop.ownerDigitalAddress)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.houseNo)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.plotNo)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.valuationNo)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.municipality)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.propertyClassification)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.billYear)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.billDateFormatted)}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums">{prop.rateableValueFormatted || "—"}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums">{prop.rateImposed ?? "—"}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums">{prop.previousYearBillFormatted || "—"}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums">GH₵ {(Number(prop.amountPaidLastYear || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums"><span className={prop.arrears > 0 ? "text-[#FF3B30] font-semibold" : ""}>{prop.arrearsFormatted || "—"}</span></td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums">GH₵ {(Number(prop.currentFee || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums">GH₵ {(Number(prop.totalAmountDue || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.electoralArea)}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap font-bold text-[#1C1C1E] text-[11px] tabular-nums">GH₵ {(Number(prop.totalAmountDue || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
                           </tr>
                         );
                       })
@@ -1571,37 +1506,37 @@ export function SmsRolloutSimulator({
                                 setAudienceScope("SELECTED");
                               }
                             }}
-                            className={`transition-colors cursor-pointer ${isSelected ? 'bg-[#2B313A] text-[#EAECEF]' : 'hover:bg-[#2B313A]/60'}`}
+                            className={`transition-colors cursor-pointer border-b border-[#E5E5EA] ${isSelected ? 'bg-[#007AFF]/10 text-[#1C1C1E]' : 'hover:bg-[#F8F9FA]'}`}
                           >
                             <td className="py-2.5 px-3 text-center w-10 border-l-4 border-transparent">
                               <input
                                 type="checkbox"
                                 checked={isSelected}
                                 readOnly
-                                className="w-3.5 h-3.5 rounded border-[#2B3139] text-[#FCD535] focus:ring-[#FCD535] accent-[#FCD535] cursor-pointer pointer-events-none"
+                                className="w-3.5 h-3.5 rounded border-[#C7C7CC] text-[#007AFF] focus:ring-[#007AFF] accent-[#007AFF] cursor-pointer pointer-events-none"
                               />
                             </td>
-                            <td className="py-2.5 px-3 whitespace-nowrap font-mono font-bold text-[#FCD535] text-[11px]">{cleanDash(prop.accountNumber)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] max-w-[150px] truncate">{cleanDash(prop.ownerName)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.ownerPhone)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap font-mono font-medium text-[11px] text-[#EAECEF]">{cleanDash(prop.id)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap font-mono font-medium text-[11px] text-[#EAECEF]">{cleanDash(prop.ownerDigitalAddress)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.houseNo)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.plotNo)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.valuationNo)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.municipality)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.propertyClassification)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.billYear)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.billDateFormatted)}</td>
-                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums">{prop.rateableValueFormatted || "—"}</td>
-                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums">{prop.rateImposed ?? "—"}</td>
-                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums">{prop.previousYearBillFormatted || "—"}</td>
-                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums">GH₵ {(Number(prop.amountPaidLastYear || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
-                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums"><span className={prop.arrears > 0 ? "text-[#F6465D] font-semibold" : ""}>{prop.arrearsFormatted || "—"}</span></td>
-                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums">GH₵ {(Number(prop.currentFee || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
-                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#EAECEF] tabular-nums">GH₵ {(Number(prop.totalAmountDue || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#EAECEF]">{cleanDash(prop.electoralArea)}</td>
-                            <td className="py-2.5 px-3 text-right whitespace-nowrap font-bold text-[#EAECEF] text-[11px] tabular-nums">GH₵ {(Number(prop.totalAmountDue || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap font-mono font-bold text-[#007AFF] text-[11px]">{cleanDash(prop.accountNumber)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] max-w-[150px] truncate">{cleanDash(prop.ownerName)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.ownerPhone)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap font-mono font-medium text-[11px] text-[#1C1C1E]">{cleanDash(prop.id)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap font-mono font-medium text-[11px] text-[#1C1C1E]">{cleanDash(prop.ownerDigitalAddress)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.houseNo)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.plotNo)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.valuationNo)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.municipality)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.propertyClassification)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.billYear)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.billDateFormatted)}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums">{prop.rateableValueFormatted || "—"}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums">{prop.rateImposed ?? "—"}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums">{prop.previousYearBillFormatted || "—"}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums">GH₵ {(Number(prop.amountPaidLastYear || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums"><span className={prop.arrears > 0 ? "text-[#FF3B30] font-semibold" : ""}>{prop.arrearsFormatted || "—"}</span></td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums">GH₵ {(Number(prop.currentFee || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums">GH₵ {(Number(prop.totalAmountDue || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.electoralArea)}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap font-bold text-[#1C1C1E] text-[11px] tabular-nums">GH₵ {(Number(prop.totalAmountDue || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
                           </tr>
                         );
                       })
@@ -1611,23 +1546,23 @@ export function SmsRolloutSimulator({
                     {isLoadingMoreAudience && (
                       <>
                         {[...Array(6)].map((_, i) => (
-                          <tr key={`sms-skel-${i}`} className="animate-pulse border-b border-[#2B3139]">
+                          <tr key={`sms-skel-${i}`} className="animate-pulse border-b border-[#E5E5EA]">
                             <td className="py-2.5 px-3">
-                              <div className="w-4 h-4 rounded bg-[#2B3139] mx-auto" />
+                              <div className="w-4 h-4 rounded bg-[#E5E5EA] mx-auto" />
                             </td>
                             <td className="py-2.5 px-3">
-                              <div className="h-3 bg-[#2B3139] rounded w-28" />
+                              <div className="h-3 bg-[#E5E5EA] rounded w-28" />
                             </td>
                             <td className="py-2.5 px-3">
-                              <div className="h-3 bg-[#2B3139] rounded w-32" />
-                              <div className="h-2.5 bg-[#2B313A] rounded w-24 mt-1" />
+                              <div className="h-3 bg-[#E5E5EA] rounded w-32" />
+                              <div className="h-2.5 bg-[#F2F2F7] rounded w-24 mt-1" />
                             </td>
                             <td className="py-2.5 px-3">
-                              <div className="h-3 bg-[#2B3139] rounded w-24" />
+                              <div className="h-3 bg-[#E5E5EA] rounded w-24" />
                             </td>
                             {[...Array(18)].map((_, j) => (
                               <td key={j} className="py-2.5 px-3">
-                                <div className="h-3 bg-[#2B313A] rounded w-16" />
+                                <div className="h-3 bg-[#F2F2F7] rounded w-16" />
                               </td>
                             ))}
                           </tr>
@@ -1640,8 +1575,8 @@ export function SmsRolloutSimulator({
 
                     {/* Clean End-of-Roll Marker */}
                     {!hasMoreAudience && liveAudience.length > 0 && (
-                      <tr className="border-t border-[#2B3139] bg-[#1E2329]">
-                        <td colSpan={22} className="py-3 text-center text-[11px] font-medium text-[#848E9C]">
+                      <tr className="border-t border-[#E5E5EA] bg-[#F8F9FA]">
+                        <td colSpan={22} className="py-3 text-center text-[11px] font-medium text-[#6C6C70]">
                           &bull; End of audience roll ({(totalAudienceCount || liveAudience.length).toLocaleString()} properties loaded)
                         </td>
                       </tr>
@@ -1653,16 +1588,15 @@ export function SmsRolloutSimulator({
           </div>
         </div>
       </div>
-    </div>
 
         {/* PANE 2: DELIVERY LOGS */}
         <div className="w-1/2 h-full flex flex-col min-h-0 p-0 overflow-hidden relative">
-          <div className="h-full flex flex-col bg-[#181A20] border-0 rounded-none overflow-hidden shadow-none">
-            <div className="p-3 border-b border-[#2B3139] flex items-center justify-between gap-3 shrink-0">
+          <div className="h-full flex flex-col bg-white border-0 rounded-none overflow-hidden shadow-none">
+            <div className="p-3 border-b border-[#E5E5EA] bg-[#F8F9FA] flex items-center justify-between gap-3 shrink-0">
               <button
                 type="button"
                 onClick={() => setActiveView("SIMULATOR")}
-                className="h-7.5 px-2.5 rounded-lg border border-[#2B3139] text-xs font-semibold text-[#EAECEF] bg-[#1E2329] hover:bg-[#2B313A] transition-colors flex items-center gap-1 cursor-pointer"
+                className="h-7.5 px-2.5 rounded-lg border border-[#E5E5EA] text-xs font-semibold text-[#1C1C1E] bg-white hover:bg-[#F2F2F7] transition-colors flex items-center gap-1 cursor-pointer"
               >
                 <ChevronLeft className="w-3.5 h-3.5" />
                 <span>Back to Engine</span>
@@ -1671,39 +1605,24 @@ export function SmsRolloutSimulator({
                 <button
                   type="button"
                   onClick={handleExportLogs}
-                  className="h-7.5 px-2.5 rounded-lg border border-[#FCD535]/30 text-xs font-semibold text-[#FCD535] bg-[#1E2329] hover:bg-[#2B313A] transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  className="h-7.5 px-2.5 rounded-lg border border-[#E5E5EA] text-xs font-semibold text-[#007AFF] bg-white hover:bg-[#F2F2F7] transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
                   title="Export SMS Rollout Logs CSV"
                 >
                   <Download className="w-3.5 h-3.5" />
                   <span>Export Logs CSV</span>
                 </button>
-                <span className="text-xs text-[#848E9C]">{logsList.length} total entries</span>
+                <span className="text-xs text-[#6C6C70]">{logsList.length} total entries</span>
               </div>
             </div>
 
-            {/* Delivery Logs Carousel Edge Fade Container with Depth */}
-            <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
-              {/* Left Edge Fade Overlay with Depth */}
-              <div
-                className={`pointer-events-none absolute left-0 top-0 bottom-0 w-8 z-30 transition-opacity duration-300 bg-gradient-to-r from-[#181A20] via-[#181A20]/50 to-transparent shadow-[inset_12px_0_16px_-6px_rgba(0,0,0,0.65)] ${
-                  canLogsScrollLeft ? "opacity-100" : "opacity-0"
-                }`}
-              />
-
-              {/* Right Edge Fade Overlay with Depth */}
-              <div
-                className={`pointer-events-none absolute right-0 top-0 bottom-0 w-10 z-30 transition-opacity duration-300 bg-gradient-to-l from-[#181A20] via-[#181A20]/50 to-transparent shadow-[inset_-12px_0_16px_-6px_rgba(0,0,0,0.65)] ${
-                  canLogsScrollRight ? "opacity-100" : "opacity-0"
-                }`}
-              />
-
-              <div
-                ref={logsTableContainerRef}
-                onScroll={handleCombinedLogsScroll}
-                className="flex-1 min-h-0 overflow-y-auto overflow-x-auto"
-              >
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-[#1E2329] border-b border-[#2B3139] text-[#848E9C] sticky top-0">
+            {/* Delivery Logs Container */}
+            <div
+              ref={logsTableContainerRef}
+              onScroll={handleLogsTableScroll}
+              className="flex-1 min-h-0 overflow-y-auto overflow-x-auto"
+            >
+              <table className="w-full text-left text-xs">
+                  <thead className="bg-[#F8F9FA] border-b border-[#E5E5EA] text-[#6C6C70] sticky top-0">
                     <tr>
                       <th className="py-2.5 px-3">Timestamp</th>
                       <th className="py-2.5 px-3">Recipient</th>
@@ -1711,32 +1630,32 @@ export function SmsRolloutSimulator({
                       <th className="py-2.5 px-3 text-center">Status</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#2B3139]">
+                  <tbody className="divide-y divide-[#E5E5EA]">
                     {logsList.map((log) => (
-                      <tr key={log.id}>
-                        <td className="py-2.5 px-3 text-xs font-medium text-[#EAECEF]">{log.createdAtFormatted}</td>
-                        <td className="py-2.5 px-3 text-xs font-semibold text-[#EAECEF]">{log.recipientName} ({log.recipientPhone})</td>
-                        <td className="py-2.5 px-3 text-xs text-[#EAECEF] font-medium truncate max-w-xs">{log.message}</td>
-                        <td className={`py-2.5 px-3 text-center text-xs font-bold ${log.deliveryStatus === "DELIVERED" ? "text-[#0ECB81]" : log.deliveryStatus === "FAILED" ? "text-[#F6465D]" : "text-[#FCD535]"}`}>{log.deliveryStatus}</td>
+                      <tr key={log.id} className="hover:bg-[#F8F9FA] transition-colors">
+                        <td className="py-2.5 px-3 text-xs font-medium text-[#1C1C1E]">{log.createdAtFormatted}</td>
+                        <td className="py-2.5 px-3 text-xs font-semibold text-[#1C1C1E]">{log.recipientName} ({log.recipientPhone})</td>
+                        <td className="py-2.5 px-3 text-xs text-[#1C1C1E] font-medium truncate max-w-xs">{log.message}</td>
+                        <td className={`py-2.5 px-3 text-center text-xs font-bold ${log.deliveryStatus === "DELIVERED" ? "text-[#34C759]" : log.deliveryStatus === "FAILED" ? "text-[#FF3B30]" : "text-[#FF9500]"}`}>{log.deliveryStatus}</td>
                       </tr>
                     ))}
                     {/* Logs Loading Skeleton Rows — matches Cadastre table pattern */}
                     {isLoadingMoreLogs && (
                       <>
                         {[...Array(4)].map((_, i) => (
-                          <tr key={`log-skel-${i}`} className="animate-pulse border-b border-[#2B3139]">
+                          <tr key={`log-skel-${i}`} className="animate-pulse border-b border-[#E5E5EA]">
                             <td className="py-2.5 px-3">
-                              <div className="h-3 bg-[#2B3139] rounded w-24" />
+                              <div className="h-3 bg-[#E5E5EA] rounded w-24" />
                             </td>
                             <td className="py-2.5 px-3">
-                              <div className="h-3 bg-[#2B3139] rounded w-36" />
-                              <div className="h-2.5 bg-[#2B313A] rounded w-28 mt-1" />
+                              <div className="h-3 bg-[#E5E5EA] rounded w-36" />
+                              <div className="h-2.5 bg-[#F2F2F7] rounded w-28 mt-1" />
                             </td>
                             <td className="py-2.5 px-3">
-                              <div className="h-3 bg-[#2B313A] rounded w-48" />
+                              <div className="h-3 bg-[#F2F2F7] rounded w-48" />
                             </td>
                             <td className="py-2.5 px-3 text-center">
-                              <div className="h-3 bg-[#2B3139] rounded w-16 mx-auto" />
+                              <div className="h-3 bg-[#E5E5EA] rounded w-16 mx-auto" />
                             </td>
                           </tr>
                         ))}
@@ -1744,8 +1663,8 @@ export function SmsRolloutSimulator({
                     )}
                     <tr ref={logsSentinelRef} className="h-2 pointer-events-none" />
                     {!hasMoreLogs && logsList.length > 0 && (
-                      <tr className="bg-[#1E2329] border-t border-[#2B3139]">
-                        <td colSpan={4} className="py-3 text-center text-[11px] font-medium text-[#848E9C]">
+                      <tr className="bg-[#F8F9FA] border-t border-[#E5E5EA]">
+                        <td colSpan={4} className="py-3 text-center text-[11px] font-medium text-[#6C6C70]">
                           &bull; End of dispatch delivery history ({logsList.length} entries loaded)
                         </td>
                       </tr>
@@ -1755,22 +1674,21 @@ export function SmsRolloutSimulator({
               </div>
             </div>
           </div>
-        </div>
-      </motion.div>
+        </motion.div>
 
       {/* Message Template Configuration Modal Popup */}
       {showTemplateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/45 backdrop-blur-xs font-sans">
-          <div className="bg-[#1E2329] rounded-2xl border border-[#2B3139] max-w-2xl w-full shadow-2xl flex flex-col overflow-hidden max-h-[90vh]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-xs font-sans">
+          <div className="bg-white/95 backdrop-blur-2xl rounded-2xl border border-[#E5E5EA] max-w-2xl w-full shadow-2xl flex flex-col overflow-hidden max-h-[90vh]">
             {/* Modal Header */}
-            <div className="px-5 py-3.5 border-b border-[#2B3139] flex items-center justify-between shrink-0 bg-[#1E2329]">
+            <div className="px-5 py-3.5 border-b border-[#E5E5EA] flex items-center justify-between shrink-0 bg-[#F8F9FA]">
               <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-[#FCD535]" />
+                <FileText className="w-4 h-4 text-[#007AFF]" />
                 <div>
-                  <h3 className="text-sm font-bold text-[#EAECEF]">
+                  <h3 className="text-sm font-bold text-[#1C1C1E]">
                     Message Template &amp; Dynamic Tokens
                   </h3>
-                  <p className="text-[11px] text-[#848E9C]">
+                  <p className="text-[11px] text-[#6C6C70]">
                     Customise the outbound notice text with dynamic property and balance tokens.
                   </p>
                 </div>
@@ -1778,18 +1696,18 @@ export function SmsRolloutSimulator({
               <button
                 type="button"
                 onClick={() => setShowTemplateModal(false)}
-                className="text-[#848E9C] hover:text-[#EAECEF] p-1 rounded-lg hover:bg-[#2B313A] cursor-pointer transition-colors"
+                className="text-[#8E8E93] hover:text-[#1C1C1E] p-1 rounded-lg hover:bg-[#E5E5EA] cursor-pointer transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Modal Body */}
-            <div className="p-5 space-y-4 overflow-y-auto flex-1">
+            <div className="p-5 space-y-4 overflow-y-auto flex-1 bg-white">
               {/* Type and Presets Row */}
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#2B3139] pb-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#E5E5EA] pb-3">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-semibold text-[#EAECEF]">Template Type:</span>
+                  <span className="text-xs font-semibold text-[#1C1C1E]">Template Type:</span>
                   <div className="flex items-center gap-1">
                     <select
                       value={activeTemplateType === "RECEIPT" ? "RECEIPT" : targetStatus}
@@ -1802,7 +1720,7 @@ export function SmsRolloutSimulator({
                           handleStatusChange(val as any);
                         }
                       }}
-                      className="bg-[#0B0E11] text-[#FCD535] border border-[#2B3139] rounded-md px-2 py-1 text-xs font-medium focus:outline-none focus:border-[#FCD535] cursor-pointer"
+                      className="bg-[#F2F2F7] text-[#007AFF] border border-[#E5E5EA] rounded-md px-2 py-1 text-xs font-medium focus:outline-none focus:border-[#007AFF] cursor-pointer"
                     >
                       <option value="UNPAID">Annual Bill (Unpaid)</option>
                       <option value="ALL">General Notice (All)</option>
@@ -1820,9 +1738,9 @@ export function SmsRolloutSimulator({
                       ref={tokenInserterBtnRef}
                       type="button"
                       onClick={() => setShowTokenInserter((prev) => !prev)}
-                      className="h-6 px-2 rounded-md bg-[#2B313A] hover:bg-[#363D47] border border-[#2B3139] text-[10px] font-semibold text-[#EAECEF] flex items-center gap-1 transition-colors cursor-pointer"
+                      className="h-6 px-2 rounded-md bg-[#F2F2F7] hover:bg-[#E5E5EA] border border-[#E5E5EA] text-[10px] font-semibold text-[#1C1C1E] flex items-center gap-1 transition-colors cursor-pointer"
                     >
-                      <Code2 className="w-3 h-3 text-[#FCD535]" />
+                      <Code2 className="w-3 h-3 text-[#007AFF]" />
                       <span>Insert Token</span>
                       <ChevronDown className="w-2.5 h-2.5" />
                     </button>
@@ -1830,9 +1748,9 @@ export function SmsRolloutSimulator({
                     {showTokenInserter && (
                       <div
                         ref={tokenInserterRef}
-                        className="absolute right-0 top-full mt-1 w-64 z-50 rounded-xl border border-[#2B3139] bg-[#1E2329] shadow-2xl p-2 space-y-1 font-sans text-xs"
+                        className="absolute right-0 top-full mt-1 w-64 z-50 rounded-xl border border-[#E5E5EA] bg-white/95 backdrop-blur-xl shadow-xl p-2 space-y-1 font-sans text-xs"
                       >
-                        <div className="text-[10px] font-bold text-[#848E9C] uppercase px-1 pb-1 border-b border-[#2B3139]">
+                        <div className="text-[10px] font-bold text-[#6C6C70] uppercase px-1 pb-1 border-b border-[#E5E5EA]">
                           Insert Dynamic Token
                         </div>
                         <div className="max-h-48 overflow-y-auto space-y-0.5">
@@ -1859,10 +1777,10 @@ export function SmsRolloutSimulator({
                                   }, 50);
                                 }
                               }}
-                              className="w-full text-left px-2 py-1 rounded hover:bg-[#2B313A] text-[11px] flex items-center justify-between group cursor-pointer"
+                              className="w-full text-left px-2 py-1 rounded hover:bg-[#F2F2F7] text-[11px] flex items-center justify-between group cursor-pointer"
                             >
-                              <span className="font-mono text-[#FCD535] font-semibold text-[10px]">{t.tag}</span>
-                              <span className="text-[10px] text-[#848E9C] group-hover:text-[#EAECEF]">{t.label}</span>
+                              <span className="font-mono text-[#007AFF] font-semibold text-[10px]">{t.tag}</span>
+                              <span className="text-[10px] text-[#6C6C70] group-hover:text-[#1C1C1E]">{t.label}</span>
                             </button>
                           ))}
                         </div>
@@ -1876,9 +1794,9 @@ export function SmsRolloutSimulator({
                       ref={savedTemplatesBtnRef}
                       type="button"
                       onClick={() => setShowSavedTemplates((prev) => !prev)}
-                      className="h-6 px-2 rounded-md bg-[#2B313A] hover:bg-[#363D47] border border-[#2B3139] text-[10px] font-medium text-[#EAECEF] flex items-center gap-1 transition-colors cursor-pointer"
+                      className="h-6 px-2 rounded-md bg-[#F2F2F7] hover:bg-[#E5E5EA] border border-[#E5E5EA] text-[10px] font-medium text-[#1C1C1E] flex items-center gap-1 transition-colors cursor-pointer"
                     >
-                      <Bookmark className="w-3 h-3 text-[#FCD535]" />
+                      <Bookmark className="w-3 h-3 text-[#007AFF]" />
                       <span>Saved Presets</span>
                       <ChevronDown className="w-2.5 h-2.5" />
                     </button>
@@ -1886,9 +1804,9 @@ export function SmsRolloutSimulator({
                     {showSavedTemplates && (
                       <div
                         ref={savedTemplatesRef}
-                        className="absolute right-0 top-full mt-1 w-72 z-50 rounded-xl border border-[#2B3139] bg-[#1E2329] shadow-2xl p-2 space-y-1 font-sans text-xs"
+                        className="absolute right-0 top-full mt-1 w-72 z-50 rounded-xl border border-[#E5E5EA] bg-white/95 backdrop-blur-xl shadow-xl p-2 space-y-1 font-sans text-xs"
                       >
-                        <div className="text-[10px] font-bold text-[#848E9C] uppercase px-1 pb-1 border-b border-[#2B3139]">
+                        <div className="text-[10px] font-bold text-[#6C6C70] uppercase px-1 pb-1 border-b border-[#E5E5EA]">
                           Load Template Preset
                         </div>
                         <div className="max-h-56 overflow-y-auto space-y-1">
@@ -1909,10 +1827,10 @@ export function SmsRolloutSimulator({
                                   }
                                   setShowSavedTemplates(false);
                                 }}
-                                className="w-full text-left p-1.5 rounded hover:bg-[#2B313A] border border-[#2B3139] cursor-pointer transition-colors"
+                                className="w-full text-left p-1.5 rounded hover:bg-[#F2F2F7] border border-[#E5E5EA] cursor-pointer transition-colors"
                               >
-                                <span className="font-semibold text-[#FCD535] text-[11px] block">{st.name}</span>
-                                <span className="text-[10px] text-[#848E9C] line-clamp-1 font-mono">{st.content}</span>
+                                <span className="font-semibold text-[#007AFF] text-[11px] block">{st.name}</span>
+                                <span className="text-[10px] text-[#6C6C70] line-clamp-1 font-mono">{st.content}</span>
                               </button>
                             ))}
                         </div>
@@ -1920,7 +1838,7 @@ export function SmsRolloutSimulator({
                     )}
                   </div>
 
-                  <span className="text-[11px] text-[#848E9C] font-mono">{currentTemplate.length} chars</span>
+                  <span className="text-[11px] text-[#6C6C70] font-mono">{currentTemplate.length} chars</span>
                 </div>
               </div>
 
@@ -1935,14 +1853,14 @@ export function SmsRolloutSimulator({
                       : setReceiptTemplate(e.target.value)
                   }
                   rows={6}
-                  className="w-full p-3 rounded-lg border border-[#2B3139] bg-[#0B0E11] text-xs text-[#EAECEF] focus:outline-none focus:border-[#FCD535] resize-y font-mono leading-relaxed"
+                  className="w-full p-3 rounded-lg border border-[#E5E5EA] bg-[#F2F2F7] text-xs text-[#1C1C1E] focus:outline-none focus:border-[#007AFF] focus:bg-white resize-y font-mono leading-relaxed"
                   placeholder="Type or customize your SMS message template here..."
                 />
               </div>
 
               {/* Dynamic Tokens Guide Strip */}
               <div className="space-y-1.5">
-                <span className="text-[10px] font-semibold text-[#848E9C] uppercase tracking-wider block">
+                <span className="text-[10px] font-semibold text-[#6C6C70] uppercase tracking-wider block">
                   Click token below to insert into template:
                 </span>
                 <div className="flex flex-wrap gap-1.5">
@@ -1968,7 +1886,7 @@ export function SmsRolloutSimulator({
                           }, 50);
                         }
                       }}
-                      className="text-[10px] font-mono px-2 py-0.5 rounded border border-[#2B3139] bg-[#0B0E11] hover:bg-[#2B313A] hover:border-[#FCD535] text-[#FCD535] font-medium cursor-pointer transition-colors"
+                      className="text-[10px] font-mono px-2 py-0.5 rounded border border-[#E5E5EA] bg-[#F2F2F7] hover:bg-[#E5E5EA] text-[#007AFF] font-medium cursor-pointer transition-colors"
                       title={t.label}
                     >
                       {t.tag}
@@ -1979,11 +1897,11 @@ export function SmsRolloutSimulator({
             </div>
 
             {/* Modal Footer */}
-            <div className="px-5 py-3 border-t border-[#2B3139] bg-[#1E2329] flex items-center justify-between shrink-0">
+            <div className="px-5 py-3 border-t border-[#E5E5EA] bg-[#F8F9FA] flex items-center justify-between shrink-0">
               <button
                 type="button"
                 onClick={() => setShowTemplateModal(false)}
-                className="border border-[#2B3139] bg-[#2B313A] text-[#EAECEF] hover:bg-[#363D47] font-medium h-8 px-3.5 rounded-lg text-xs font-semibold cursor-pointer"
+                className="border border-[#E5E5EA] bg-white text-[#1C1C1E] hover:bg-[#F2F2F7] font-medium h-8 px-3.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors"
               >
                 Cancel
               </button>
@@ -1994,7 +1912,7 @@ export function SmsRolloutSimulator({
                   setShowTemplateModal(false);
                 }}
                 disabled={isSavingTemplate}
-                className="bg-[#FCD535] hover:bg-[#FCD535]/90 text-[#181A20] font-bold shadow-xs h-8 px-4 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                className="bg-[#007AFF] hover:bg-[#007AFF]/90 text-white font-semibold shadow-xs h-8 px-4 rounded-lg text-xs flex items-center gap-1.5 cursor-pointer transition-colors"
               >
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 <span>{isSavingTemplate ? "Saving..." : "Save & Apply Template"}</span>
@@ -2006,11 +1924,11 @@ export function SmsRolloutSimulator({
 
       {/* Security Modal */}
       {showAuthModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs font-sans">
-          <div className="bg-[#1E2329] rounded-2xl border border-[#2B3139] p-6 max-w-md w-full space-y-4 shadow-2xl">
-            <h3 className="text-sm font-semibold text-[#EAECEF]">Authorize Rollout Dispatch</h3>
-            <p className="text-xs text-[#848E9C]">
-              Targeting <span className="font-bold text-[#EAECEF]">{effectiveRolloutCount.toLocaleString()}</span> properties {audienceScope === "SELECTED" ? "(manually selected)" : "matching active filter criteria"} with total outstanding due of <span className="font-bold text-[#EAECEF]">{effectiveRolloutTotalDueFormatted}</span>.
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-xs font-sans">
+          <div className="bg-white/95 backdrop-blur-2xl rounded-2xl border border-[#E5E5EA] p-6 max-w-md w-full space-y-4 shadow-2xl">
+            <h3 className="text-sm font-semibold text-[#1C1C1E]">Authorize Rollout Dispatch</h3>
+            <p className="text-xs text-[#6C6C70]">
+              Targeting <span className="font-bold text-[#1C1C1E]">{effectiveRolloutCount.toLocaleString()}</span> properties {audienceScope === "SELECTED" ? "(manually selected)" : "matching active filter criteria"} with total outstanding due of <span className="font-bold text-[#1C1C1E]">{effectiveRolloutTotalDueFormatted}</span>.
             </p>
             
             {(() => {
@@ -2021,37 +1939,37 @@ export function SmsRolloutSimulator({
 
               return (
                 <>
-                  <div className="bg-[#1E2329] rounded-xl p-3.5 border border-[#2B3139] space-y-2.5">
+                  <div className="bg-[#F8F9FA] rounded-xl p-3.5 border border-[#E5E5EA] space-y-2.5">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="text-[#848E9C] font-medium">Gateway Balance (Arkesel):</span>
+                      <span className="text-[#6C6C70] font-medium">Gateway Balance (Arkesel):</span>
                       {isFetchingBalance ? (
-                        <span className="text-[#FCD535] flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" /> Fetching...</span>
+                        <span className="text-[#007AFF] flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" /> Fetching...</span>
                       ) : gatewayBalance ? (
-                        <span className="font-semibold text-[#0ECB81]">
+                        <span className="font-semibold text-[#34C759]">
                           {gatewayBalance.smsBalance} SMS ({gatewayBalance.mainBalance})
                         </span>
                       ) : (
-                        <span className="text-[#F6465D] font-semibold">Unavailable</span>
+                        <span className="text-[#FF3B30] font-semibold">Unavailable</span>
                       )}
                     </div>
                     
                     <div className="flex items-center justify-between text-xs">
-                      <span className="text-[#848E9C] font-medium">Est. Credits Needed:</span>
-                      <span className={`font-semibold ${isInsufficient ? "text-[#F6465D]" : "text-[#EAECEF]"}`}>
+                      <span className="text-[#6C6C70] font-medium">Est. Credits Needed:</span>
+                      <span className={`font-semibold ${isInsufficient ? "text-[#FF3B30]" : "text-[#1C1C1E]"}`}>
                         {estCreditsNeeded.toLocaleString()} SMS
                       </span>
                     </div>
                     
                     <div className="flex items-center justify-between text-xs">
-                      <span className="text-[#848E9C] font-medium">Est. Dispatch Cost:</span>
-                      <span className="font-bold text-[#FCD535]">
+                      <span className="text-[#6C6C70] font-medium">Est. Dispatch Cost:</span>
+                      <span className="font-bold text-[#007AFF]">
                         GH₵ {(estCreditsNeeded * 0.035).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                       </span>
                     </div>
                   </div>
 
                   {isInsufficient && (
-                    <div className="bg-[#F6465D]/10 border border-[#F6465D]/30 text-[#F6465D] px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-2 mt-4">
+                    <div className="bg-[#FF3B30]/10 border border-[#FF3B30]/30 text-[#FF3B30] px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-2 mt-4">
                       <span>⚠️</span>
                       Insufficient Arkesel gateway balance for this rollout.
                     </div>
@@ -2066,15 +1984,15 @@ export function SmsRolloutSimulator({
                       autoComplete="new-password"
                       data-lpignore="true"
                       data-form-type="other"
-                      className="w-full h-9 px-3 rounded-lg border border-[#2B3139] bg-[#0B0E11] text-xs text-[#EAECEF] focus:outline-none focus:border-[#FCD535]"
+                      className="w-full h-9 px-3 rounded-lg border border-[#E5E5EA] bg-[#F2F2F7] text-xs text-[#1C1C1E] focus:outline-none focus:border-[#007AFF] focus:bg-white"
                     />
-                    {authError && <p className="text-xs text-[#F6465D]">{authError}</p>}
+                    {authError && <p className="text-xs text-[#FF3B30]">{authError}</p>}
                     
                     <div className="flex justify-end gap-2">
                       <button
                         type="button"
                         onClick={() => setShowAuthModal(false)}
-                        className="border border-[#2B3139] bg-[#2B313A] text-[#EAECEF] hover:bg-[#363D47] font-medium h-8 px-3 rounded-lg text-xs cursor-pointer"
+                        className="border border-[#E5E5EA] bg-white text-[#1C1C1E] hover:bg-[#F2F2F7] font-medium h-8 px-3 rounded-lg text-xs cursor-pointer transition-colors"
                         disabled={isAuthorizing}
                       >
                         Cancel
@@ -2083,7 +2001,7 @@ export function SmsRolloutSimulator({
                         type="button"
                         onClick={handleConfirmAuthorization}
                         disabled={isButtonDisabled}
-                        className="bg-[#FCD535] hover:bg-[#FCD535]/90 text-[#181A20] font-bold shadow-xs h-8 px-4 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="bg-[#007AFF] hover:bg-[#007AFF]/90 text-white font-semibold shadow-xs h-8 px-4 rounded-lg text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
                         {isAuthorizing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Lock className="w-3.5 h-3.5" />}
                         <span>Dispatch SMS</span>

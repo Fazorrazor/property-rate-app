@@ -17,41 +17,30 @@ export default async function AdminLoginPage() {
   }
 
   return (
-    <main className="h-screen max-h-screen overflow-hidden bg-[#0B0E11] flex flex-col justify-center items-center p-3 sm:p-4 font-sans select-none relative">
-      {/* Ambient grid overlay */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0"
-        style={{
-          backgroundImage:
-            'linear-gradient(rgba(252,213,53,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(252,213,53,0.025) 1px, transparent 1px)',
-          backgroundSize: '44px 44px',
-        }}
-      />
-
+    <main className="min-h-screen bg-[#F2F2F7] flex flex-col justify-center items-center p-4 sm:p-6 font-sans select-none relative">
       <div className="w-full max-w-sm sm:max-w-md my-auto flex flex-col justify-center relative z-10">
         {/* Top Municipal Crest & Identification */}
-        <div className="text-center mb-5 sm:mb-6">
-          <div className="inline-flex items-center justify-center w-11 h-11 bg-[#FCD535] text-[#181A20] shadow-lg mb-3 rounded-sm">
-            <Building2 className="w-5 h-5" />
+        <div className="text-center mb-6 sm:mb-8">
+          <div className="inline-flex items-center justify-center w-14 h-14 bg-[#007AFF] text-white shadow-md mb-3.5 rounded-2xl">
+            <Building2 className="w-7 h-7" />
           </div>
           <div className="space-y-1">
-            <p className="text-[10px] font-bold tracking-widest uppercase text-[#848E9C]">
+            <p className="text-[11px] font-semibold tracking-wider uppercase text-[#6C6C70]">
               Republic of Ghana
             </p>
-            <h1 className="text-lg sm:text-xl font-bold tracking-tight text-[#EAECEF]">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[#1C1C1E]">
               Kpone-Katamanso Municipal Assembly
             </h1>
-            <p className="text-[11px] text-[#848E9C] font-medium">
+            <p className="text-xs text-[#8E8E93] font-medium">
               Revenue Administration Portal &bull; Act 936
             </p>
           </div>
         </div>
 
         {/* Master Authorization Card */}
-        <div className="bg-[#1E2329] border border-[#2B3139] shadow-[0_8px_48px_rgba(0,0,0,0.6)] p-5 sm:p-6 rounded-sm">
-          <div className="mb-4 pb-3 border-b border-[#2B3139]">
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-[#848E9C] font-mono">
+        <div className="bg-white border border-[#E5E5EA] shadow-xl p-6 sm:p-7 rounded-2xl">
+          <div className="mb-5 pb-3 border-b border-[#E5E5EA]">
+            <p className="text-xs font-semibold text-[#8E8E93] uppercase tracking-wider">
               Administrator Sign-In
             </p>
           </div>
@@ -60,11 +49,10 @@ export default async function AdminLoginPage() {
         </div>
 
         {/* Footer */}
-        <p className="text-center text-[10px] text-[#848E9C] mt-4 font-mono">
-          Restricted access &middot; Authorized officers only
+        <p className="text-center text-[11px] text-[#8E8E93] mt-5">
+          Restricted access &middot; Authorized revenue officers only
         </p>
       </div>
     </main>
   );
 }
-

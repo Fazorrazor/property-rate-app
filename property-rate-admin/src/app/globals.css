@@ -2,9 +2,9 @@
 
 @layer base {
   body {
-    background-color: #181A20;
-    color: #EAECEF;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-color: #F2F2F7;
+    color: #1C1C1E;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -24,36 +24,54 @@
     display: none;
   }
 
-  /* Suppress browser native autofill blue/yellow background overlay */
+  /* Suppress browser native autofill blue/yellow background overlay in light theme */
   input:-webkit-autofill,
   input:-webkit-autofill:hover, 
   input:-webkit-autofill:focus, 
   input:-webkit-autofill:active {
-    -webkit-box-shadow: 0 0 0 1000px #0B0E11 inset !important;
-    -webkit-text-fill-color: #EAECEF !important;
+    -webkit-box-shadow: 0 0 0 1000px #FFFFFF inset !important;
+    -webkit-text-fill-color: #1C1C1E !important;
     transition: background-color 5000s ease-in-out 0s;
   }
 }
 
 @layer components {
+  /* Apple HIG Native Action Styles (replaces heavy 3D block buttons) */
+  .apple-btn-primary {
+    @apply relative inline-flex items-center justify-center gap-1.5 transition-all duration-150 active:scale-[0.98] bg-[#007AFF] text-white hover:bg-[#0071E3] font-medium text-xs min-h-[32px] px-3.5 rounded-lg shadow-xs cursor-pointer select-none;
+  }
+
+  .apple-btn-secondary {
+    @apply relative inline-flex items-center justify-center gap-1.5 transition-all duration-150 active:scale-[0.98] bg-white text-[#1C1C1E] hover:bg-[#F2F2F7] border border-[#E5E5EA] font-medium text-xs min-h-[32px] px-3 rounded-lg shadow-2xs cursor-pointer select-none;
+  }
+
+  .apple-btn-destructive {
+    @apply relative inline-flex items-center justify-center gap-1.5 transition-all duration-150 active:scale-[0.98] bg-[#FF3B30] text-white hover:bg-[#D70015] font-medium text-xs min-h-[32px] px-3.5 rounded-lg shadow-xs cursor-pointer select-none;
+  }
+
+  .apple-card {
+    @apply bg-white border border-[#E5E5EA] rounded-xl shadow-none;
+  }
+
+  .apple-material-header {
+    @apply sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-[#E5E5EA];
+  }
+
+  /* Backward compatibility shims: convert old 3D classes into flat Apple HIG aesthetics */
   .btn-3d-primary {
-    @apply relative transition-[transform,box-shadow,opacity] duration-75 active:translate-y-[3px] active:shadow-none bg-[#FCD535] text-[#181A20] border border-[#181A20];
-    box-shadow: 0 4px 0 0 #181A20, 0 5px 10px rgba(0,0,0,0.3);
+    @apply relative inline-flex items-center justify-center gap-1.5 transition-all duration-150 active:scale-[0.98] bg-[#007AFF] text-white hover:bg-[#0071E3] font-medium text-xs min-h-[32px] px-3.5 rounded-lg shadow-xs cursor-pointer border-0;
   }
   
   .btn-3d-secondary {
-    @apply relative transition-[transform,box-shadow,opacity] duration-75 active:translate-y-[3px] active:shadow-none bg-[#1E2329] text-[#EAECEF] border border-[#2B3139];
-    box-shadow: 0 4px 0 0 #1E2329, 0 5px 10px rgba(0,0,0,0.2);
+    @apply relative inline-flex items-center justify-center gap-1.5 transition-all duration-150 active:scale-[0.98] bg-white text-[#1C1C1E] hover:bg-[#F2F2F7] border border-[#E5E5EA] font-medium text-xs min-h-[32px] px-3 rounded-lg shadow-2xs cursor-pointer;
   }
 
   .btn-3d-outline-primary {
-    @apply relative transition-[transform,box-shadow,opacity] duration-75 active:translate-y-[3px] active:shadow-none bg-[#1E2329] text-[#FCD535] border border-[#FCD535];
-    box-shadow: 0 4px 0 0 #181A20, 0 5px 10px rgba(0,0,0,0.15);
+    @apply relative inline-flex items-center justify-center gap-1.5 transition-all duration-150 active:scale-[0.98] bg-transparent text-[#007AFF] hover:bg-[#007AFF]/10 border border-[#007AFF]/30 font-medium text-xs min-h-[32px] px-3 rounded-lg cursor-pointer;
   }
 
   .btn-3d-danger {
-    @apply relative transition-[transform,box-shadow,opacity] duration-75 active:translate-y-[3px] active:shadow-none bg-[#F6465D] text-[#EAECEF] border border-[#F6465D];
-    box-shadow: 0 4px 0 0 #181A20, 0 5px 10px rgba(0,0,0,0.25);
+    @apply relative inline-flex items-center justify-center gap-1.5 transition-all duration-150 active:scale-[0.98] bg-[#FF3B30] text-white hover:bg-[#D70015] font-medium text-xs min-h-[32px] px-3.5 rounded-lg shadow-xs cursor-pointer border-0;
   }
 }
 
@@ -78,4 +96,3 @@ table,
   -ms-overflow-style: none !important;
   scrollbar-width: none !important;
 }
-
