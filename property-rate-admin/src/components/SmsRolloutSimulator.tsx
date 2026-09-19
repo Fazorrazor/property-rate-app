@@ -1153,7 +1153,7 @@ export function SmsRolloutSimulator({
               <div
                 ref={tableContainerRef}
                 onScroll={handleAudienceTableScroll}
-                className="flex-1 min-h-0 overflow-y-auto overflow-x-auto"
+                className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
               >
                 <table className="w-full text-left text-xs border-collapse">
                   <thead className="border-b text-[#6C6C70] font-semibold text-[11px] sticky top-0 z-20 bg-[#F8F9FA] border-[#E5E5EA]">
@@ -1620,7 +1620,7 @@ export function SmsRolloutSimulator({
             <div
               ref={logsTableContainerRef}
               onScroll={handleLogsTableScroll}
-              className="flex-1 min-h-0 overflow-y-auto overflow-x-auto"
+              className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
             >
               <table className="w-full text-left text-xs">
                   <thead className="border-b text-[#6C6C70] sticky top-0 bg-[#F8F9FA] border-[#E5E5EA]">

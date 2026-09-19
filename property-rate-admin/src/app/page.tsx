@@ -1672,7 +1672,7 @@ export default function AdminDashboardPage() {
               <div
                 ref={tableContainerRef}
                 onScroll={handleTableScroll}
-                className="w-full flex-1 min-h-0 overflow-y-auto overflow-x-auto"
+                className="w-full flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
               >
                 {/* Desktop Cadastre Table (>= 768px) */}
                 <table className="hidden md:table table-fixed w-full text-left text-xs border-collapse">
@@ -2199,7 +2199,7 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
 
-              <div className="w-full flex-1 min-h-0 overflow-y-auto overflow-x-auto">
+              <div className="w-full flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
                 {/* Desktop Treasury Table (>= 768px) */}
                 <table className="hidden md:table table-fixed w-full text-left text-xs border-collapse">
                   <thead className="bg-[#F8F9FA] border-b border-[#E5E5EA] text-[#6C6C70] font-semibold text-[11px] sticky top-0 z-10">
@@ -2409,7 +2409,7 @@ export default function AdminDashboardPage() {
               {/* Table Container */}
               <div
                 ref={auditLogTableContainerRef}
-                className="w-full flex-1 min-h-0 overflow-y-auto overflow-x-auto"
+                className="w-full flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
               >
                 {/* Desktop Audit Trail Table (>= 768px) */}
                 <table className="hidden md:table table-fixed w-full text-left text-xs border-collapse">

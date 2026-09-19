@@ -227,7 +227,7 @@ export function AdminDashboardSkeleton() {
             </div>
 
             {/* Table Container with Static Column Headers & Shimmer Rows */}
-            <div className="w-full flex-1 min-h-0 overflow-y-auto overflow-x-auto">
+            <div className="w-full flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
               <table className="hidden md:table table-fixed w-full text-left text-xs border-collapse">
                 <thead className="bg-[#F8F9FA] border-b border-[#E5E5EA] text-[#6C6C70] font-semibold text-[11px] sticky top-0 z-10">
                   <tr>
