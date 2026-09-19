@@ -8,13 +8,12 @@ import {
   ArrowRight,
   Building2,
   ShieldCheck,
+  ChevronRight,
+  AlertCircle,
 } from "lucide-react";
 import { DashboardSkeleton } from "@/components/ui/Skeletons";
 import { motion } from "framer-motion";
-import {
-  getDashboardData,
-  DashboardData,
-} from "@/app/actions";
+import { getDashboardData, DashboardData } from "@/app/actions";
 
 function DashboardContent() {
   const router = useRouter();
@@ -23,14 +22,13 @@ function DashboardContent() {
 
   const [data, setData] = useState<DashboardData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadData() {
       try {
         const dashRes = await getDashboardData(accountNumberParam);
-        if (dashRes) {
-          setData(dashRes);
-        }
+        if (dashRes) setData(dashRes);
       } catch (err) {
         console.error("Error loading dashboard:", err);
       } finally {
@@ -53,6 +51,7 @@ function DashboardContent() {
   });
 
   const isAllPaid = properties.length > 0 && properties.every((p) => p.status === "PAID");
+  const unpaidProps = properties.filter((p) => p.status !== "PAID");
 
   const metrics = data?.metrics || {
     totalValuation: 0,
@@ -65,300 +64,266 @@ function DashboardContent() {
     complianceStatus: "Compliant" as const,
   };
 
-  if (isLoading) {
-    return <DashboardSkeleton />;
-  }
+  if (isLoading) return <DashboardSkeleton />;
 
-  const primaryProp = properties[0];
-  const primaryPropId = primaryProp ? primaryProp.accountNumber : "ALL";
+  const primaryPropId = unpaidProps.length > 1
+    ? (accountNumberParam || unpaidProps[0]?.accountNumber || "ALL")
+    : (unpaidProps[0]?.accountNumber || properties[0]?.accountNumber || "ALL");
+
+  const checkoutHref = unpaidProps.length > 1
+    ? `/checkout?propertyId=ALL&accountNumber=${encodeURIComponent(primaryPropId)}`
+    : `/checkout?propertyId=${encodeURIComponent(primaryPropId)}`;
+
+  const statusLabel = (status: string) => {
+    if (status === "PAID") return { text: "Settled", color: "text-[#1A7336]" };
+    if (status === "PARTIALLY_PAID") return { text: "Partial", color: "text-[#B06000]" };
+    return { text: "Due", color: "text-[#C5221F]" };
+  };
 
   return (
-    <main className="min-h-screen bg-background text-foreground flex flex-col max-w-md mx-auto w-full p-4 sm:p-5 font-sans relative">
-      {/* Sleek Header / Balance Card */}
-      <div className="-mx-4 sm:-mx-5 -mt-4 sm:-mt-5 px-5 sm:px-6 pt-8 pb-8 bg-surface text-foreground shadow-sm rounded-b-[36px] relative overflow-hidden shrink-0 z-20 border-b border-border-light transition-colors duration-300">
-        <div className="absolute top-0 right-0 -mt-16 -mr-16 w-64 h-64 bg-primary opacity-5 rounded-full blur-[80px] pointer-events-none" />
+    <main className="min-h-screen bg-[#F0F2F5] text-foreground flex flex-col max-w-md mx-auto w-full font-sans">
 
-        <header className="flex items-center justify-between mb-8 relative z-10">
-          <div className="flex items-center gap-3">
-            <span className="text-xl font-black tracking-tight select-none">
-              Heinz
-            </span>
-            <div className="border-l border-border-subtle pl-3">
-              <h1 className="text-sm font-medium leading-tight tracking-wide">
-                {properties.length > 0 && data?.user?.name && data.user.name !== "Ratepayer"
-                  ? `Hello, ${data.user.name.split(" ")[0]}`
-                  : data?.user?.phoneNumber
-                  ? `Taxpayer (${data.user.phoneNumber})`
-                  : "Municipal Rate Assessment"}
-              </h1>
-              <p className="text-[11px] text-on-surface-muted leading-tight mt-0.5">
-                {properties.length > 0 ? "Kpone-Katamanso Municipal Assembly" : "Municipal District"}
+      {/* ── Hero Balance Header ── */}
+      <div className="bg-[#121330] text-white px-5 pt-10 pb-8 relative overflow-hidden">
+        {/* Subtle radial gradient accent */}
+        <div className="absolute -top-20 -right-20 w-64 h-64 bg-white opacity-[0.03] rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-0 right-0 h-px bg-white/10" />
+
+        {/* Top row */}
+        <div className="flex items-center justify-between mb-8 relative z-10">
+          <div>
+            <h1 className="text-[22px] font-black tracking-tight leading-none">
+              {data?.user?.name && data.user.name !== "Municipal Ratepayer"
+                ? data.user.name
+                : "Municipal Ratepayer"}
+            </h1>
+            <p className="text-white/50 text-[11px] font-medium mt-1 tracking-wide uppercase">
+              Kpone-Katamanso Municipal Assembly
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5 text-white/40 text-[11px]">
+            <ShieldCheck className="w-3.5 h-3.5 text-[#34A853]" />
+            <span>Encrypted</span>
+          </div>
+        </div>
+
+        {/* Balance */}
+        <div className="relative z-10">
+          <p className="text-white/50 text-xs font-semibold uppercase tracking-widest mb-1">
+            Total Municipal Rate Due
+          </p>
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <p className="text-[44px] font-black tracking-tighter leading-none text-white">
+                {properties.length === 0 ? "GH₵ 0.00" : metrics.totalOutstandingFormatted}
+              </p>
+              <p className="text-white/40 text-[11px] mt-2 font-medium">
+                {properties.length === 0
+                  ? "No properties on record"
+                  : isAllPaid
+                  ? "All accounts fully settled · FY 2026"
+                  : `${unpaidProps.length} account${unpaidProps.length !== 1 ? "s" : ""} outstanding · FY 2026`}
               </p>
             </div>
+
+            {!isAllPaid && properties.length > 0 && (
+              <button
+                type="button"
+                onClick={() => router.push(checkoutHref)}
+                className="shrink-0 flex items-center gap-1.5 bg-white text-[#121330] hover:bg-white/90 active:scale-95 transition-all px-4 py-2.5 rounded-xl cursor-pointer font-bold text-[13px] tracking-wide shadow-lg"
+              >
+                <span>Pay Now</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            )}
           </div>
 
-          <div className="flex items-center gap-1.5 text-on-surface-muted text-xs">
-            <ShieldCheck className="w-4 h-4 text-[#188038]" />
-            <span className="text-[11px] font-medium text-on-surface-muted">Encrypted</span>
-          </div>
-        </header>
-
-        <div className="space-y-4 relative z-10">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-on-surface-muted uppercase tracking-widest">
-              Total Municipal Rate Due
-            </span>
-            <span
-              className={`text-[10px] uppercase font-bold tracking-wider ${
-                properties.length === 0
-                  ? "text-on-surface-muted"
-                  : isAllPaid
-                  ? "text-[#188038]"
-                  : "text-[#C5221F]"
-              }`}
-            >
-              {properties.length === 0
-                ? "No properties linked"
-                : isAllPaid
-                ? "All bills settled"
-                : "Payment Due 30-Jun"}
-            </span>
-          </div>
-
-          <div className="flex items-end justify-between gap-4">
-            <p className="text-[40px] font-bold tracking-tighter leading-none">
-              {properties.length === 0 ? "GH₵ 0.00" : metrics.totalOutstandingFormatted}
-            </p>
-
-            <div className="shrink-0 mb-1">
-              {!isAllPaid && properties.length > 0 ? (
-                <button
-                  type="button"
-                  onClick={() => router.push(`/checkout?propertyId=${encodeURIComponent(primaryPropId)}`)}
-                  className="flex items-center justify-center gap-1.5 bg-primary text-on-primary hover:bg-primary-hover active:scale-95 transition-all px-4 py-2.5 rounded-xl cursor-pointer shadow-md"
-                >
-                  <span className="text-[13px] font-bold tracking-wide uppercase">Pay Now</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-              ) : null}
+          {/* Summary metrics row */}
+          {properties.length > 0 && (
+            <div className="mt-5 pt-4 border-t border-white/10 grid grid-cols-3 gap-0">
+              {[
+                { label: "Properties", value: String(properties.length) },
+                { label: "Unpaid", value: String(unpaidProps.length) },
+                { label: "Settled", value: String(metrics.paidCount) },
+              ].map((m, i) => (
+                <div key={m.label} className={`text-center ${i > 0 ? "border-l border-white/10" : ""}`}>
+                  <p className="text-white font-black text-xl">{m.value}</p>
+                  <p className="text-white/40 text-[10px] font-medium uppercase tracking-wider mt-0.5">{m.label}</p>
+                </div>
+              ))}
             </div>
-          </div>
+          )}
         </div>
       </div>
 
+      {/* ── Property Bill List ── */}
       <motion.div
-        initial={{ opacity: 0, y: 8 }}
+        initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="space-y-4 flex-1 flex flex-col min-h-0 pt-3"
+        transition={{ duration: 0.3, delay: 0.1 }}
+        className="flex-1 px-4 py-5 space-y-3"
       >
-        {/* Registered Property List */}
-        <section className="flex flex-col space-y-3 flex-1" aria-label="Properties">
-          <div className="flex items-center justify-between px-1">
-            <h2 className="text-xs font-semibold text-on-surface-muted uppercase tracking-wider">
-              Assessed {properties.length === 1 ? "Property Rate Bill" : `Property Bills (${properties.length})`}
-            </h2>
+        <div className="flex items-center justify-between px-1">
+          <h2 className="text-[11px] font-bold text-[#717171] uppercase tracking-widest">
+            {properties.length === 1 ? "Demand Notice" : `Demand Notices (${properties.length})`}
+          </h2>
+          <span className="text-[11px] text-[#717171] font-medium">FY 2026 · Act 936</span>
+        </div>
+
+        {/* Empty state */}
+        {properties.length === 0 && (
+          <div className="bg-white rounded-2xl border border-[#DADCE0] p-8 flex flex-col items-center text-center gap-3 shadow-sm">
+            <div className="w-12 h-12 rounded-2xl bg-[#F0F2F5] flex items-center justify-center">
+              <Building2 className="w-6 h-6 text-[#717171]" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-[#121212]">No Assessment Found</h3>
+              <p className="text-xs text-[#717171] leading-relaxed mt-1 max-w-[260px]">
+                No active property rate bills were found for this account. Please check your SMS notice link.
+              </p>
+            </div>
           </div>
+        )}
 
-          <div className="flex flex-col gap-4 mt-1 flex-1">
-            {properties.length === 0 ? (
-              <div className="p-6 rounded-2xl bg-surface border border-border-light shadow-sm text-center flex flex-col items-center justify-center space-y-3 py-10">
-                <div className="w-12 h-12 rounded-xl bg-surface-subtle flex items-center justify-center text-[#4B1426] border border-border-subtle">
-                  <Building2 className="w-6 h-6" />
-                </div>
-                <div className="space-y-1 max-w-xs">
-                  <h3 className="text-sm font-bold text-foreground">No Assessment Found</h3>
-                  <p className="text-xs text-on-surface-muted leading-relaxed">
-                    No active property rate bills were found for this account. Please check your SMS notice link.
-                  </p>
-                </div>
-              </div>
-            ) : properties.length === 1 ? (
-              <article className="bg-surface p-4 sm:p-6 rounded-2xl border border-border-light shadow-md flex flex-col gap-3 sm:gap-5 transition-all w-full relative overflow-hidden flex-1">
-                {/* Header */}
-                <div className="flex items-start justify-between pb-3 sm:pb-4 border-b border-border-light">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-background text-foreground flex items-center justify-center shrink-0">
-                      <FileText className="w-5 h-5" />
+        {/* Property cards */}
+        <div className="flex flex-col gap-3">
+          {properties.map((prop, idx) => {
+            const isPaid = prop.status === "PAID";
+            const isExpanded = expandedId === prop.id;
+            const sl = statusLabel(prop.status);
+
+            return (
+              <motion.article
+                key={prop.id}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2, delay: idx * 0.05 }}
+                className="bg-white rounded-2xl border border-[#DADCE0] shadow-sm overflow-hidden"
+              >
+                {/* Card Header — always visible */}
+                <button
+                  type="button"
+                  onClick={() => setExpandedId(isExpanded ? null : prop.id)}
+                  className="w-full text-left px-4 pt-4 pb-3 flex items-start justify-between gap-3 cursor-pointer"
+                >
+                  <div className="flex items-start gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-xl bg-[#F0F2F5] flex items-center justify-center shrink-0 mt-0.5">
+                      <FileText className="w-4 h-4 text-[#121330]" />
                     </div>
-                    <div>
-                      <h2 className="text-sm font-bold text-foreground">
-                        Digital Demand Notice
-                      </h2>
-                      <p className="text-xs text-on-surface-muted">FY {properties[0].billYear} &bull; Local Governance Act, 2016 (Act 936)</p>
+                    <div className="min-w-0">
+                      <p className="font-mono font-black text-[#121212] text-[15px] tracking-tight">{prop.accountNumber}</p>
+                      <p className="text-[11px] text-[#717171] mt-0.5 truncate">{prop.ownerDigitalAddress} · {prop.propertyClassification?.split(" ").slice(-2).join(" ")}</p>
                     </div>
                   </div>
-                  <span
-                    className={`text-xs font-bold ${
-                      properties[0].status === "PAID"
-                        ? "text-[#188038]"
-                        : properties[0].status === "PARTIALLY_PAID"
-                        ? "text-[#B06000]"
-                        : "text-[#C5221F]"
-                    }`}
+                  <div className="text-right shrink-0 flex flex-col items-end gap-1">
+                    <p className={`text-[11px] font-bold uppercase tracking-wide ${sl.color}`}>{sl.text}</p>
+                    <p className="font-black text-[#121212] text-[16px] leading-none">
+                      {isPaid ? "GH₵ 0.00" : `GH₵ ${prop.totalAmountDue.toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
+                    </p>
+                    <ChevronRight className={`w-4 h-4 text-[#DADCE0] transition-transform ${isExpanded ? "rotate-90" : ""}`} />
+                  </div>
+                </button>
+
+                {/* Divider */}
+                <div className="h-px bg-[#F0F2F5] mx-4" />
+
+                {/* Bill summary row — always visible */}
+                <div className="px-4 py-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+                  <div className="flex items-center justify-between col-span-2">
+                    <span className="text-[#717171]">Arrears (Prev. Year)</span>
+                    <span className="font-semibold text-[#121212] tabular-nums">GH₵ {(prop.arrears || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="flex items-center justify-between col-span-2">
+                    <span className="text-[#717171]">Current Year Fee</span>
+                    <span className="font-semibold text-[#121212] tabular-nums">GH₵ {(prop.currentFee || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+                  </div>
+                </div>
+
+                {/* Expanded details */}
+                {isExpanded && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.2 }}
                   >
-                    {properties[0].status === "PAID"
-                      ? "Settled in Full"
-                      : properties[0].status === "PARTIALLY_PAID"
-                      ? "Partially Settled"
-                      : "Unpaid / Due 30-Jun"}
-                  </span>
-                </div>
-
-                {/* Main Identification */}
-                <div className="grid grid-cols-2 gap-2 sm:gap-4 text-sm bg-surface-subtle p-3 sm:p-4 rounded-xl border border-border-light">
-                  <div>
-                    <span className="text-[11px] text-on-surface-muted uppercase font-semibold tracking-wider">Account Head</span>
-                    <div className="font-mono font-bold text-foreground mt-0.5 sm:mt-1 text-sm sm:text-base">
-                      {properties[0].accountNumber}
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-[11px] text-on-surface-muted uppercase font-semibold tracking-wider">GPS Digital Address</span>
-                    <div className="font-mono font-bold text-foreground mt-0.5 sm:mt-1 text-sm sm:text-base">
-                      {properties[0].ownerDigitalAddress}
-                    </div>
-                  </div>
-                  <div className="col-span-2 hidden [@media(min-height:700px)]:block">
-                    <span className="text-[11px] text-on-surface-muted uppercase font-semibold tracking-wider">Property Classification</span>
-                    <div className="font-semibold text-foreground mt-0.5 sm:mt-1 text-xs sm:text-sm">
-                      {properties[0].propertyClassification}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Financial Breakdown */}
-                <div className="space-y-3 pt-1">
-                  <div className="hidden [@media(min-height:800px)]:block space-y-3">
-                    <h3 className="text-[11px] text-on-surface-muted uppercase font-bold tracking-widest border-b border-border-light pb-2">Valuation & Assessment Breakdown</h3>
-                    
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-on-surface-muted">Assessed Capital Value</span>
-                      <span className="font-medium text-foreground">GH₵ {(properties[0].rateableValue || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                    </div>
-                    <div className="flex justify-between items-center text-xs pb-2 border-b border-dashed border-border-light">
-                      <span className="text-on-surface-muted">Applied Rate Factor</span>
-                      <span className="font-medium text-foreground">{properties[0].rateImposed}</span>
-                    </div>
-                  </div>
-
-                  {/* Core Balances */}
-                  <div className="flex justify-between items-center text-xs pt-1">
-                    <span className="text-on-surface-muted font-semibold">Current Year Fee</span>
-                    <span className="font-bold text-foreground">GH₵ {(properties[0].currentFee || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                  </div>
-
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="text-on-surface-muted">Previous Year Arrears</span>
-                    <span className="font-medium text-foreground">GH₵ {(properties[0].arrears || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                  </div>
-                </div>
-
-                {/* Total & Pay Button */}
-                <div className="pt-3 sm:pt-4 flex flex-col gap-3 sm:gap-4 border-t border-border-light mt-auto">
-                  <div className="flex items-center justify-between">
-                    <span className="font-extrabold text-sm uppercase tracking-widest text-foreground">Total Amount Due</span>
-                    <span className="text-xl font-bold text-foreground">
-                      {properties[0].status === "PAID" ? "GH₵ 0.00" : properties[0].totalAmountDueFormatted}
-                    </span>
-                  </div>
-
-                  {properties[0].status !== "PAID" && (
-                    <button
-                      type="button"
-                      onClick={() => router.push(`/checkout?propertyId=${encodeURIComponent(properties[0].accountNumber)}`)}
-                      className="btn-3d-primary w-full h-12 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 cursor-pointer shadow-md"
-                    >
-                      <CreditCard className="w-5 h-5 shrink-0" />
-                      <span>Proceed to Payment</span>
-                    </button>
-                  )}
-                </div>
-              </article>
-            ) : (
-              properties.map((prop) => {
-                const isPaid = prop.status === "PAID";
-                return (
-                  <article
-                    key={prop.id}
-                    className="bg-surface p-5 rounded-2xl border border-border-light shadow-sm flex flex-col gap-4 transition-all hover:shadow-md"
-                  >
-                    {/* Header */}
-                    <div className="flex items-center justify-between pb-3 border-b border-border-light">
-                      <div className="flex items-center gap-2">
-                        <FileText className="w-4 h-4 text-foreground" />
-                        <div>
-                          <h2 className="text-xs font-semibold text-foreground">
-                            Digital Demand Notice &bull; FY {prop.billYear}
-                          </h2>
-                          <p className="text-[11px] text-on-surface-muted">Local Governance Act, 2016 (Act 936)</p>
+                    <div className="mx-4 border-t border-dashed border-[#DADCE0] py-3 space-y-2 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[#717171]">Assessed Capital Value</span>
+                        <span className="font-medium text-[#121212] tabular-nums">GH₵ {(prop.rateableValue || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[#717171]">Applied Rate Factor</span>
+                        <span className="font-medium text-[#121212] tabular-nums">{prop.rateImposed}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[#717171]">Bill Date</span>
+                        <span className="font-medium text-[#121212]">{prop.billDateFormatted}</span>
+                      </div>
+                      {prop.isOverdue && (
+                        <div className="flex items-center gap-1.5 text-[#C5221F] pt-1">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                          <span className="font-semibold text-[10px] uppercase tracking-wide">Overdue · Penalties may apply</span>
                         </div>
-                      </div>
-                      <span
-                        className={`text-xs font-medium ${
-                          isPaid
-                            ? "text-[#188038]"
-                            : prop.status === "PARTIALLY_PAID"
-                            ? "text-[#B06000]"
-                            : "text-[#C5221F]"
-                        }`}
-                      >
-                        {isPaid
-                          ? "Settled in Full"
-                          : prop.status === "PARTIALLY_PAID"
-                          ? "Partially Settled"
-                          : "Due: 30-Jun"}
-                      </span>
-                    </div>
-
-                    {/* Particulars Grid */}
-                    <div className="grid grid-cols-2 gap-3 text-xs">
-                      <div>
-                        <span className="text-[11px] text-on-surface-muted">Account Head</span>
-                        <div className="font-mono font-semibold text-foreground mt-0.5">
-                          {prop.accountNumber}
-                        </div>
-                      </div>
-                      <div>
-                        <span className="text-[11px] text-on-surface-muted">GPS Digital Address</span>
-                        <div className="font-mono font-medium text-foreground mt-0.5">
-                          {prop.ownerDigitalAddress}
-                        </div>
-                      </div>
-                      <div className="col-span-2 pt-2 border-t border-border-light">
-                        <span className="text-[11px] text-on-surface-muted">Property Classification</span>
-                        <div className="font-medium text-foreground mt-0.5">
-                          {prop.propertyClassification}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Total & Pay Button */}
-                    <div className="pt-3 flex flex-col gap-3.5 border-t border-border-light/60">
-                      <div className="flex items-center justify-between text-sm font-semibold">
-                        <span className="font-extrabold uppercase tracking-widest text-foreground">Total Due</span>
-                        <span className="text-base text-foreground">
-                          {isPaid ? "GH₵ 0.00" : prop.totalAmountDueFormatted}
-                        </span>
-                      </div>
-
-                      {!isPaid && (
-                        <button
-                          type="button"
-                          onClick={() => router.push(`/checkout?propertyId=${encodeURIComponent(prop.accountNumber)}`)}
-                          className="btn-3d-outline-primary w-full h-11 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
-                        >
-                          <CreditCard className="w-4 h-4 shrink-0" />
-                          <span>Pay Now</span>
-                        </button>
                       )}
                     </div>
-                  </article>
-                );
-              })
-            )}
-          </div>
-        </section>
+                  </motion.div>
+                )}
+
+                {/* Total + Pay button footer */}
+                <div className="px-4 pb-4 pt-1">
+                  <div className="flex items-center justify-between pt-3 border-t border-[#F0F2F5]">
+                    <div>
+                      <p className="text-[10px] font-bold text-[#717171] uppercase tracking-widest">Total Amount Due</p>
+                      <p className={`text-[22px] font-black tracking-tight leading-tight ${isPaid ? "text-[#1A7336]" : "text-[#121212]"}`}>
+                        {isPaid ? "GH₵ 0.00" : `GH₵ ${prop.totalAmountDue.toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
+                      </p>
+                    </div>
+                    {!isPaid && (
+                      <button
+                        type="button"
+                        onClick={() => router.push(`/checkout?propertyId=${encodeURIComponent(prop.accountNumber)}`)}
+                        className="flex items-center gap-1.5 bg-[#121330] hover:bg-black active:scale-95 transition-all text-white px-4 py-2.5 rounded-xl font-bold text-xs cursor-pointer shadow-md"
+                      >
+                        <CreditCard className="w-3.5 h-3.5" />
+                        <span>Pay</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </motion.article>
+            );
+          })}
+        </div>
+
+        {/* Pay All sticky footer — multi-property only */}
+        {unpaidProps.length > 1 && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.2 }}
+            className="sticky bottom-5 pt-2"
+          >
+            <button
+              type="button"
+              onClick={() => router.push(checkoutHref)}
+              className="w-full h-14 rounded-2xl bg-[#121330] hover:bg-black active:scale-[0.98] transition-all text-white font-black text-sm flex items-center justify-between px-5 cursor-pointer shadow-xl"
+            >
+              <div className="text-left">
+                <span className="block text-xs text-white/50 font-semibold uppercase tracking-widest">Pay All Outstanding</span>
+                <span className="block text-base font-black tracking-tight">{metrics.totalOutstandingFormatted}</span>
+              </div>
+              <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center">
+                <ArrowRight className="w-4 h-4 text-white" />
+              </div>
+            </button>
+          </motion.div>
+        )}
+
+        {/* Legal footnote */}
+        <p className="text-center text-[10px] text-[#ADADAD] font-medium pt-2 pb-4">
+          Local Governance Act, 2016 (Act 936) · Kpone-Katamanso Municipal Assembly
+        </p>
       </motion.div>
     </main>
   );
