@@ -29,6 +29,11 @@ import {
   Menu,
   CreditCard,
   ChevronRight,
+  LogOut,
+  Flag,
+  XCircle,
+  Clock,
+  ArrowLeft,
 } from "lucide-react";
 import {
   getAdminOverview,
@@ -62,9 +67,10 @@ import {
 } from "@/lib/csv-export";
 import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "framer-motion";
-import { AdminDashboardSkeleton } from "@/components/Skeletons";
 import { RatepayerDossierSheet } from "@/components/RatepayerDossierSheet";
 import { SettingsTab } from "@/components/SettingsTab";
+import { SupabaseTablePagination } from "@/components/SupabaseTablePagination";
+import { SmsRolloutSkeleton } from "@/components/Skeletons";
 
 const PropertyModal = dynamic(
   () => import("@/components/PropertyModal").then((m) => m.PropertyModal),
@@ -80,11 +86,7 @@ const SmsRolloutSimulator = dynamic(
   () => import("@/components/SmsRolloutSimulator").then((m) => m.SmsRolloutSimulator),
   {
     ssr: false,
-    loading: () => (
-      <div className="flex-1 flex items-center justify-center p-12">
-        <Loader2 className="w-6 h-6 animate-spin text-[#007AFF]" />
-      </div>
-    ),
+    loading: () => <SmsRolloutSkeleton />,
   }
 );
 
@@ -103,23 +105,21 @@ export default function AdminDashboardPage() {
   const [data, setData] = useState<AdminDashboardData | null>(null);
   const [propertiesList, setPropertiesList] = useState<AdminProperty[]>([]);
   const [currentPropertyPage, setCurrentPropertyPage] = useState(1);
-  const [hasMoreProperties, setHasMoreProperties] = useState(true);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [propertyLimit, setPropertyLimit] = useState(50);
   const tableContainerRef = useRef<HTMLDivElement>(null);
-  const propertySentinelRef = useRef<HTMLDivElement>(null);
 
   const [ratepayers, setRatepayers] = useState<AdminRatepayerSummary[]>([]);
   const [ratepayersTotal, setRatepayersTotal] = useState(0);
   const [currentRatepayerPage, setCurrentRatepayerPage] = useState(1);
-  const [hasMoreRatepayers, setHasMoreRatepayers] = useState(true);
-  const [isLoadingMoreRatepayers, setIsLoadingMoreRatepayers] = useState(false);
+  const [ratepayerLimit, setRatepayerLimit] = useState(50);
+  const [isLoadingRatepayers, setIsLoadingRatepayers] = useState(false);
   const [ratepayerSearchQuery, setRatepayerSearchQuery] = useState("");
   const deferredRatepayerSearchQuery = useDeferredValue(ratepayerSearchQuery);
   const [smsLogs, setSmsLogs] = useState<SmsRolloutLogItem[]>([]);
   const [auditLogs, setAuditLogs] = useState<AdminAuditLogItem[]>([]);
   const [auditLogsTotal, setAuditLogsTotal] = useState(0);
   const [currentAuditLogPage, setCurrentAuditLogPage] = useState(1);
-  const [hasMoreAuditLogs, setHasMoreAuditLogs] = useState(true);
+  const [auditLogLimit, setAuditLogLimit] = useState(50);
   const [isLoadingAuditLogs, setIsLoadingAuditLogs] = useState(false);
   const [auditLogSearchQuery, setAuditLogSearchQuery] = useState("");
   const deferredAuditLogSearchQuery = useDeferredValue(auditLogSearchQuery);
@@ -145,8 +145,34 @@ export default function AdminDashboardPage() {
   // Mobile Drawer Navigation State
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
+  // Desktop Supabase-Style Curtain Sidebar Hover State
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
+
   // Dedicated Municipal Admin State
   const [currentAdmin, setCurrentAdmin] = useState<{ id: string; username: string; name: string; role: string } | null>(null);
+
+  // Return to Ratepayer Dossier from Property Roll
+  const [returnToRatepayerDossier, setReturnToRatepayerDossier] = useState<{ id: string; name: string; preview: any } | null>(null);
+
+  // Activity-Based 10-Minute Session Watchdog & 9-Minute Warning Modal States
+  const [showInactivityModal, setShowInactivityModal] = useState(false);
+  const [inactivityCountdown, setInactivityCountdown] = useState(60);
+  const lastActivityTimestampRef = useRef(Date.now());
+  const showInactivityModalRef = useRef(false);
+
+  const handleConfirmActive = () => {
+    lastActivityTimestampRef.current = Date.now();
+    showInactivityModalRef.current = false;
+    setShowInactivityModal(false);
+  };
+
+  const handleInactivityLogout = async () => {
+    try {
+      await adminLogout();
+    } finally {
+      window.location.href = "/login?expired=true";
+    }
+  };
 
   useEffect(() => {
     const verifySession = async () => {
@@ -155,23 +181,70 @@ export default function AdminDashboardPage() {
         if (admin) {
           setCurrentAdmin(admin);
         } else {
-          window.location.href = "/login?superseded=true";
+          window.location.href = "/login?expired=true";
         }
       } catch {
-        window.location.href = "/login?superseded=true";
+        window.location.href = "/login?expired=true";
       }
     };
 
     verifySession();
 
-    // Proactive single-session check: detect if another device logged into this admin account
-    const handleFocus = () => verifySession();
+    // User activity listeners across page/window events
+    const recordActivity = () => {
+      // Only reset activity timestamp if the warning modal is not active
+      if (!showInactivityModalRef.current) {
+        lastActivityTimestampRef.current = Date.now();
+      }
+    };
+
+    const activityEvents = ["mousemove", "mousedown", "keydown", "scroll", "touchstart"];
+    activityEvents.forEach((ev) => {
+      window.addEventListener(ev, recordActivity, { passive: true });
+    });
+
+    // 1-second watchdog interval checking idle thresholds (9m prompt, 10m logout)
+    const TEN_MINUTES_MS = 10 * 60 * 1000;
+    const NINE_MINUTES_MS = 9 * 60 * 1000;
+
+    const watchdogInterval = setInterval(async () => {
+      const idleDuration = Date.now() - lastActivityTimestampRef.current;
+
+      if (idleDuration >= TEN_MINUTES_MS) {
+        clearInterval(watchdogInterval);
+        try {
+          await adminLogout();
+        } finally {
+          window.location.href = "/login?expired=true";
+        }
+      } else if (idleDuration >= NINE_MINUTES_MS) {
+        showInactivityModalRef.current = true;
+        setShowInactivityModal(true);
+        const remainingSec = Math.max(0, Math.ceil((TEN_MINUTES_MS - idleDuration) / 1000));
+        setInactivityCountdown(remainingSec);
+      } else {
+        if (showInactivityModalRef.current) {
+          showInactivityModalRef.current = false;
+          setShowInactivityModal(false);
+        }
+      }
+    }, 1000);
+
+    // Periodic single-session & expiration heartbeat check every 30 seconds
+    const handleFocus = () => {
+      recordActivity();
+      verifySession();
+    };
     window.addEventListener("focus", handleFocus);
-    const interval = setInterval(verifySession, 30000);
+    const sessionHeartbeat = setInterval(verifySession, 30000);
 
     return () => {
+      activityEvents.forEach((ev) => {
+        window.removeEventListener(ev, recordActivity);
+      });
+      clearInterval(watchdogInterval);
       window.removeEventListener("focus", handleFocus);
-      clearInterval(interval);
+      clearInterval(sessionHeartbeat);
     };
   }, []);
 
@@ -311,7 +384,8 @@ export default function AdminDashboardPage() {
     muni = municipalityFilter,
     classification = classificationFilter,
     status = statusFilter,
-    isInitial = false
+    isInitial = false,
+    limit = propertyLimit
   ) => {
     if (isInitial) {
       setIsInitialLoading(true);
@@ -323,7 +397,7 @@ export default function AdminDashboardPage() {
       // 1. High-speed database overview with exact filter counts
       const overviewRes = await getAdminOverview(
         page,
-        50,
+        limit,
         muni,
         query,
         classification,
@@ -335,8 +409,7 @@ export default function AdminDashboardPage() {
       }
       setData(overviewRes);
       setPropertiesList(overviewRes?.properties || []);
-      setCurrentPropertyPage(1);
-      setHasMoreProperties((overviewRes?.pagination?.page || 1) < (overviewRes?.pagination?.totalPages || 1));
+      setCurrentPropertyPage(page);
 
       // Cache baseline dataset when query is empty and filters are default
       if (!query && muni === "ALL" && classification === "ALL" && (status === "ALL" || !status)) {
@@ -372,9 +445,8 @@ export default function AdminDashboardPage() {
           setAuditLogs(auditRes.logs);
           setAuditLogsTotal(auditRes.total);
           setCurrentAuditLogPage(1);
-          setHasMoreAuditLogs(auditRes.logs.length < auditRes.total);
         }
-        getTreasuryReceipts("", "ALL", 1, 100).then((tres) => {
+        getTreasuryReceipts("", "ALL", 1, 50).then((tres) => {
           if (tres) {
             setTreasuryReceipts(tres.receipts);
             setTreasuryReceiptsTotal(tres.total);
@@ -386,22 +458,17 @@ export default function AdminDashboardPage() {
     }
   };
 
-  const loadAuditLogs = async (query = auditLogSearchQuery, actionFilter = auditLogActionFilter, page = 1, append = false) => {
+  const loadAuditLogs = async (query = auditLogSearchQuery, actionFilter = auditLogActionFilter, page = 1, limit = auditLogLimit) => {
     setIsLoadingAuditLogs(true);
     try {
-      const res = await getAuditTrailList(query, actionFilter, page, 50);
+      const res = await getAuditTrailList(query, actionFilter, page, limit);
       if (activeAuditQueryRef.current !== query) {
         return;
       }
       if (res) {
-        if (append) {
-          setAuditLogs((prev) => [...prev, ...res.logs]);
-        } else {
-          setAuditLogs(res.logs);
-        }
+        setAuditLogs(res.logs);
         setAuditLogsTotal(res.total);
         setCurrentAuditLogPage(page);
-        setHasMoreAuditLogs((page * 50) < res.total);
         if (!query && actionFilter === "ALL") {
           baselineAuditLogsRef.current = res;
         }
@@ -414,65 +481,23 @@ export default function AdminDashboardPage() {
     }
   };
 
-
-  // Proactive pagination loader for Cadastre properties
-  const loadNextPropertyPage = async () => {
-    if (isLoadingMore || !hasMoreProperties || isSearchingProperties) return;
-    setIsLoadingMore(true);
-    const nextPage = currentPropertyPage + 1;
-    try {
-      const activeStatus = statusFilter;
-      const nextRes = await getAdminOverview(
-        nextPage,
-        50,
-        municipalityFilter,
-        searchQuery,
-        classificationFilter,
-        activeStatus as any
-      );
-      if (nextRes && nextRes.properties.length > 0) {
-        setPropertiesList((prev) => {
-          const existingIds = new Set(prev.map((p) => p.id));
-          const newItems = nextRes.properties.filter((p) => !existingIds.has(p.id));
-          return [...prev, ...newItems];
-        });
-        setCurrentPropertyPage(nextPage);
-        setHasMoreProperties(nextPage < (nextRes.pagination?.totalPages || 1));
-      } else {
-        setHasMoreProperties(false);
-      }
-    } catch (err) {
-      console.error("Error loading next page of properties:", err);
-    } finally {
-      setIsLoadingMore(false);
-    }
+  const handlePropertyPageChange = (newPage: number) => {
+    loadData(newPage, searchQuery, municipalityFilter, classificationFilter, statusFilter, false, propertyLimit);
   };
 
-  // Fallback scroll handler inside Cadastre table container
-  const handleTableScroll = async (e: React.UIEvent<HTMLDivElement>) => {
-    const target = e.currentTarget;
-    if (target.scrollTop + target.clientHeight >= target.scrollHeight - 80) {
-      loadNextPropertyPage();
-    }
+  const handlePropertyPageSizeChange = (newLimit: number) => {
+    setPropertyLimit(newLimit);
+    loadData(1, searchQuery, municipalityFilter, classificationFilter, statusFilter, false, newLimit);
   };
 
-  // Proactive IntersectionObserver for endless scrolling of Cadastre properties
-  useEffect(() => {
-    const sentinel = propertySentinelRef.current;
-    if (!sentinel || !hasMoreProperties || isLoadingMore || isSearchingProperties) return;
+  const handleAuditLogPageChange = (newPage: number) => {
+    loadAuditLogs(auditLogSearchQuery, auditLogActionFilter, newPage, auditLogLimit);
+  };
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) {
-          loadNextPropertyPage();
-        }
-      },
-      { rootMargin: "300px" }
-    );
-
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [hasMoreProperties, isLoadingMore, isSearchingProperties, currentPropertyPage, activeTab, municipalityFilter, searchQuery, classificationFilter, statusFilter]);
+  const handleAuditLogPageSizeChange = (newLimit: number) => {
+    setAuditLogLimit(newLimit);
+    loadAuditLogs(auditLogSearchQuery, auditLogActionFilter, 1, newLimit);
+  };
 
   // Initial load once on mount
   useEffect(() => {
@@ -495,10 +520,6 @@ export default function AdminDashboardPage() {
         setData(baselineOverviewRef.current);
         setPropertiesList(baselineOverviewRef.current.properties || []);
         setCurrentPropertyPage(1);
-        setHasMoreProperties(
-          (baselineOverviewRef.current.pagination?.page || 1) <
-          (baselineOverviewRef.current.pagination?.totalPages || 1)
-        );
       }
       loadData(1, "", municipalityFilter, classificationFilter, statusFilter, false);
       return;
@@ -523,10 +544,6 @@ export default function AdminDashboardPage() {
       setData(baselineOverviewRef.current);
       setPropertiesList(baselineOverviewRef.current.properties || []);
       setCurrentPropertyPage(1);
-      setHasMoreProperties(
-        (baselineOverviewRef.current.pagination?.page || 1) <
-        (baselineOverviewRef.current.pagination?.totalPages || 1)
-      );
     }
     loadData(1, "", municipalityFilter, classificationFilter, statusFilter, false);
   };
@@ -559,9 +576,6 @@ export default function AdminDashboardPage() {
     }
   }, [treasurySearchQuery, treasuryMethodFilter, activeTab]);
 
-
-
-
   // Debounced background server search for Audit Trail
   useEffect(() => {
     if (isInitialLoading) return;
@@ -571,9 +585,6 @@ export default function AdminDashboardPage() {
         setAuditLogs(baselineAuditLogsRef.current.logs);
         setAuditLogsTotal(baselineAuditLogsRef.current.total);
         setCurrentAuditLogPage(1);
-        setHasMoreAuditLogs(
-          baselineAuditLogsRef.current.logs.length < baselineAuditLogsRef.current.total
-        );
       }
       loadAuditLogs("", auditLogActionFilter, 1);
       return;
@@ -591,38 +602,39 @@ export default function AdminDashboardPage() {
       setAuditLogs(baselineAuditLogsRef.current.logs);
       setAuditLogsTotal(baselineAuditLogsRef.current.total);
       setCurrentAuditLogPage(1);
-      setHasMoreAuditLogs(
-        baselineAuditLogsRef.current.logs.length < baselineAuditLogsRef.current.total
-      );
     }
     loadAuditLogs("", auditLogActionFilter, 1);
   };
 
-  // Proactive pagination loader for Ratepayers
-  const loadRatepayers = async (query = "", page = 1, append = false) => {
-    if (page === 1) setIsLoadingMoreRatepayers(true);
+  // Dedicated pagination loader for Ratepayers
+  const loadRatepayers = async (query = "", page = 1, limit = ratepayerLimit) => {
+    setIsLoadingRatepayers(true);
     try {
-      const res = await getRatepayersList(query, page, 50);
+      const res = await getRatepayersList(query, page, limit);
       if (res) {
-        if (append) {
-          setRatepayers((prev) => [...prev, ...res.ratepayers]);
-        } else {
-          setRatepayers(res.ratepayers);
-        }
+        setRatepayers(res.ratepayers);
         setRatepayersTotal(res.total);
         setCurrentRatepayerPage(page);
-        setHasMoreRatepayers(res.ratepayers.length === 50 && page * 50 < res.total);
       }
     } catch (err) {
       console.error("Error loading ratepayers list:", err);
     } finally {
-      setIsLoadingMoreRatepayers(false);
+      setIsLoadingRatepayers(false);
     }
+  };
+
+  const handleRatepayerPageChange = (newPage: number) => {
+    loadRatepayers(deferredRatepayerSearchQuery, newPage, ratepayerLimit);
+  };
+
+  const handleRatepayerPageSizeChange = (newLimit: number) => {
+    setRatepayerLimit(newLimit);
+    loadRatepayers(deferredRatepayerSearchQuery, 1, newLimit);
   };
 
   useEffect(() => {
     if (activeTab === "RATEPAYERS") {
-      loadRatepayers(deferredRatepayerSearchQuery, 1, false);
+      loadRatepayers(deferredRatepayerSearchQuery, 1, ratepayerLimit);
     }
   }, [activeTab, deferredRatepayerSearchQuery]);
 
@@ -1073,13 +1085,9 @@ export default function AdminDashboardPage() {
     });
   }, [allTreasuryReceipts, deferredTreasurySearchQuery, treasuryMethodFilter]);
 
-  if (isInitialLoading) {
-    return <AdminDashboardSkeleton />;
-  }
-
   return (
 
-    <div className="min-h-screen w-full bg-[#F2F2F7] text-[#1C1C1E] flex flex-col lg:flex-row font-sans relative">
+    <div className="h-screen w-full bg-white text-[#1C1C1E] flex flex-col lg:flex-row font-sans relative overflow-hidden">
       {/* Mobile Slide-Over Navigation Drawer */}
       <AnimatePresence>
         {isMobileMenuOpen && (
@@ -1199,14 +1207,21 @@ export default function AdminDashboardPage() {
         )}
       </AnimatePresence>
 
-      {/* Desktop Sidebar Navigation */}
-      <aside className="hidden lg:flex w-64 bg-white/90 backdrop-blur-xl border-r border-[#E5E5EA] shadow-2xs flex-col shrink-0 h-screen z-30 font-sans sticky top-0">
-        <div className="h-13 flex items-center px-4 border-b border-[#E5E5EA] shrink-0 justify-between gap-2">
-          <div className="flex items-center gap-2.5 min-w-0">
+      {/* Desktop Sidebar Anchor (Fixed 56px footprint so main workspace never jumps or shifts) */}
+      <div className="hidden lg:block w-14 shrink-0 relative z-30">
+        <aside
+          onMouseEnter={() => setIsSidebarExpanded(true)}
+          onMouseLeave={() => setIsSidebarExpanded(false)}
+          className={`h-screen fixed top-0 left-0 z-40 flex flex-col bg-white/95 backdrop-blur-2xl border-r border-[#E5E5EA] transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] overflow-hidden font-sans ${
+            isSidebarExpanded ? "w-64 shadow-2xl" : "w-14 shadow-2xs"
+          }`}
+        >
+          {/* Header */}
+          <div className="h-13 flex items-center px-3.5 border-b border-[#E5E5EA] shrink-0 gap-2.5 overflow-hidden">
             <div className="w-7 h-7 rounded-md bg-[#007AFF] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
               K
             </div>
-            <div className="flex flex-col min-w-0">
+            <div className={`flex flex-col min-w-0 transition-opacity duration-200 ${isSidebarExpanded ? "opacity-100" : "opacity-0 pointer-events-none w-0"}`}>
               <select
                 value={municipalityFilter}
                 onChange={(e) => setMunicipalityFilter(e.target.value)}
@@ -1215,86 +1230,103 @@ export default function AdminDashboardPage() {
               >
                 <option value="Kpone-Katamanso (KKMA)">Kpone-Katamanso (KKMA)</option>
               </select>
-              <span className="text-[10px] text-[#6C6C70] truncate leading-tight">
+              <span className="text-[10px] text-[#6C6C70] truncate leading-tight whitespace-nowrap">
                 Property Rate Cadastre &bull; Act 936
               </span>
             </div>
-          </div>
-          <span className="text-[10px] text-[#6C6C70] uppercase font-mono font-medium shrink-0">Admin</span>
-        </div>
-
-        {/* Navigation Links (Zero Pills - Clean Google Enterprise Standard) */}
-        <nav className="flex flex-col flex-1 px-3 py-3 gap-1 overflow-y-auto" aria-label="Main Navigation">
-          <div className="px-3 pt-1 pb-1.5 text-[10px] font-semibold tracking-wider text-[#6C6C70] uppercase font-mono select-none">
-            Revenue Modules
-          </div>
-          {NAV_TABS.map((tab) => {
-            const isActive = activeTab === tab.key;
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => handleTabChange(tab.key)}
-                className={`relative px-3 py-2.5 text-left text-xs font-medium transition-colors cursor-pointer focus:outline-none rounded-lg flex items-center justify-between group ${isActive
-                    ? "bg-[#007AFF]/10 text-[#007AFF] font-semibold"
-                    : "text-[#6C6C70] hover:text-[#1C1C1E] hover:bg-[#F2F2F7]"
-                  }`}
-              >
-                <div className="flex items-center gap-2.5 min-w-0 pr-1">
-                  <Icon className={`w-4 h-4 shrink-0 transition-colors ${isActive ? "text-[#007AFF]" : "text-[#6C6C70] group-hover:text-[#1C1C1E]"}`} />
-                  <span className="truncate whitespace-nowrap">{tab.label}</span>
-                </div>
-                {isActive && (
-                  <motion.div
-                    layoutId="activeTabIndicatorSidebar"
-                    className="absolute left-0 top-1.5 bottom-1.5 w-[3.5px] bg-[#007AFF] rounded-r"
-                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                  />
-                )}
-              </button>
-            );
-          })}
-        </nav>
-
-        {/* User & Sign Out Footer */}
-        <div className="p-3 border-t border-[#E5E5EA] shrink-0 bg-[#F8F9FA]">
-          <div className="px-3 py-1.5 text-xs">
-            <span className="text-[#6C6C70] block text-[10px]">Logged in Administrator</span>
-            <span className="font-semibold text-[#1C1C1E] truncate block">
-              {currentAdmin?.username || currentAdmin?.name || "Heinz"}
-            </span>
-          </div>
-
-
-          <button
-            type="button"
-            disabled={isLoggingOut}
-            onClick={async () => {
-              setIsLoggingOut(true);
-              try {
-                await adminLogout();
-              } finally {
-                window.location.href = '/login';
-              }
-            }}
-            aria-label="Sign out of administration portal"
-            className="w-full py-1.5 text-xs font-medium text-[#6C6C70] hover:text-[#1C1C1E] hover:bg-[#E5E5EA] rounded-lg transition-colors focus:outline-none text-left px-3 cursor-pointer flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            {isLoggingOut ? (
-              <>
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-[#007AFF]" />
-                <span>Signing out...</span>
-              </>
-            ) : (
-              <span>Sign Out</span>
+            {isSidebarExpanded && (
+              <span className="text-[10px] text-[#6C6C70] uppercase font-mono font-medium shrink-0 ml-auto transition-opacity duration-200">
+                Admin
+              </span>
             )}
-          </button>
-        </div>
-      </aside>
+          </div>
+
+          {/* Navigation Links (Zero Pills - Clean Google Enterprise / Supabase Standard) */}
+          <nav className="flex flex-col flex-1 px-2 py-3 gap-1 overflow-y-auto overflow-x-hidden" aria-label="Main Navigation">
+            {isSidebarExpanded ? (
+              <div className="px-3 pt-1 pb-1.5 text-[10px] font-semibold tracking-wider text-[#6C6C70] uppercase font-mono select-none whitespace-nowrap transition-opacity duration-200">
+                Revenue Modules
+              </div>
+            ) : (
+              <div className="w-6 mx-auto h-px bg-[#E5E5EA] my-1" />
+            )}
+
+            {NAV_TABS.map((tab) => {
+              const isActive = activeTab === tab.key;
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => handleTabChange(tab.key)}
+                  title={!isSidebarExpanded ? tab.label : undefined}
+                  className={`relative h-10 px-2.5 text-left text-xs font-medium transition-colors cursor-pointer focus:outline-none rounded-lg flex items-center group overflow-hidden ${
+                    isActive
+                      ? "bg-[#007AFF]/10 text-[#007AFF] font-semibold"
+                      : "text-[#6C6C70] hover:text-[#1C1C1E] hover:bg-[#F2F2F7]"
+                  } ${isSidebarExpanded ? "w-full justify-between" : "w-10 mx-auto justify-center"}`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Icon className={`w-4 h-4 shrink-0 transition-colors ${isActive ? "text-[#007AFF]" : "text-[#6C6C70] group-hover:text-[#1C1C1E]"}`} />
+                    <span className={`truncate whitespace-nowrap transition-all duration-200 ${isSidebarExpanded ? "opacity-100 max-w-[160px]" : "opacity-0 max-w-0 pointer-events-none"}`}>
+                      {tab.label}
+                    </span>
+                  </div>
+                  {isActive && (
+                    <motion.div
+                      layoutId="activeTabIndicatorSidebar"
+                      className="absolute left-0 top-1.5 bottom-1.5 w-[3.5px] bg-[#007AFF] rounded-r"
+                      transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                    />
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* User & Sign Out Footer */}
+          <div className="p-2 border-t border-[#E5E5EA] shrink-0 bg-[#F8F9FA] overflow-hidden">
+            {isSidebarExpanded && (
+              <div className="px-2 py-1.5 text-xs transition-opacity duration-200">
+                <span className="text-[#6C6C70] block text-[10px]">Logged in Administrator</span>
+                <span className="font-semibold text-[#1C1C1E] truncate block">
+                  {currentAdmin?.username || currentAdmin?.name || "Heinz"}
+                </span>
+              </div>
+            )}
+
+            <button
+              type="button"
+              disabled={isLoggingOut}
+              onClick={async () => {
+                setIsLoggingOut(true);
+                try {
+                  await adminLogout();
+                } finally {
+                  window.location.href = '/login';
+                }
+              }}
+              title={!isSidebarExpanded ? "Sign Out" : undefined}
+              aria-label="Sign out of administration portal"
+              className={`h-9 text-xs font-medium text-[#6C6C70] hover:text-[#FF3B30] hover:bg-[#E5E5EA] rounded-lg transition-colors focus:outline-none cursor-pointer flex items-center disabled:opacity-60 disabled:cursor-not-allowed overflow-hidden ${
+                isSidebarExpanded ? "w-full px-2.5 gap-2.5" : "w-10 mx-auto justify-center"
+              }`}
+            >
+              {isLoggingOut ? (
+                <Loader2 className="w-4 h-4 animate-spin text-[#007AFF] shrink-0" />
+              ) : (
+                <LogOut className="w-4 h-4 shrink-0 text-[#6C6C70] group-hover:text-[#FF3B30]" />
+              )}
+              <span className={`whitespace-nowrap transition-opacity duration-200 ${isSidebarExpanded ? "opacity-100" : "opacity-0 pointer-events-none w-0"}`}>
+                {isLoggingOut ? "Signing out..." : "Sign Out"}
+              </span>
+            </button>
+          </div>
+        </aside>
+      </div>
 
       {/* Main Content Area */}
-      <div className={`flex-1 flex flex-col min-w-0 ${activeTab === "SMS_CENTER" ? "h-screen overflow-hidden" : "min-h-screen lg:h-screen lg:overflow-hidden"}`}>
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
         {/* Mobile App Header */}
         <header className="bg-white/80 backdrop-blur-xl border-b border-[#E5E5EA] shadow-2xs px-3.5 sm:px-4 h-13 flex items-center justify-between shrink-0 lg:hidden font-sans z-20 sticky top-0">
           <div className="flex items-center gap-2.5 min-w-0">
@@ -1387,66 +1419,105 @@ export default function AdminDashboardPage() {
           </div>
         )}
 
-        {/* Main Dashboard Workspace (Viewport Fitted & Full-Bleed on Mobile) */}
-        <main className={`flex-1 min-h-0 w-full flex flex-col ${activeTab === "SMS_CENTER"
-            ? "p-0 max-w-none overflow-hidden h-full"
-            : activeTab === "SETTINGS"
-              ? "p-0 max-w-none overflow-y-auto"
-              : "p-0 lg:px-6 lg:py-3 max-w-none lg:max-w-7xl lg:mx-auto gap-0 lg:gap-3 bg-[#F2F2F7] lg:bg-transparent overflow-y-auto lg:overflow-hidden pb-3"
-          }`}>
-          {/* Top KPI Cards (Zero Pills - Flat Edge-to-Edge on Mobile, Cards on Desktop) */}
+        {/* Main Dashboard Workspace (Universal Flat Studio Layout) */}
+        <main className="flex-1 min-h-0 w-full flex flex-col p-0 max-w-none overflow-hidden h-full">
+          {/* Top Modern KPI Cards (Compact Whimsical Fluid Wave Design) */}
           {activeTab === "REGISTRY" && (
-            <section aria-label="Executive KPIs" className="shrink-0 bg-white border-b border-[#E5E5EA] lg:border-b-0 lg:bg-transparent">
-              <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-y lg:divide-x-0 lg:divide-y-0 divide-[#E5E5EA] lg:gap-3">
+            <section aria-label="Executive KPIs" className="shrink-0 bg-[#F8F9FA] border-b border-[#E5E5EA] px-4 py-2 sm:px-6 sm:py-2.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 {/* 1. Total Assessed Demand */}
-                <div className="p-3.5 sm:p-4 lg:p-3 lg:bg-white lg:border lg:border-[#E5E5EA] lg:rounded-xl hover:bg-[#F8F9FA] lg:hover:border-[#D1D1D6] transition-colors flex items-center justify-between lg:shadow-2xs">
-                  <div className="min-w-0 pr-2">
-                    <span className="text-[11px] text-[#6C6C70] font-medium block truncate">Total Assessed Demand</span>
-                    <span className="text-base xl:text-lg font-bold text-[#1C1C1E] tracking-tight whitespace-nowrap tabular-nums block">{metrics.totalBilledFormatted}</span>
+                <div className="p-3.5 bg-white border border-[#E5E5EA] rounded-xl hover:border-[#D1D1D6] transition-colors flex flex-col justify-between min-h-[96px]">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-[#8E8E93]">Total Assessed Demand</span>
+                    <Building2 className="w-4 h-4 text-[#8E8E93]" />
                   </div>
-                  <div className="text-right shrink-0">
-                    <span className="text-[10px] text-[#6C6C70] block font-mono">FY 2025</span>
-                    <span className="text-[10px] text-[#6C6C70] block">{(data?.pagination?.total ?? metrics.totalProperties).toLocaleString()} accounts</span>
+                  <div className="mt-2">
+                    {isInitialLoading ? (
+                      <div className="h-7 w-32 bg-[#E5E5EA] rounded animate-pulse" />
+                    ) : (
+                      <div className="text-xl sm:text-2xl font-semibold text-[#1C1C1E] tracking-tight tabular-nums">
+                        {metrics.totalBilledFormatted}
+                      </div>
+                    )}
+                    <div className="text-[11px] text-[#8E8E93] mt-1 flex items-center gap-1.5 flex-wrap">
+                      <span className="font-medium text-[#007AFF]">FY 2025</span>
+                      <span>&bull;</span>
+                      <span>{(data?.pagination?.total ?? metrics.totalProperties).toLocaleString()} cadastre accounts</span>
+                    </div>
                   </div>
                 </div>
 
                 {/* 2. Revenue Collected */}
-                <div className="p-3.5 sm:p-4 lg:p-3 lg:bg-white lg:border lg:border-[#E5E5EA] lg:rounded-xl hover:bg-[#F8F9FA] lg:hover:border-[#D1D1D6] transition-colors flex items-center justify-between lg:shadow-2xs">
-                  <div className="min-w-0 pr-2">
-                    <span className="text-[11px] text-[#6C6C70] font-medium block truncate">Revenue Collected</span>
-                    <span className="text-base xl:text-lg font-bold text-[#34C759] tracking-tight whitespace-nowrap tabular-nums block">{metrics.totalCollectedFormatted}</span>
+                <div className="p-3.5 bg-white border border-[#E5E5EA] rounded-xl hover:border-[#D1D1D6] transition-colors flex flex-col justify-between min-h-[96px]">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-[#8E8E93]">Revenue Collected</span>
+                    <CheckCircle2 className="w-4 h-4 text-[#34C759]" />
                   </div>
-                  <div className="text-right shrink-0">
-                    <span className="text-[10px] text-[#6C6C70] block font-mono">Efficiency</span>
-                    <span className="text-[11px] font-semibold text-[#34C759] block">{metrics.collectionRateFormatted}</span>
+                  <div className="mt-2">
+                    {isInitialLoading ? (
+                      <div className="h-7 w-32 bg-[#E5E5EA] rounded animate-pulse" />
+                    ) : (
+                      <div className="text-xl sm:text-2xl font-semibold text-[#34C759] tracking-tight tabular-nums">
+                        {metrics.totalCollectedFormatted}
+                      </div>
+                    )}
+                    <div className="text-[11px] text-[#8E8E93] mt-1 flex items-center gap-1.5 flex-wrap">
+                      <span className="font-medium text-[#34C759]">+{metrics.collectionRateFormatted}</span>
+                      <span>&bull;</span>
+                      <span>Direct treasury mobilization</span>
+                    </div>
                   </div>
                 </div>
 
                 {/* 3. Cumulative Arrears */}
-                <div className="p-3.5 sm:p-4 lg:p-3 lg:bg-white lg:border lg:border-[#E5E5EA] lg:rounded-xl hover:bg-[#F8F9FA] lg:hover:border-[#D1D1D6] transition-colors flex items-center justify-between lg:shadow-2xs">
-                  <div className="min-w-0 pr-2">
-                    <span className="text-[11px] text-[#6C6C70] font-medium block truncate">Cumulative Arrears</span>
-                    <span className="text-base xl:text-lg font-bold text-[#FF3B30] tracking-tight whitespace-nowrap tabular-nums block">{metrics.totalArrearsFormatted}</span>
+                <div className="p-3.5 bg-white border border-[#E5E5EA] rounded-xl hover:border-[#D1D1D6] transition-colors flex flex-col justify-between min-h-[96px]">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-[#8E8E93]">Cumulative Arrears</span>
+                    <XCircle className="w-4 h-4 text-[#FF3B30]" />
                   </div>
-                  <div className="text-right shrink-0">
-                    <span className="text-[10px] text-[#6C6C70] block font-mono">Prior Debt</span>
-                    <span className="text-[10px] text-[#6C6C70] block">Act 936</span>
+                  <div className="mt-2">
+                    {isInitialLoading ? (
+                      <div className="h-7 w-32 bg-[#E5E5EA] rounded animate-pulse" />
+                    ) : (
+                      <div className="text-xl sm:text-2xl font-semibold text-[#FF3B30] tracking-tight tabular-nums">
+                        {metrics.totalArrearsFormatted}
+                      </div>
+                    )}
+                    <div className="text-[11px] text-[#8E8E93] mt-1 flex items-center gap-1.5 flex-wrap">
+                      <span className="font-medium text-[#FF3B30]">Prior Debt</span>
+                      <span>&bull;</span>
+                      <span>Enforceable under Act 936</span>
+                    </div>
                   </div>
                 </div>
 
                 {/* 4. Accounts with Arrears */}
-                <div className="p-3.5 sm:p-4 lg:p-3 lg:bg-white lg:border lg:border-[#E5E5EA] lg:rounded-xl hover:bg-[#F8F9FA] lg:hover:border-[#D1D1D6] transition-colors flex items-center justify-between lg:shadow-2xs">
-                  <div className="min-w-0 pr-2">
-                    <span className="text-[11px] text-[#6C6C70] font-medium block truncate">Accounts with Arrears</span>
-                    <span className="text-base xl:text-lg font-bold text-[#1C1C1E] tracking-tight whitespace-nowrap tabular-nums block">{metrics.defaultersCount.toLocaleString()}</span>
+                <div className="p-3.5 bg-white border border-[#E5E5EA] rounded-xl hover:border-[#D1D1D6] transition-colors flex flex-col justify-between min-h-[96px]">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-[#8E8E93]">Accounts with Arrears</span>
+                    <Flag className="w-4 h-4 text-[#FF9500]" />
                   </div>
-                  <div className="text-right shrink-0">
-                    <span className={`text-[10px] font-semibold block ${metrics.defaultersCount > 0 ? "text-[#FF3B30]" : "text-[#34C759]"}`}>
-                      {metrics.defaultersCount > 0 ? "Recovery Active" : "Compliant"}
-                    </span>
-                    <span className="text-[10px] text-[#007AFF] hover:underline cursor-pointer" onClick={() => { setActiveTab("REGISTRY"); setStatusFilter("DEFAULTER"); }}>
-                      Inspect
-                    </span>
+                  <div className="mt-2">
+                    {isInitialLoading ? (
+                      <div className="h-7 w-20 bg-[#E5E5EA] rounded animate-pulse" />
+                    ) : (
+                      <div className="text-xl sm:text-2xl font-semibold text-[#1C1C1E] tracking-tight tabular-nums">
+                        {metrics.defaultersCount.toLocaleString()}
+                      </div>
+                    )}
+                    <div className="text-[11px] text-[#8E8E93] mt-1 flex items-center gap-1.5 flex-wrap">
+                      <span className={`font-medium ${metrics.defaultersCount > 0 ? "text-[#FF9500]" : "text-[#34C759]"}`}>
+                        {metrics.defaultersCount > 0 ? "Recovery active" : "Compliant"}
+                      </span>
+                      <span>&bull;</span>
+                      <button
+                        type="button"
+                        onClick={() => { setActiveTab("REGISTRY"); setStatusFilter("DEFAULTER"); }}
+                        className="text-[#007AFF] hover:underline cursor-pointer"
+                      >
+                        Inspect delinquent accounts &rarr;
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1455,7 +1526,7 @@ export default function AdminDashboardPage() {
 
           {/* TAB 1: CADASTRE & VALUATION ROLL */}
           {activeTab === "REGISTRY" && (
-            <section className="bg-white border-b border-[#E5E5EA] lg:border lg:border-[#E5E5EA] rounded-none lg:rounded-xl shadow-none flex-1 min-h-0 flex flex-col overflow-hidden w-full">
+            <section className="bg-white border-0 rounded-none shadow-none flex-1 min-h-0 flex flex-col overflow-hidden w-full">
               <div className="p-3.5 border-b border-[#E5E5EA] space-y-2.5 shrink-0 bg-white">
                 <div className="flex items-center justify-between">
                   <div>
@@ -1668,10 +1739,9 @@ export default function AdminDashboardPage() {
                 )}
               </AnimatePresence>
 
-              {/* Cadastre Table Container with Infinite Scrolling */}
+              {/* Cadastre Table Container */}
               <div
                 ref={tableContainerRef}
-                onScroll={handleTableScroll}
                 className="w-full flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
               >
                 {/* Desktop Cadastre Table (>= 768px) */}
@@ -1697,7 +1767,35 @@ export default function AdminDashboardPage() {
                   </thead>
 
                   <tbody className="divide-y divide-[#E5E5EA] bg-white">
-                    {filteredProperties.length === 0 ? (
+                    {isSearchingProperties || isInitialLoading ? (
+                      Array.from({ length: 8 }).map((_, i) => (
+                        <tr key={`cadastre-skel-${i}`} className="animate-pulse">
+                          <td className="py-2.5 px-3 text-center">
+                            <div className="w-3.5 h-3.5 bg-[#E5E5EA] rounded mx-auto" />
+                          </td>
+                          <td className="py-2.5 px-3 space-y-1">
+                            <div className="w-24 h-3.5 bg-[#E5E5EA] rounded" />
+                            <div className="w-36 h-2.5 bg-[#F2F2F7] rounded" />
+                          </td>
+                          <td className="py-2.5 px-3 space-y-1">
+                            <div className="w-28 h-3.5 bg-[#E5E5EA] rounded" />
+                            <div className="w-20 h-2.5 bg-[#F2F2F7] rounded" />
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <div className="w-20 h-3.5 bg-[#E5E5EA] rounded" />
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <div className="w-16 h-3.5 bg-[#E5E5EA] rounded ml-auto" />
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <div className="w-18 h-3.5 bg-[#E5E5EA] rounded ml-auto" />
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            <div className="w-12 h-3.5 bg-[#E5E5EA] rounded mx-auto" />
+                          </td>
+                        </tr>
+                      ))
+                    ) : filteredProperties.length === 0 ? (
                       <tr>
                         <td colSpan={7} className="py-8 text-center text-[#8E8E93] font-normal">
                           No property records found matching current criteria.
@@ -1769,39 +1867,6 @@ export default function AdminDashboardPage() {
                           </tr>
                         );
                       })
-                    )}
-
-                    {isLoadingMore && (
-                      <>
-                        {[...Array(5)].map((_, i) => (
-                          <tr key={`cadastre-skel-desk-${i}`} className="bg-white border-b border-[#E5E5EA]">
-                            <td className="py-2.5 px-3 text-center">
-                              <div className="w-3.5 h-3.5 rounded border border-[#E5E5EA] bg-[#F2F2F7] mx-auto" />
-                            </td>
-                            <td className="py-2.5 px-3 space-y-1">
-                              <div className="h-3.5 vercel-skeleton rounded w-28" />
-                              <div className="h-2.5 vercel-skeleton rounded w-20" />
-                            </td>
-                            <td className="py-2.5 px-3 space-y-1">
-                              <div className="h-3.5 vercel-skeleton rounded w-36" />
-                              <div className="h-2.5 vercel-skeleton rounded w-28" />
-                            </td>
-                            <td className="py-2.5 px-3">
-                              <div className="h-3 vercel-skeleton rounded w-24" />
-                            </td>
-                            <td className="py-2.5 px-3 text-right">
-                              <div className="h-3.5 vercel-skeleton rounded w-20 ml-auto" />
-                            </td>
-                            <td className="py-2.5 px-3 text-right space-y-1">
-                              <div className="h-3.5 vercel-skeleton rounded w-20 ml-auto" />
-                              <div className="h-2.5 vercel-skeleton rounded w-14 ml-auto" />
-                            </td>
-                            <td className="py-2.5 px-3 text-center">
-                              <div className="h-3.5 vercel-skeleton rounded w-12 mx-auto" />
-                            </td>
-                          </tr>
-                        ))}
-                      </>
                     )}
                   </tbody>
                 </table>
@@ -1890,62 +1955,47 @@ export default function AdminDashboardPage() {
                     })
                   )}
 
-                  {isLoadingMore && (
-                    <div className="divide-y divide-[#E5E5EA] bg-white animate-pulse">
-                      {[...Array(4)].map((_, i) => (
-                        <div key={`cadastre-skel-mob-${i}`} className="px-3.5 py-3 flex items-center justify-between gap-2.5">
-                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                            <div className="w-4 h-4 rounded border border-[#E5E5EA] bg-[#F2F2F7] shrink-0" />
-                            <div className="min-w-0 flex-1 space-y-1.5">
-                              <div className="h-3.5 w-28 rounded vercel-skeleton" />
-                              <div className="h-2.5 w-36 rounded vercel-skeleton" />
-                            </div>
-                          </div>
-                          <div className="space-y-1 text-right shrink-0">
-                            <div className="h-3.5 w-16 rounded vercel-skeleton ml-auto" />
-                            <div className="h-2.5 w-10 rounded vercel-skeleton ml-auto" />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
-
-                {/* Endless Scroll Sentinel & Clean End Marker (Visible across desktop & mobile) */}
-                <div ref={propertySentinelRef} className="h-2 w-full shrink-0" />
-                {!hasMoreProperties && filteredProperties.length > 0 && (
-                  <div className="py-4 text-center text-[11px] text-[#6C6C70] border-t border-[#E5E5EA] bg-white shrink-0">
-                    &bull; End of cadastre roll ({filteredProperties.length.toLocaleString()} properties loaded)
-                  </div>
-                )}
               </div>
+
+              {/* Cadastre Supabase Studio-Style Table Pagination Bar */}
+              <SupabaseTablePagination
+                currentPage={currentPropertyPage}
+                totalPages={data?.pagination?.totalPages || 1}
+                totalRecords={data?.pagination?.total || propertiesList.length}
+                pageSize={propertyLimit}
+                pageSizeOptions={[25, 50, 100]}
+                onPageChange={handlePropertyPageChange}
+                onPageSizeChange={handlePropertyPageSizeChange}
+                isLoading={isSearchingProperties}
+                entityLabel="properties"
+              />
             </section>
           )}
 
           {/* TAB 2: RATEPAYER DIRECTORY & CONSOLIDATED PORTFOLIOS */}
           {activeTab === "RATEPAYERS" && (
-            <section className="apple-card flex-1 flex flex-col min-h-0 overflow-hidden w-full rounded-none lg:rounded-2xl shadow-none border-[#E5E5EA]">
+            <section className="bg-white flex-1 flex flex-col min-h-0 overflow-hidden w-full border-0 rounded-none shadow-none">
               {/* Directory Header Bar */}
               <div className="px-4 lg:px-6 py-3.5 sm:py-4 border-b border-[#E5E5EA] flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 shrink-0 bg-white">
                 <div>
                   <div className="flex items-center gap-2">
                     <h2 className="text-base font-semibold text-[#1C1C1E] tracking-tight">
-                      Municipal Ratepayer Directory &amp; Portfolios
+                      Ratepayer Directory &amp; Portfolios
                     </h2>
-                    <span className="text-xs text-[#007AFF] font-medium">&bull; Consolidated Taxpayer Profiles</span>
                   </div>
                   <p className="text-xs text-[#6C6C70] mt-0.5">
-                    Search and inspect citizen portfolios, multi-property ownerships, billing history, payment receipts, and audit logs under their name alone.
+                    Directory of registered ratepayers and linked property portfolios.
                   </p>
                 </div>
                 <div className="flex items-center gap-2.5 shrink-0">
                   <button
                     type="button"
-                    onClick={() => loadRatepayers(ratepayerSearchQuery, 1, false)}
-                    disabled={isLoadingMoreRatepayers}
+                    onClick={() => loadRatepayers(ratepayerSearchQuery, 1, ratepayerLimit)}
+                    disabled={isLoadingRatepayers}
                     className="apple-btn-secondary h-8 px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 cursor-pointer disabled:opacity-50 text-[#1C1C1E] border-[#E5E5EA]"
                   >
-                    <RefreshCw className={`w-3.5 h-3.5 ${isLoadingMoreRatepayers ? "animate-spin" : ""}`} />
+                    <RefreshCw className={`w-3.5 h-3.5 ${isLoadingRatepayers ? "animate-spin" : ""}`} />
                     <span>Refresh</span>
                   </button>
                 </div>
@@ -1986,7 +2036,7 @@ export default function AdminDashboardPage() {
                     <Download className="w-3.5 h-3.5" />
                     <span>Export Ratepayers CSV</span>
                   </button>
-                  <span className="text-xs text-[#6C6C70] font-mono">
+                  <span className="text-xs text-[#8E8E93] font-sans tabular-nums">
                     {ratepayers.length} of {ratepayersTotal} Ratepayers
                   </span>
                 </div>
@@ -2007,13 +2057,38 @@ export default function AdminDashboardPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#E5E5EA] bg-white">
-                    {isLoadingMoreRatepayers && ratepayers.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} className="px-6 py-12 text-center text-[#6C6C70]">
-                          <Loader2 className="w-6 h-6 animate-spin mx-auto text-[#007AFF] mb-2" />
-                          <span>Loading ratepayer profiles...</span>
-                        </td>
-                      </tr>
+                    {isLoadingRatepayers && ratepayers.length === 0 ? (
+                      Array.from({ length: 8 }).map((_, i) => (
+                        <tr key={`ratepayer-skel-${i}`} className="animate-pulse">
+                          <td className="px-4 lg:px-6 py-3.5">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-7 h-7 rounded-lg bg-[#E5E5EA] shrink-0" />
+                              <div className="space-y-1.5 flex-1">
+                                <div className="h-3.5 w-32 bg-[#E5E5EA] rounded" />
+                                <div className="h-2.5 w-24 bg-[#F2F2F7] rounded" />
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 lg:px-6 py-3.5">
+                            <div className="h-3.5 w-28 bg-[#E5E5EA] rounded" />
+                          </td>
+                          <td className="px-4 lg:px-6 py-3.5 text-center">
+                            <div className="h-3.5 w-8 bg-[#E5E5EA] rounded mx-auto" />
+                          </td>
+                          <td className="px-4 lg:px-6 py-3.5 text-right">
+                            <div className="h-3.5 w-20 bg-[#E5E5EA] rounded ml-auto" />
+                          </td>
+                          <td className="px-4 lg:px-6 py-3.5 text-right">
+                            <div className="h-3.5 w-24 bg-[#E5E5EA] rounded ml-auto" />
+                          </td>
+                          <td className="px-4 lg:px-6 py-3.5 text-center">
+                            <div className="h-3 w-16 bg-[#E5E5EA] rounded mx-auto" />
+                          </td>
+                          <td className="px-4 lg:px-6 py-3.5 text-right">
+                            <div className="h-3 w-14 bg-[#E5E5EA] rounded ml-auto" />
+                          </td>
+                        </tr>
+                      ))
                     ) : ratepayers.length === 0 ? (
                       <tr>
                         <td colSpan={7} className="px-6 py-12 text-center text-[#6C6C70]">
@@ -2030,11 +2105,11 @@ export default function AdminDashboardPage() {
                           <td className="px-4 lg:px-6 py-3.5">
                             <div className="flex items-center gap-2.5">
                               <div className="w-7 h-7 rounded-lg bg-[#007AFF]/10 text-[#007AFF] flex items-center justify-center font-bold text-xs shrink-0">
-                                {rp.name.charAt(0).toUpperCase()}
+                                {(rp.name || "C").charAt(0).toUpperCase()}
                               </div>
                               <div className="min-w-0">
                                 <span className="font-semibold text-[#1C1C1E] group-hover:text-[#007AFF] block truncate transition-colors">
-                                  {rp.name}
+                                  {rp.name || `Citizen (${rp.phoneNumber})`}
                                 </span>
                                 <span className="text-[11px] text-[#6C6C70] block">
                                   Member since {rp.createdAtFormatted}
@@ -2050,7 +2125,7 @@ export default function AdminDashboardPage() {
                               {rp.propertyCount} {rp.propertyCount === 1 ? "property" : "properties"}
                             </span>
                           </td>
-                          <td className="px-4 lg:px-6 py-3.5 text-right font-mono font-medium text-[#FF3B30]">
+                          <td className={`px-4 lg:px-6 py-3.5 text-right font-mono font-medium ${rp.totalArrears > 0 || (rp.totalArrearsFormatted && rp.totalArrearsFormatted !== 'GH₵ 0.00') ? 'text-[#FF3B30]' : 'text-[#8E8E93]'}`}>
                             {rp.totalArrearsFormatted}
                           </td>
                           <td className="px-4 lg:px-6 py-3.5 text-right font-mono font-semibold text-[#1C1C1E]">
@@ -2087,20 +2162,18 @@ export default function AdminDashboardPage() {
                 </table>
               </div>
 
-              {/* Pagination Bar */}
-              {hasMoreRatepayers && (
-                <div className="p-3 border-t border-[#E5E5EA] bg-white flex justify-center shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => loadRatepayers(ratepayerSearchQuery, currentRatepayerPage + 1, true)}
-                    disabled={isLoadingMoreRatepayers}
-                    className="apple-btn-secondary px-4 py-1.5 text-xs font-medium text-[#007AFF] flex items-center gap-1.5 cursor-pointer disabled:opacity-50 border-[#E5E5EA]"
-                  >
-                    {isLoadingMoreRatepayers && <Loader2 className="w-3 h-3 animate-spin" />}
-                    <span>Load More Ratepayers</span>
-                  </button>
-                </div>
-              )}
+              {/* Ratepayer Directory Supabase-Style Table Pagination Bar */}
+              <SupabaseTablePagination
+                currentPage={currentRatepayerPage}
+                totalPages={Math.max(1, Math.ceil(ratepayersTotal / ratepayerLimit))}
+                totalRecords={ratepayersTotal}
+                pageSize={ratepayerLimit}
+                pageSizeOptions={[25, 50, 100]}
+                onPageChange={handleRatepayerPageChange}
+                onPageSizeChange={handleRatepayerPageSizeChange}
+                isLoading={isLoadingRatepayers}
+                entityLabel="ratepayers"
+              />
             </section>
           )}
 
@@ -2121,7 +2194,7 @@ export default function AdminDashboardPage() {
 
           {/* TAB 5: TREASURY RECONCILIATION */}
           {activeTab === "TREASURY" && (
-            <section className="apple-card flex-1 min-h-0 flex flex-col overflow-hidden w-full rounded-none lg:rounded-2xl shadow-none border-[#E5E5EA]">
+            <section className="bg-white flex-1 min-h-0 flex flex-col overflow-hidden w-full border-0 rounded-none shadow-none">
               <div className="px-4 lg:px-6 py-3.5 border-b border-[#E5E5EA] bg-white flex flex-col gap-3 shrink-0">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div>
@@ -2213,7 +2286,31 @@ export default function AdminDashboardPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#E5E5EA] bg-white">
-                    {filteredTreasuryReceipts.length === 0 ? (
+                    {isLoadingTreasury || (isInitialLoading && treasuryReceipts.length === 0) ? (
+                      Array.from({ length: 8 }).map((_, i) => (
+                        <tr key={`treasury-skel-${i}`} className="animate-pulse">
+                          <td className="py-2.5 px-3">
+                            <div className="h-3.5 w-28 bg-[#E5E5EA] rounded" />
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <div className="h-3.5 w-24 bg-[#E5E5EA] rounded mb-1" />
+                            <div className="h-2.5 w-32 bg-[#F2F2F7] rounded" />
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <div className="h-3.5 w-20 bg-[#E5E5EA] rounded" />
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <div className="h-3.5 w-24 bg-[#E5E5EA] rounded" />
+                          </td>
+                          <td className="py-2.5 px-3 text-right">
+                            <div className="h-3.5 w-16 bg-[#E5E5EA] rounded ml-auto" />
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            <div className="h-3 w-16 bg-[#E5E5EA] rounded mx-auto" />
+                          </td>
+                        </tr>
+                      ))
+                    ) : filteredTreasuryReceipts.length === 0 ? (
                       <tr>
                         <td colSpan={6} className="py-8 text-center text-[#6C6C70] italic font-normal">
                           No treasury receipts match your search query.
@@ -2249,7 +2346,17 @@ export default function AdminDashboardPage() {
 
                 {/* Mobile Treasury List (< 768px) */}
                 <div className="block md:hidden divide-y divide-[#E5E5EA] bg-white">
-                  {filteredTreasuryReceipts.length === 0 ? (
+                  {isLoadingTreasury || (isInitialLoading && treasuryReceipts.length === 0) ? (
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <div key={`treasury-mob-skel-${i}`} className="px-3.5 py-3 animate-pulse flex items-center justify-between gap-2.5">
+                        <div className="space-y-1.5 flex-1">
+                          <div className="h-3.5 w-24 bg-[#E5E5EA] rounded" />
+                          <div className="h-2.5 w-36 bg-[#F2F2F7] rounded" />
+                        </div>
+                        <div className="h-4 w-16 bg-[#E5E5EA] rounded" />
+                      </div>
+                    ))
+                  ) : filteredTreasuryReceipts.length === 0 ? (
                     <div className="py-8 text-center text-[#6C6C70] italic font-normal text-xs px-4">
                       No treasury receipts match your search query.
                     </div>
@@ -2298,7 +2405,7 @@ export default function AdminDashboardPage() {
 
           {/* TAB: SYSTEM AUDIT TRAIL */}
           {activeTab === "AUDIT_LOGS" && (
-            <section className="apple-card flex-1 flex flex-col min-h-0 overflow-hidden w-full rounded-none lg:rounded-2xl shadow-none border-[#E5E5EA]">
+            <section className="bg-white flex-1 flex flex-col min-h-0 overflow-hidden w-full border-0 rounded-none shadow-none">
               {/* Audit Header Bar */}
               <div className="px-4 lg:px-6 py-3.5 sm:py-4 border-b border-[#E5E5EA] flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 shrink-0 bg-white">
                 <div>
@@ -2424,16 +2531,36 @@ export default function AdminDashboardPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#E5E5EA] bg-white font-sans">
-                    {filteredAuditLogs.length === 0 ? (
+                    {isLoadingAuditLogs && auditLogs.length === 0 ? (
+                      Array.from({ length: 8 }).map((_, i) => (
+                        <tr key={`audit-skel-${i}`} className="animate-pulse">
+                          <td className="py-2.5 px-3">
+                            <div className="h-3.5 w-20 bg-[#E5E5EA] rounded mb-1" />
+                            <div className="h-2.5 w-14 bg-[#F2F2F7] rounded" />
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <div className="h-3.5 w-28 bg-[#E5E5EA] rounded mb-1" />
+                            <div className="h-2.5 w-20 bg-[#F2F2F7] rounded" />
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <div className="h-3.5 w-20 bg-[#E5E5EA] rounded" />
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <div className="h-3.5 w-24 bg-[#E5E5EA] rounded mb-1" />
+                            <div className="h-2.5 w-16 bg-[#F2F2F7] rounded" />
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <div className="h-3.5 w-48 bg-[#E5E5EA] rounded" />
+                          </td>
+                          <td className="py-2.5 px-3 text-right">
+                            <div className="h-3 w-20 bg-[#E5E5EA] rounded ml-auto" />
+                          </td>
+                        </tr>
+                      ))
+                    ) : filteredAuditLogs.length === 0 ? (
                       <tr>
                         <td colSpan={6} className="py-12 text-center text-[#6C6C70]">
-                          {isLoadingAuditLogs ? (
-                            <div className="flex justify-center items-center py-4">
-                              <Loader2 className="w-5 h-5 animate-spin text-[#007AFF]" />
-                            </div>
-                          ) : (
-                            <span className="italic">No audit trail records found matching your filter.</span>
-                          )}
+                          <span className="italic">No audit trail records found matching your filter.</span>
                         </td>
                       </tr>
                     ) : (
@@ -2481,15 +2608,23 @@ export default function AdminDashboardPage() {
 
                 {/* Mobile Audit Trail Cards (< 768px) */}
                 <div className="block md:hidden divide-y divide-[#E5E5EA] bg-white font-sans">
-                  {filteredAuditLogs.length === 0 ? (
-                    <div className="py-12 text-center text-[#6C6C70] text-xs px-4">
-                      {isLoadingAuditLogs ? (
-                        <div className="flex justify-center items-center py-4">
-                          <Loader2 className="w-5 h-5 animate-spin text-[#007AFF]" />
+                  {isLoadingAuditLogs && auditLogs.length === 0 ? (
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <div key={`audit-mob-skel-${i}`} className="p-3.5 space-y-2 animate-pulse">
+                        <div className="flex justify-between items-center">
+                          <div className="h-3.5 w-24 bg-[#E5E5EA] rounded" />
+                          <div className="h-3 w-16 bg-[#F2F2F7] rounded" />
                         </div>
-                      ) : (
-                        <span className="italic">No audit trail records found matching your filter.</span>
-                      )}
+                        <div className="h-3 w-48 bg-[#E5E5EA] rounded" />
+                        <div className="pt-1.5 border-t border-[#E5E5EA] flex justify-between items-center">
+                          <div className="h-2.5 w-28 bg-[#F2F2F7] rounded" />
+                          <div className="h-2.5 w-20 bg-[#F2F2F7] rounded" />
+                        </div>
+                      </div>
+                    ))
+                  ) : filteredAuditLogs.length === 0 ? (
+                    <div className="py-12 text-center text-[#6C6C70] text-xs px-4">
+                      <span className="italic">No audit trail records found matching your filter.</span>
                     </div>
                   ) : (
                     filteredAuditLogs.map((log) => (
@@ -2529,11 +2664,18 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
 
-              {/* Status Bar */}
-              <div className="px-4 py-2 border-t border-[#E5E5EA] bg-white flex items-center justify-between text-xs text-[#6C6C70] shrink-0">
-                <span>Local Governance Act, 2016 (Act 936) &bull; Official Treasury Audit Log</span>
-                <span>{auditLogs.length} of {auditLogsTotal} records shown</span>
-              </div>
+              {/* Audit Trail Supabase Studio-Style Table Pagination Bar */}
+              <SupabaseTablePagination
+                currentPage={currentAuditLogPage}
+                totalPages={Math.max(1, Math.ceil(auditLogsTotal / auditLogLimit))}
+                totalRecords={auditLogsTotal}
+                pageSize={auditLogLimit}
+                pageSizeOptions={[25, 50, 100]}
+                onPageChange={handleAuditLogPageChange}
+                onPageSizeChange={handleAuditLogPageSizeChange}
+                isLoading={isLoadingAuditLogs}
+                entityLabel="events"
+              />
             </section>
           )}
 
@@ -2554,24 +2696,48 @@ export default function AdminDashboardPage() {
       {/* PROPERTY ASSESSMENT DOSSIER SIDE SHEET */}
       <AnimatePresence>
         {selectedAccount && (
-          <div className="fixed inset-0 z-50 flex justify-end">
+          <motion.div 
+            key="property-drawer-wrapper"
+            className="fixed inset-0 z-50 flex justify-end pointer-events-auto"
+          >
             <motion.div
+              key="property-drawer-backdrop"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
+              transition={{ duration: 0.28, ease: "easeOut" }}
               className="fixed inset-0 bg-black/30 backdrop-blur-xs"
-              onClick={() => setSelectedAccount(null)}
+              onClick={() => {
+                setSelectedAccount(null);
+                setReturnToRatepayerDossier(null);
+              }}
             />
 
             <motion.aside
+              key="property-drawer-panel"
               initial={{ x: "100%" }}
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
-              transition={{ type: "spring", damping: 25, stiffness: 280 }}
+              transition={{ type: "tween", ease: [0.16, 1, 0.3, 1], duration: 0.32 }}
               className="relative z-10 w-full max-w-lg bg-white/95 backdrop-blur-2xl h-full shadow-2xl flex flex-col border-l border-[#E5E5EA] font-sans"
             >
               <div className="px-6 py-4 border-b border-[#E5E5EA] flex items-center justify-between shrink-0 bg-white/80 backdrop-blur-md">
                 <div>
+                  {returnToRatepayerDossier && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const target = returnToRatepayerDossier;
+                        setSelectedAccount(null);
+                        setReturnToRatepayerDossier(null);
+                        handleOpenRatepayerDossier(target.id, target.preview);
+                      }}
+                      className="inline-flex items-center gap-1.5 text-xs text-[#007AFF] hover:text-[#0062CC] font-medium mb-1.5 cursor-pointer transition-colors"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5" />
+                      <span>Back to Ratepayer Dossier ({returnToRatepayerDossier.name})</span>
+                    </button>
+                  )}
                   <div className="flex items-center gap-2">
                     <span className="text-[11px] text-[#8E8E93] font-semibold uppercase tracking-wider">
                       Property Assessment Dossier
@@ -2594,7 +2760,10 @@ export default function AdminDashboardPage() {
 
                 <button
                   type="button"
-                  onClick={() => setSelectedAccount(null)}
+                  onClick={() => {
+                    setSelectedAccount(null);
+                    setReturnToRatepayerDossier(null);
+                  }}
                   className="p-1.5 rounded-lg text-[#8E8E93] hover:text-[#1C1C1E] hover:bg-[#F2F2F7] transition-colors cursor-pointer"
                   aria-label="Close dossier"
                 >
@@ -2722,7 +2891,7 @@ export default function AdminDashboardPage() {
 
               </div>
             </motion.aside>
-          </div>
+          </motion.div>
         )}
       </AnimatePresence>
 
@@ -2737,9 +2906,14 @@ export default function AdminDashboardPage() {
           setSelectedRatepayerDossier(null);
           setPreviewRatepayer(null);
         }}
-        onSelectProperty={(acc) => {
+        onSelectProperty={(acc, origin) => {
+          if (origin) {
+            setReturnToRatepayerDossier(origin);
+          } else {
+            setReturnToRatepayerDossier(null);
+          }
           const propFromDossier = selectedRatepayerDossier?.properties.find((p) => p.accountNumber === acc);
-          const propFromList = properties.find((p) => p.accountNumber === acc);
+          const propFromList = propertiesList.find((p) => p.accountNumber === acc) || data?.properties.find((p) => p.accountNumber === acc);
           const prop = propFromDossier || propFromList;
           if (prop) setSelectedAccount(prop);
         }}
@@ -3286,6 +3460,67 @@ export default function AdminDashboardPage() {
           loadData();
         }}
       />
+
+      {/* 9-MINUTE SESSION INACTIVITY WARNING MODAL */}
+      <AnimatePresence>
+        {showInactivityModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 font-sans">
+            {/* Blurred Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/40 backdrop-blur-md"
+            />
+
+            {/* Modal Card */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 12 }}
+              transition={{ type: "spring", damping: 26, stiffness: 320 }}
+              className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl border border-[#E5E5EA] overflow-hidden p-6 z-10"
+            >
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-xl bg-[#FF9500]/10 flex items-center justify-center shrink-0 text-[#FF9500]">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-base font-semibold text-[#1C1C1E]">
+                    Still working?
+                  </h3>
+                  <p className="text-xs text-[#6C6C70] mt-1.5 leading-relaxed">
+                    You&apos;ve been inactive for a while. Signing out in:
+                  </p>
+                  <div className="mt-3 flex items-baseline gap-1.5">
+                    <span className="text-3xl font-bold font-mono text-[#FF3B30] tabular-nums">
+                      {inactivityCountdown}
+                    </span>
+                    <span className="text-xs font-medium text-[#8E8E93]">seconds</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 pt-4 border-t border-[#E5E5EA] flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={handleInactivityLogout}
+                  className="px-4 py-2.5 text-xs font-medium text-[#6C6C70] hover:text-[#1C1C1E] hover:bg-[#F2F2F7] rounded-lg transition-colors cursor-pointer"
+                >
+                  Sign Out
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmActive}
+                  className="px-5 py-2.5 text-xs font-semibold text-white bg-[#007AFF] hover:bg-[#0062CC] rounded-lg transition-colors cursor-pointer shadow-xs"
+                >
+                  Continue Working
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

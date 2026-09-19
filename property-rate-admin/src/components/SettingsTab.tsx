@@ -24,6 +24,7 @@ import {
   testArkeselGatewayConnection,
   SmsSettingsData,
 } from "@/app/actions";
+import { SettingsSkeleton } from "@/components/Skeletons";
 
 interface SettingsTabProps {
   onNotify?: (message: string, type: "success" | "error" | "info") => void;
@@ -169,61 +170,80 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
   };
 
   if (isLoading) {
-    return (
-      <div className="flex-1 flex items-center justify-center p-12 bg-[#F2F2F7]">
-        <Loader2 className="w-6 h-6 animate-spin text-[#007AFF]" />
-      </div>
-    );
+    return <SettingsSkeleton />;
   }
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col overflow-y-auto scrollbar-none bg-[#F2F2F7] p-4 sm:p-8 font-sans">
-      <div className="max-w-4xl w-full mx-auto space-y-6">
-        {/* Header */}
-        <div className="border-b border-[#E5E5EA] pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-[#1C1C1E] tracking-tight">
+    <div className="w-full flex-1 min-h-0 flex flex-col overflow-hidden bg-white font-sans border-0 rounded-none shadow-none">
+      {/* Studio Header Toolbar */}
+      <div className="px-4 lg:px-6 py-3.5 border-b border-[#E5E5EA] flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0 bg-white">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-base font-semibold text-[#1C1C1E] tracking-tight">
               System &amp; SMS Dispatch Settings
             </h1>
-            <p className="text-xs text-[#6C6C70] mt-1">
-              Configure carrier gateway routes, API credentials, and telephony rollout modes.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2 pt-1 sm:pt-0">
             <span
-              className={`text-xs font-semibold ${
+              className={`text-[11px] font-semibold ${
                 dispatchMode === "LIVE" ? "text-[#34C759]" : "text-[#FF9500]"
               }`}
             >
-              {dispatchMode === "LIVE"
-                ? "• Live Carrier Dispatch Active"
-                : "• Test Sandbox Simulation Active"}
+              &bull; {dispatchMode === "LIVE" ? "Live Carrier Dispatch Active" : "Test Sandbox Simulation Active"}
             </span>
           </div>
+          <p className="text-xs text-[#6C6C70] mt-0.5">
+            Configure carrier gateway routes, API credentials, and municipal telephony policy.
+          </p>
         </div>
 
-        {/* SECTION 1: DISPATCH MODE TOGGLE (LIVE VS TEST) */}
-        <div className="bg-white border border-[#E5E5EA] rounded-2xl p-5 sm:p-6 shadow-xs space-y-4">
-          <div>
-            <div className="flex items-center gap-2">
+        {/* Live Gateway Balance Indicator & Direct Top-up Link */}
+        <div className="flex items-center gap-3 shrink-0 text-xs">
+          <div className="text-left sm:text-right space-y-0.5">
+            <span className="text-[#8E8E93] block text-[10px] uppercase font-semibold tracking-wider">Gateway Balance</span>
+            <span className="font-semibold text-[#34C759] font-mono tabular-nums">
+              {settings?.balanceInfo
+                ? `${settings.balanceInfo.smsBalance} Credits • ${settings.balanceInfo.mainBalance.replace('GHS', 'GH₵')}`
+                : "93 Credits • GH₵ 0.025"}
+            </span>
+          </div>
+          <div className="h-6 w-px bg-[#E5E5EA] hidden sm:block" />
+          <a
+            href={
+              provider === "arkesel"
+                ? "https://sms.arkesel.com/user/billing/make-payment"
+                : "https://console.twilio.com/billing"
+            }
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs font-semibold text-[#007AFF] hover:underline cursor-pointer"
+            title={`Open ${provider === "arkesel" ? "Arkesel payment portal" : "Twilio billing portal"}`}
+          >
+            <span>Top Up {provider === "arkesel" ? "Arkesel" : "Twilio"}</span>
+            <ExternalLink className="w-3 h-3" />
+          </a>
+        </div>
+      </div>
+
+      {/* Flat Studio Workspace Body */}
+      <div className="w-full flex-1 min-h-0 overflow-y-auto bg-white divide-y divide-[#E5E5EA]">
+        {/* SECTION 1: DISPATCH MODE TOGGLE */}
+        <div className="px-4 lg:px-6 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="lg:col-span-4 space-y-1">
+            <div className="flex items-center gap-2 text-sm font-semibold text-[#1C1C1E]">
               <Radio className="w-4 h-4 text-[#007AFF]" />
-              <h2 className="text-sm font-semibold text-[#1C1C1E]">
-                Outbound SMS Dispatch Mode
-              </h2>
+              <span>Outbound SMS Mode</span>
             </div>
-            <p className="text-xs text-[#6C6C70] mt-1">
-              Select whether rollout demand notices and SMS messages are broadcast live to citizens or tested in simulation mode.
+            <p className="text-xs text-[#6C6C70] leading-relaxed">
+              Select whether rollout demand notices and SMS messages are broadcast live to citizens or tested safely in simulation mode.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+          <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             {/* Mode Option 1: Test / Simulation */}
             <div
               onClick={() => handleModeChange("TEST")}
               className={`p-4 rounded-xl border transition-all cursor-pointer ${
                 dispatchMode === "TEST"
-                  ? "border-[#007AFF] bg-[#007AFF]/5 shadow-xs"
+                  ? "border-[#007AFF] bg-[#007AFF]/5 shadow-2xs"
                   : "border-[#E5E5EA] hover:border-[#007AFF]/40 bg-white"
               }`}
             >
@@ -258,7 +278,7 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
               onClick={() => handleModeChange("LIVE")}
               className={`p-4 rounded-xl border transition-all cursor-pointer ${
                 dispatchMode === "LIVE"
-                  ? "border-[#34C759] bg-[#34C759]/5 shadow-xs"
+                  ? "border-[#34C759] bg-[#34C759]/5 shadow-2xs"
                   : "border-[#E5E5EA] hover:border-[#34C759]/40 bg-white"
               }`}
             >
@@ -291,210 +311,185 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
         </div>
 
         {/* SECTION 2: ARKESEL GATEWAY CONFIGURATION */}
-        <div className="bg-white border border-[#E5E5EA] rounded-2xl p-5 sm:p-6 shadow-xs space-y-5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#E5E5EA] pb-4 gap-3">
-            <div className="flex items-center gap-2.5">
-              <Key className="w-4 h-4 text-[#007AFF] shrink-0" />
-              <div>
-                <h2 className="text-sm font-semibold text-[#1C1C1E]">
-                  Arkesel Carrier Route Credentials (Ghana)
-                </h2>
-                <p className="text-xs text-[#6C6C70] mt-0.5">
-                  Direct HTTP gateway routing for Ghanaian E.164 mobile numbers (+233).
-                </p>
-              </div>
+        <div className="px-4 lg:px-6 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="lg:col-span-4 space-y-1">
+            <div className="flex items-center gap-2 text-sm font-semibold text-[#1C1C1E]">
+              <Key className="w-4 h-4 text-[#007AFF]" />
+              <span>Gateway Credentials</span>
             </div>
-
-            {/* Live Gateway Balance Indicator & Direct Top-up Link */}
-            <div className="p-3 sm:p-0 bg-[#F8F9FA] sm:bg-transparent rounded-xl sm:rounded-none border sm:border-0 border-[#E5E5EA] text-left sm:text-right text-xs space-y-0.5">
-              <span className="text-[#6C6C70] block text-[10px] uppercase font-semibold tracking-wider">Live Gateway Balance</span>
-              <div className="flex flex-wrap items-center sm:justify-end gap-2">
-                <span className="font-semibold text-[#34C759]">
-                  {settings?.balanceInfo
-                    ? `${settings.balanceInfo.smsBalance} SMS Credits • ${settings.balanceInfo.mainBalance.replace('GHS', 'GH₵')}`
-                    : "93 SMS Credits • GH₵ 0.025"}
-                </span>
-                <span className="text-[#C7C7CC]">&bull;</span>
-                <a
-                  href={
-                    provider === "arkesel"
-                      ? "https://sms.arkesel.com/user/billing/make-payment"
-                      : "https://console.twilio.com/billing"
-                  }
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#007AFF] hover:underline cursor-pointer"
-                  title={`Open ${provider === "arkesel" ? "Arkesel payment portal" : "Twilio billing portal"} to top up balance`}
-                >
-                  <span>Top Up {provider === "arkesel" ? "Arkesel" : "Twilio"}</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              </div>
-            </div>
+            <p className="text-xs text-[#6C6C70] leading-relaxed">
+              Direct HTTP gateway credentials for Ghanaian E.164 mobile numbers (+233). Required for live dispatches and balance queries.
+            </p>
           </div>
 
-          <form onSubmit={handleSaveSettings} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* API Key */}
-              <div className="space-y-1.5 md:col-span-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-[#1C1C1E]">
-                    Arkesel API Key
-                  </label>
-                  <span className="text-[11px] text-[#6C6C70]">
-                    Required for live dispatches &amp; balance lookups
-                  </span>
+          <div className="lg:col-span-8">
+            <form onSubmit={handleSaveSettings} className="space-y-4 max-w-2xl">
+              <div className="space-y-4">
+                {/* API Key */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-[#1C1C1E]">
+                      Arkesel API Key
+                    </label>
+                    <span className="text-[11px] text-[#6C6C70]">
+                      Required for live dispatches &amp; balance lookups
+                    </span>
+                  </div>
+                  <div className="relative flex items-center">
+                    <input
+                      type={showApiKey ? "text" : "password"}
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      aria-label="Arkesel API Key"
+                      placeholder="Enter Arkesel API key..."
+                      autoComplete="off"
+                      data-form-type="other"
+                      className="w-full h-9 px-3 pr-10 border border-[#E5E5EA] rounded-lg text-xs font-mono bg-[#F2F2F7] text-[#1C1C1E] focus:bg-white focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] focus:outline-none transition-colors"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowApiKey(!showApiKey)}
+                      className="absolute right-2.5 text-[#8E8E93] hover:text-[#1C1C1E] cursor-pointer p-1 transition-colors"
+                      title={showApiKey ? "Hide Key" : "Reveal Key"}
+                    >
+                      {showApiKey ? (
+                        <EyeOff className="w-4 h-4" />
+                      ) : (
+                        <Eye className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
                 </div>
-                <div className="relative flex items-center">
-                  <input
-                    type={showApiKey ? "text" : "password"}
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    aria-label="Arkesel API Key"
-                    placeholder="Enter Arkesel API key..."
-                    autoComplete="off"
-                    data-form-type="other"
-                    className="w-full h-11 sm:h-10 px-3.5 pr-10 border border-[#E5E5EA] rounded-xl text-xs font-mono bg-[#F2F2F7] text-[#1C1C1E] focus:bg-white focus:border-[#007AFF] focus:ring-2 focus:ring-[#007AFF]/20 focus:outline-none transition-all"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowApiKey(!showApiKey)}
-                    className="absolute right-3 text-[#8E8E93] hover:text-[#1C1C1E] cursor-pointer p-1 transition-colors"
-                    title={showApiKey ? "Hide Key" : "Reveal Key"}
-                  >
-                    {showApiKey ? (
-                      <EyeOff className="w-4 h-4" />
-                    ) : (
-                      <Eye className="w-4 h-4" />
-                    )}
-                  </button>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Sender ID */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-[#1C1C1E]">
+                      Registered Sender ID
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={11}
+                      value={senderId}
+                      onChange={(e) => setSenderId(e.target.value)}
+                      aria-label="Registered SMS Sender ID"
+                      placeholder="e.g. Arnold or KKMA-Rev"
+                      autoComplete="off"
+                      data-form-type="other"
+                      className="w-full h-9 px-3 border border-[#E5E5EA] rounded-lg text-xs font-mono bg-[#F2F2F7] text-[#1C1C1E] focus:bg-white focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] focus:outline-none transition-colors"
+                    />
+                    <p className="text-[10px] text-[#6C6C70]">
+                      Max 11 alphanumeric characters approved by Ghana NCA.
+                    </p>
+                  </div>
+
+                  {/* SMS Provider Selection */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-[#1C1C1E]">
+                      Active Telephony Engine
+                    </label>
+                    <select
+                      value={provider}
+                      onChange={(e) => setProvider(e.target.value as any)}
+                      aria-label="Active Telephony Engine"
+                      className="w-full h-9 px-3 border border-[#E5E5EA] rounded-lg text-xs bg-[#F2F2F7] text-[#1C1C1E] focus:bg-white focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] focus:outline-none transition-colors cursor-pointer"
+                    >
+                      <option value="arkesel">Arkesel (Ghana Domestic Gateway)</option>
+                      <option value="twilio">Twilio (International Gateway)</option>
+                    </select>
+                    <p className="text-[10px] text-[#6C6C70]">
+                      {provider === "arkesel"
+                        ? "Optimized for Ghana domestic routes (+233)."
+                        : "Twilio routes international SMS and US/UK numbers."}
+                    </p>
+                  </div>
                 </div>
               </div>
 
-              {/* Sender ID */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-[#1C1C1E]">
-                  Registered Sender ID
-                </label>
-                <input
-                  type="text"
-                  maxLength={11}
-                  value={senderId}
-                  onChange={(e) => setSenderId(e.target.value)}
-                  aria-label="Registered SMS Sender ID"
-                  placeholder="e.g. Arnold or KKMA-Rev"
-                  autoComplete="off"
-                  data-form-type="other"
-                  className="w-full h-11 sm:h-10 px-3.5 border border-[#E5E5EA] rounded-xl text-xs font-mono bg-[#F2F2F7] text-[#1C1C1E] focus:bg-white focus:border-[#007AFF] focus:ring-2 focus:ring-[#007AFF]/20 focus:outline-none transition-all"
-                />
-                <p className="text-[10px] text-[#6C6C70]">
-                  Max 11 alphanumeric characters approved by Ghana NCA.
-                </p>
-              </div>
-
-              {/* SMS Provider Selection */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-[#1C1C1E]">
-                  Active Telephony Engine
-                </label>
-                <select
-                  value={provider}
-                  onChange={(e) => setProvider(e.target.value as any)}
-                  aria-label="Active Telephony Engine"
-                  className="w-full h-11 sm:h-10 px-3.5 border border-[#E5E5EA] rounded-xl text-xs bg-[#F2F2F7] text-[#1C1C1E] focus:bg-white focus:border-[#007AFF] focus:ring-2 focus:ring-[#007AFF]/20 focus:outline-none transition-all cursor-pointer"
+              {/* Test Diagnostic Result Banner */}
+              {testResult && (
+                <div
+                  className={`p-3 rounded-lg border text-xs flex items-start gap-2.5 ${
+                    testResult.success
+                      ? "bg-[#34C759]/10 border-[#34C759]/30 text-[#34C759]"
+                      : "bg-[#FF3B30]/10 border-[#FF3B30]/30 text-[#FF3B30]"
+                  }`}
                 >
-                  <option value="arkesel">Arkesel (Ghana Domestic Gateway)</option>
-                  <option value="twilio">Twilio (International Gateway)</option>
-                </select>
-                <p className="text-[10px] text-[#6C6C70]">
-                  {provider === "arkesel"
-                    ? "Arkesel is optimized for Ghana domestic routes (+233)."
-                    : "Twilio routes international SMS and US/UK telephone numbers."}
-                </p>
-              </div>
-            </div>
-
-            {/* Test Diagnostic Result Banner */}
-            {testResult && (
-              <div
-                className={`p-3.5 rounded-xl border text-xs flex items-start gap-2.5 ${
-                  testResult.success
-                    ? "bg-[#34C759]/10 border-[#34C759]/30 text-[#34C759]"
-                    : "bg-[#FF3B30]/10 border-[#FF3B30]/30 text-[#FF3B30]"
-                }`}
-              >
-                {testResult.success ? (
-                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
-                ) : (
-                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                )}
-                <div className="flex-1">
-                  <span className="font-semibold block">
-                    {testResult.success ? "Gateway Health OK" : "Connection Test Failed"}
-                  </span>
-                  <span className="text-[11px] block mt-0.5">
-                    {testResult.message}
-                  </span>
+                  {testResult.success ? (
+                    <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                  )}
+                  <div className="flex-1">
+                    <span className="font-semibold block">
+                      {testResult.success ? "Gateway Health OK" : "Connection Test Failed"}
+                    </span>
+                    <span className="text-[11px] block mt-0.5">
+                      {testResult.message}
+                    </span>
+                  </div>
                 </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="pt-2 flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={handleTestConnection}
+                  disabled={isTesting || !apiKey.trim()}
+                  className="apple-btn-secondary w-full sm:w-auto h-9 px-4 disabled:opacity-50"
+                >
+                  {isTesting ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-[#007AFF]" />
+                  ) : (
+                    <RefreshCw className="w-3.5 h-3.5 text-[#6C6C70]" />
+                  )}
+                  <span>Test Gateway Connection</span>
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="apple-btn-primary w-full sm:w-auto h-9 px-5 disabled:opacity-50"
+                >
+                  {isSaving ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+                  ) : (
+                    <Save className="w-3.5 h-3.5 text-white" />
+                  )}
+                  <span>Save Settings</span>
+                </button>
               </div>
-            )}
-
-            {/* Action Buttons: 44px min target on mobile */}
-            <div className="pt-3 flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3 border-t border-[#E5E5EA]">
-              <button
-                type="button"
-                onClick={handleTestConnection}
-                disabled={isTesting || !apiKey.trim()}
-                className="apple-btn-secondary w-full sm:w-auto h-11 sm:h-9 px-4 disabled:opacity-50"
-              >
-                {isTesting ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-[#007AFF]" />
-                ) : (
-                  <RefreshCw className="w-3.5 h-3.5 text-[#6C6C70]" />
-                )}
-                <span>Test Gateway Connection</span>
-              </button>
-
-              <button
-                type="submit"
-                disabled={isSaving}
-                className="apple-btn-primary w-full sm:w-auto h-11 sm:h-9 px-5 disabled:opacity-50"
-              >
-                {isSaving ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
-                ) : (
-                  <Save className="w-3.5 h-3.5 text-white" />
-                )}
-                <span>Save Settings</span>
-              </button>
-            </div>
-          </form>
+            </form>
+          </div>
         </div>
 
-
-
         {/* SECTION 3: SYSTEM REFERENCE DETAILS */}
-        <div className="bg-white border border-[#E5E5EA] rounded-2xl p-5 sm:p-6 shadow-xs space-y-3">
-          <div className="flex items-center gap-2">
-            <Server className="w-4 h-4 text-[#6C6C70]" />
-            <h3 className="text-xs font-semibold text-[#1C1C1E]">
-              Carrier Protocol Standards &bull; Act 936
-            </h3>
+        <div className="px-4 lg:px-6 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="lg:col-span-4 space-y-1">
+            <div className="flex items-center gap-2 text-sm font-semibold text-[#1C1C1E]">
+              <Server className="w-4 h-4 text-[#6C6C70]" />
+              <span>Carrier Protocols</span>
+            </div>
+            <p className="text-xs text-[#6C6C70] leading-relaxed">
+              Legal telephony dispatch standards and audit compliance under Local Governance Act, 2016 (Act 936).
+            </p>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 text-xs text-[#6C6C70] pt-1">
-            <div className="p-3.5 bg-[#F8F9FA] rounded-xl border border-[#E5E5EA]">
+
+          <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-3 gap-3.5 text-xs text-[#6C6C70]">
+            <div className="p-3.5 bg-[#F8F9FA] rounded-lg border border-[#E5E5EA]">
               <span className="font-semibold text-[#1C1C1E] block">Dual Direct Links</span>
               <span className="text-[11px] mt-1 block leading-relaxed">
                 Every demand notice embeds an assessment inspection link and an instant checkout link.
               </span>
             </div>
-            <div className="p-3.5 bg-[#F8F9FA] rounded-xl border border-[#E5E5EA]">
+            <div className="p-3.5 bg-[#F8F9FA] rounded-lg border border-[#E5E5EA]">
               <span className="font-semibold text-[#1C1C1E] block">E.164 Normalization</span>
               <span className="text-[11px] mt-1 block leading-relaxed">
                 Local formats (024, 050, 020) are automatically formatted to Ghana +233 standard before dispatch.
               </span>
             </div>
-            <div className="p-3.5 bg-[#F8F9FA] rounded-xl border border-[#E5E5EA]">
+            <div className="p-3.5 bg-[#F8F9FA] rounded-lg border border-[#E5E5EA]">
               <span className="font-semibold text-[#1C1C1E] block">Auditing &amp; SIDs</span>
               <span className="text-[11px] mt-1 block leading-relaxed">
                 All dispatches write to the municipal audit trail with provider transaction SIDs.

@@ -150,6 +150,7 @@ export interface AdminRatepayerSummary {
   isVerified: boolean;
   propertyCount: number;
   totalValuationFormatted: string;
+  totalArrears: number;
   totalArrearsFormatted: string;
   totalDueFormatted: string;
   status: 'SETTLED' | 'OUTSTANDING' | 'DEFAULTER' | 'NO_PROPERTIES';
@@ -215,7 +216,16 @@ export async function verifyAdminSession() {
     return null;
   }
 
-  const [adminId, sessionToken] = session.value.split(':');
+  const [adminId, sessionToken, createdAtStr] = session.value.split(':');
+
+  // Enforce strict 10-minute admin session expiration
+  if (createdAtStr) {
+    const sessionAgeMs = Date.now() - Number(createdAtStr);
+    if (sessionAgeMs > 10 * 60 * 1000) {
+      cookieStore.delete('admin_session');
+      return null;
+    }
+  }
 
   const admin = await prisma.adminUser.findUnique({
     where: { id: adminId }
@@ -310,10 +320,10 @@ export async function adminLogin(username: string, passwordHash: string, remembe
     }
 
     const cookieStore = await cookies();
-    cookieStore.set('admin_session', `${admin.id}:${sessionToken}`, {
+    cookieStore.set('admin_session', `${admin.id}:${sessionToken}:${Date.now()}`, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      maxAge: rememberMe ? 60 * 60 * 24 * 7 : 60 * 60 * 24,
+      maxAge: 10 * 60, // Exactly 10 minutes
       path: '/',
       sameSite: 'lax'
     });
@@ -607,12 +617,13 @@ export async function getRatepayersList(query = '', page = 1, limit = 50): Promi
 
       return {
         id: u.id,
-        name: u.name || 'Municipal Citizen',
+        name: u.name?.trim() || (u.phoneNumber ? `Citizen (${u.phoneNumber})` : 'Municipal Citizen'),
         phoneNumber: u.phoneNumber,
         role: u.role || 'RATEPAYER',
         isVerified: Boolean(u.isVerified),
         propertyCount: props.length,
         totalValuationFormatted: `GH₵ ${totalValuation.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        totalArrears,
         totalArrearsFormatted: `GH₵ ${totalArrears.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
         totalDueFormatted: `GH₵ ${totalDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
         status,
@@ -930,19 +941,30 @@ export async function getAuditTrailList(
 }
 
 export async function getSmsRolloutLogs(page = 1, limit = 50): Promise<SmsRolloutLogItem[]> {
+  const result = await getSmsRolloutLogsPaginated(page, limit);
+  return result.logs;
+}
+
+export async function getSmsRolloutLogsPaginated(
+  page = 1,
+  limit = 50
+): Promise<{ logs: SmsRolloutLogItem[]; total: number }> {
   try {
     await verifyAdminSession();
 
     const skip = (page - 1) * limit;
-    const notifs = await prisma.notification.findMany({
-      where: { deliveryMethod: 'SMS' },
-      include: { user: true },
-      orderBy: { createdAt: 'desc' },
-      skip,
-      take: limit,
-    });
+    const [total, notifs] = await Promise.all([
+      prisma.notification.count({ where: { deliveryMethod: 'SMS' } }),
+      prisma.notification.findMany({
+        where: { deliveryMethod: 'SMS' },
+        include: { user: true },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+    ]);
 
-    return notifs.map((n: any) => ({
+    const logs = notifs.map((n: any) => ({
       id: n.id,
       recipientPhone: n.user?.phoneNumber || n.userId || 'Citizen Phone',
       recipientName: n.user?.name || n.title || 'Municipal Ratepayer',
@@ -957,9 +979,11 @@ export async function getSmsRolloutLogs(page = 1, limit = 50): Promise<SmsRollou
         hour: '2-digit', minute: '2-digit'
       }),
     }));
+
+    return { logs, total };
   } catch (error) {
-    console.error('Error fetching SMS rollout logs:', error);
-    return [];
+    console.error('Error fetching paginated SMS rollout logs:', error);
+    return { logs: [], total: 0 };
   }
 }
 

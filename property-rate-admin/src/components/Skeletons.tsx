@@ -327,3 +327,123 @@ export function AdminDashboardSkeleton() {
     </div>
   );
 }
+
+export function SmsRolloutSkeleton() {
+  return (
+    <div className="flex-1 flex flex-col h-full min-h-0 bg-white border-0 overflow-hidden font-sans select-none animate-pulse">
+      {/* Top Banner Toolbar Skeleton */}
+      <div className="p-3 border-b border-[#E5E5EA] bg-[#F8F9FA] flex items-center justify-between gap-3 shrink-0">
+        <div className="flex items-center gap-2">
+          <div className="h-5 w-40 bg-[#E5E5EA] rounded" />
+          <div className="h-4 w-24 bg-[#E5E5EA] rounded" />
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="h-8 w-24 bg-[#E5E5EA] rounded-lg" />
+          <div className="h-8 w-28 bg-[#E5E5EA] rounded-lg" />
+        </div>
+      </div>
+
+      {/* Table Skeleton */}
+      <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+        <div className="px-4 py-2.5 bg-white border-b border-[#E5E5EA] flex items-center justify-between">
+          <div className="h-4 w-48 bg-[#E5E5EA] rounded" />
+          <div className="h-4 w-28 bg-[#E5E5EA] rounded" />
+        </div>
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead className="bg-[#F8F9FA] border-b border-[#E5E5EA]">
+              <tr>
+                <th className="py-2.5 px-3 w-10 text-center"><div className="w-3.5 h-3.5 bg-[#E5E5EA] rounded mx-auto" /></th>
+                <th className="py-2.5 px-3 w-[18%]"><div className="h-3 w-24 bg-[#E5E5EA] rounded" /></th>
+                <th className="py-2.5 px-3 w-[20%]"><div className="h-3 w-28 bg-[#E5E5EA] rounded" /></th>
+                <th className="py-2.5 px-3 w-[16%]"><div className="h-3 w-20 bg-[#E5E5EA] rounded" /></th>
+                <th className="py-2.5 px-3 w-[14%]"><div className="h-3 w-18 bg-[#E5E5EA] rounded" /></th>
+                <th className="py-2.5 px-3 w-[16%] text-right"><div className="h-3 w-20 bg-[#E5E5EA] rounded ml-auto" /></th>
+                <th className="py-2.5 px-3 w-[16%] text-right"><div className="h-3 w-24 bg-[#E5E5EA] rounded ml-auto" /></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#E5E5EA] bg-white">
+              {Array.from({ length: 9 }).map((_, i) => (
+                <tr key={`sms-skel-${i}`}>
+                  <td className="py-2.5 px-3 text-center"><div className="w-3.5 h-3.5 bg-[#E5E5EA] rounded mx-auto" /></td>
+                  <td className="py-2.5 px-3 space-y-1"><div className="h-3.5 w-24 bg-[#E5E5EA] rounded" /><div className="h-2.5 w-32 bg-[#F2F2F7] rounded" /></td>
+                  <td className="py-2.5 px-3 space-y-1"><div className="h-3.5 w-28 bg-[#E5E5EA] rounded" /><div className="h-2.5 w-20 bg-[#F2F2F7] rounded" /></td>
+                  <td className="py-2.5 px-3"><div className="h-3.5 w-20 bg-[#E5E5EA] rounded" /></td>
+                  <td className="py-2.5 px-3"><div className="h-3.5 w-16 bg-[#E5E5EA] rounded" /></td>
+                  <td className="py-2.5 px-3 text-right"><div className="h-3.5 w-18 bg-[#E5E5EA] rounded ml-auto" /></td>
+                  <td className="py-2.5 px-3 text-right"><div className="h-3.5 w-20 bg-[#E5E5EA] rounded ml-auto" /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function SettingsSkeleton() {
+  return (
+    <div className="w-full flex-1 min-h-0 flex flex-col overflow-hidden bg-white font-sans border-0 rounded-none shadow-none select-none animate-pulse">
+      {/* Studio Header Toolbar Skeleton */}
+      <div className="px-4 lg:px-6 py-3.5 border-b border-[#E5E5EA] flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0 bg-white">
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2">
+            <div className="h-4 w-48 bg-[#E5E5EA] rounded" />
+            <div className="h-3.5 w-32 bg-[#F2F2F7] rounded" />
+          </div>
+          <div className="h-3 w-72 bg-[#F2F2F7] rounded" />
+        </div>
+        <div className="h-6 w-48 bg-[#F2F2F7] rounded" />
+      </div>
+
+      {/* Flat Studio Workspace Body Skeleton */}
+      <div className="w-full flex-1 min-h-0 overflow-y-auto bg-white divide-y divide-[#E5E5EA]">
+        {/* Section 1: Outbound SMS Mode */}
+        <div className="px-4 lg:px-6 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="lg:col-span-4 space-y-1.5">
+            <div className="h-4 w-36 bg-[#E5E5EA] rounded" />
+            <div className="h-3 w-56 bg-[#F2F2F7] rounded" />
+          </div>
+          <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <div className="h-24 bg-[#F8F9FA] border border-[#E5E5EA] rounded-xl" />
+            <div className="h-24 bg-[#F8F9FA] border border-[#E5E5EA] rounded-xl" />
+          </div>
+        </div>
+
+        {/* Section 2: Gateway Credentials */}
+        <div className="px-4 lg:px-6 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="lg:col-span-4 space-y-1.5">
+            <div className="h-4 w-40 bg-[#E5E5EA] rounded" />
+            <div className="h-3 w-60 bg-[#F2F2F7] rounded" />
+          </div>
+          <div className="lg:col-span-8 space-y-4 max-w-2xl">
+            <div className="h-9 bg-[#F8F9FA] border border-[#E5E5EA] rounded-lg" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="h-9 bg-[#F8F9FA] border border-[#E5E5EA] rounded-lg" />
+              <div className="h-9 bg-[#F8F9FA] border border-[#E5E5EA] rounded-lg" />
+            </div>
+            <div className="flex justify-between pt-2">
+              <div className="h-9 w-40 bg-[#F8F9FA] border border-[#E5E5EA] rounded-lg" />
+              <div className="h-9 w-32 bg-[#E5E5EA] rounded-lg" />
+            </div>
+          </div>
+        </div>
+
+        {/* Section 3: Carrier Protocols */}
+        <div className="px-4 lg:px-6 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="lg:col-span-4 space-y-1.5">
+            <div className="h-4 w-36 bg-[#E5E5EA] rounded" />
+            <div className="h-3 w-64 bg-[#F2F2F7] rounded" />
+          </div>
+          <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+            <div className="h-20 bg-[#F8F9FA] border border-[#E5E5EA] rounded-lg" />
+            <div className="h-20 bg-[#F8F9FA] border border-[#E5E5EA] rounded-lg" />
+            <div className="h-20 bg-[#F8F9FA] border border-[#E5E5EA] rounded-lg" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+

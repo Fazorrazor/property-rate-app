@@ -31,11 +31,13 @@ import {
   SmsRolloutLogItem,
   getSmsRolloutAudience,
   getSmsRolloutLogs,
+  getSmsRolloutLogsPaginated,
   searchSmsRolloutAccounts,
   saveSmsTemplate,
   getSmsSettings,
   getArkeselBalance,
 } from "@/app/actions";
+import { SupabaseTablePagination } from "@/components/SupabaseTablePagination";
 import {
   DEFAULT_SMS_NOTICE_TEMPLATE,
   DEFAULT_RECEIPT_NOTICE_TEMPLATE,
@@ -217,29 +219,27 @@ export function SmsRolloutSimulator({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showFieldsFilter]);
 
-  // Dynamic Full Database Audience State with Endless Scrolling
+  // Dynamic Full Database Audience State with Supabase Studio Pagination
   const [liveAudience, setLiveAudience] = useState<AdminProperty[]>(properties);
   const [isLoadingAudience, setIsLoadingAudience] = useState(false);
   const [audiencePage, setAudiencePage] = useState(1);
-  const [hasMoreAudience, setHasMoreAudience] = useState(true);
-  const [isLoadingMoreAudience, setIsLoadingMoreAudience] = useState(false);
+  const [audienceLimit, setAudienceLimit] = useState(50);
   const [totalAudienceCount, setTotalAudienceCount] = useState(properties.length);
   const [totalAudienceDueFormatted, setTotalAudienceDueFormatted] = useState("GH₵ 0.00");
-  const audienceSentinelRef = useRef<HTMLTableRowElement | null>(null);
 
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
   const logsTableContainerRef = useRef<HTMLDivElement | null>(null);
 
-  // Delivery Logs Endless Scrolling State
+  // Delivery Logs Paginated State
   const [logsList, setLogsList] = useState<SmsRolloutLogItem[]>(smsLogs);
   const [logsPage, setLogsPage] = useState(1);
-  const [hasMoreLogs, setHasMoreLogs] = useState(smsLogs.length >= 40);
-  const [isLoadingMoreLogs, setIsLoadingMoreLogs] = useState(false);
-  const logsSentinelRef = useRef<HTMLTableRowElement | null>(null);
+  const [logsLimit, setLogsLimit] = useState(50);
+  const [logsTotal, setLogsTotal] = useState(smsLogs.length);
+  const [isLoadingLogs, setIsLoadingLogs] = useState(false);
 
   useEffect(() => {
     setLogsList(smsLogs);
-    setHasMoreLogs(smsLogs.length >= 40);
+    setLogsTotal((prev) => Math.max(prev, smsLogs.length));
   }, [smsLogs]);
 
   // Ratepayer Hierarchical Portfolio Grouping
@@ -403,7 +403,7 @@ export function SmsRolloutSimulator({
   const dynamicTokens = activeTemplateType === "BILLING" ? billingTokens : receiptTokens;
   const currentTemplate = activeTemplateType === "BILLING" ? messageTemplate : receiptTemplate;
 
-  // Dynamic Full Database Audience with Endless Scroll Initial Batch
+  // Dynamic Full Database Audience with Supabase Studio Pagination
   useEffect(() => {
     let isCancelled = false;
     setIsLoadingAudience(true);
@@ -418,14 +418,16 @@ export function SmsRolloutSimulator({
           requiredFields,
           searchQuery: accountSearchQuery.trim() || undefined,
           page: 1,
-          limit: 50,
+          limit: audienceLimit,
         });
 
         if (!isCancelled && res) {
           setLiveAudience(res.properties || []);
           setTotalAudienceCount(res.totalCount || 0);
           if (res.totalDueFormatted) setTotalAudienceDueFormatted(res.totalDueFormatted);
-          setHasMoreAudience((res.page || 1) < (res.totalPages || 1));
+          if (tableContainerRef.current) {
+            tableContainerRef.current.scrollTop = 0;
+          }
         }
       } catch (err) {
         console.error("Failed to query rollout audience:", err);
@@ -442,12 +444,9 @@ export function SmsRolloutSimulator({
     };
   }, [targetMunicipality, targetClassification, targetStatus, requiredFields, accountSearchQuery]);
 
-
-  // Proactive pagination loader for Audience (Cadastre & Property Roll pattern)
-  const loadNextAudiencePage = async () => {
-    if (isLoadingMoreAudience || !hasMoreAudience || isLoadingAudience) return;
-    setIsLoadingMoreAudience(true);
-    const nextPage = audiencePage + 1;
+  // Page jump / change handler for Audience
+  const handleAudiencePageChange = async (newPage: number) => {
+    setIsLoadingAudience(true);
     try {
       const res = await getSmsRolloutAudience({
         municipality: targetMunicipality,
@@ -455,108 +454,96 @@ export function SmsRolloutSimulator({
         balanceStatus: targetStatus,
         requiredFields,
         searchQuery: accountSearchQuery.trim() || undefined,
-        page: nextPage,
-        limit: 50,
+        page: newPage,
+        limit: audienceLimit,
       });
 
-      if (res && res.properties && res.properties.length > 0) {
-        setLiveAudience((prev) => {
-          const existingIds = new Set(prev.map((p) => p.id || p.accountNumber));
-          const newItems = res.properties.filter((p) => !existingIds.has(p.id || p.accountNumber));
-          return [...prev, ...newItems];
-        });
-        setAudiencePage(nextPage);
-        setHasMoreAudience(nextPage < (res.totalPages || 1));
-      } else {
-        setHasMoreAudience(false);
+      if (res) {
+        setLiveAudience(res.properties || []);
+        setTotalAudienceCount(res.totalCount || 0);
+        setAudiencePage(newPage);
+        if (res.totalDueFormatted) setTotalAudienceDueFormatted(res.totalDueFormatted);
+        if (tableContainerRef.current) {
+          tableContainerRef.current.scrollTop = 0;
+        }
       }
     } catch (err) {
-      console.error("Error loading next audience batch:", err);
+      console.error("Failed to load audience page:", err);
     } finally {
-      setIsLoadingMoreAudience(false);
+      setIsLoadingAudience(false);
     }
   };
 
-  // Fallback scroll handler for audience table container
-  const handleAudienceTableScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const target = e.currentTarget;
-    if (target.scrollTop + target.clientHeight >= target.scrollHeight - 250) {
-      loadNextAudiencePage();
-    }
-  };
-
-  // IntersectionObserver for audience table endless scroll
-  useEffect(() => {
-    const sentinel = audienceSentinelRef.current;
-    if (!sentinel || !hasMoreAudience || isLoadingMoreAudience || isLoadingAudience) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) {
-          loadNextAudiencePage();
-        }
-      },
-      {
-        root: tableContainerRef.current,
-        rootMargin: "250px",
-      }
-    );
-
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [hasMoreAudience, isLoadingMoreAudience, isLoadingAudience, audiencePage, targetMunicipality, targetClassification, targetStatus, requiredFields, accountSearchQuery]);
-
-  // Proactive pagination loader for Delivery Logs
-  const loadNextLogsPage = async () => {
-    if (isLoadingMoreLogs || !hasMoreLogs) return;
-    setIsLoadingMoreLogs(true);
-    const nextPage = logsPage + 1;
+  // Page size change handler for Audience
+  const handleAudiencePageSizeChange = async (newLimit: number) => {
+    setAudienceLimit(newLimit);
+    setIsLoadingAudience(true);
     try {
-      const nextLogs = await getSmsRolloutLogs(nextPage, 50);
-      if (nextLogs && nextLogs.length > 0) {
-        setLogsList((prev) => {
-          const existing = new Set(prev.map((l: SmsRolloutLogItem) => l.id));
-          const newItems = nextLogs.filter((l: SmsRolloutLogItem) => !existing.has(l.id));
-          return [...prev, ...newItems];
-        });
-        setLogsPage(nextPage);
-        setHasMoreLogs(nextLogs.length === 50);
-      } else {
-        setHasMoreLogs(false);
+      const res = await getSmsRolloutAudience({
+        municipality: targetMunicipality,
+        classification: targetClassification,
+        balanceStatus: targetStatus,
+        requiredFields,
+        searchQuery: accountSearchQuery.trim() || undefined,
+        page: 1,
+        limit: newLimit,
+      });
+
+      if (res) {
+        setLiveAudience(res.properties || []);
+        setTotalAudienceCount(res.totalCount || 0);
+        setAudiencePage(1);
+        if (res.totalDueFormatted) setTotalAudienceDueFormatted(res.totalDueFormatted);
+        if (tableContainerRef.current) {
+          tableContainerRef.current.scrollTop = 0;
+        }
       }
     } catch (err) {
-      console.error("Error loading next logs page:", err);
+      console.error("Failed to update audience page size:", err);
     } finally {
-      setIsLoadingMoreLogs(false);
+      setIsLoadingAudience(false);
     }
   };
 
-  const handleLogsTableScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const target = e.currentTarget;
-    if (target.scrollTop + target.clientHeight >= target.scrollHeight - 250) {
-      loadNextLogsPage();
-    }
-  };
-
-  useEffect(() => {
-    const sentinel = logsSentinelRef.current;
-    if (!sentinel || !hasMoreLogs || isLoadingMoreLogs) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) {
-          loadNextLogsPage();
+  // Delivery Logs Page Navigation
+  const handleLogsPageChange = async (newPage: number) => {
+    setIsLoadingLogs(true);
+    try {
+      const res = await getSmsRolloutLogsPaginated(newPage, logsLimit);
+      if (res) {
+        setLogsList(res.logs);
+        setLogsTotal(res.total);
+        setLogsPage(newPage);
+        if (logsTableContainerRef.current) {
+          logsTableContainerRef.current.scrollTop = 0;
         }
-      },
-      {
-        root: logsTableContainerRef.current,
-        rootMargin: "250px",
       }
-    );
+    } catch (err) {
+      console.error("Failed to load logs page:", err);
+    } finally {
+      setIsLoadingLogs(false);
+    }
+  };
 
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [hasMoreLogs, isLoadingMoreLogs, logsPage]);
+  const handleLogsPageSizeChange = async (newLimit: number) => {
+    setLogsLimit(newLimit);
+    setIsLoadingLogs(true);
+    try {
+      const res = await getSmsRolloutLogsPaginated(1, newLimit);
+      if (res) {
+        setLogsList(res.logs);
+        setLogsTotal(res.total);
+        setLogsPage(1);
+        if (logsTableContainerRef.current) {
+          logsTableContainerRef.current.scrollTop = 0;
+        }
+      }
+    } catch (err) {
+      console.error("Failed to change logs page size:", err);
+    } finally {
+      setIsLoadingLogs(false);
+    }
+  };
 
   const eligibleProperties = audienceScope === "SELECTED" && selectedSpecificAccounts.length > 0
     ? selectedSpecificAccounts
@@ -840,7 +827,6 @@ export function SmsRolloutSimulator({
                     <span className="text-[#1C1C1E] font-bold">Target Ratepayer Audience</span>
                   </h3>
                   <div className="flex items-center gap-2.5">
-                    {isLoadingAudience && <Loader2 className="w-3 h-3 animate-spin text-[#007AFF]" />}
                     <span className="text-[11px] text-[#6C6C70] font-medium">
                       {(totalAudienceCount || eligibleProperties.length).toLocaleString()} active properties matched
                     </span>
@@ -1106,7 +1092,7 @@ export function SmsRolloutSimulator({
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs font-bold text-[#1C1C1E]">Matched Audience Rollout Queue</span>
                   <span className="text-[11px] text-[#6C6C70]">
-                    ({ratepayerGroups.length.toLocaleString()} ratepayers • {liveAudience.length.toLocaleString()} properties
+                    ({totalAudienceCount.toLocaleString()} properties • Page {audiencePage} of {Math.max(1, Math.ceil(totalAudienceCount / audienceLimit))}
                     {multiPropertyRatepayersCount > 0 && ` • ${multiPropertyRatepayersCount} multi-account portfolios`})
                   </span>
                 </div>
@@ -1157,22 +1143,21 @@ export function SmsRolloutSimulator({
               {/* Audience Table Container */}
               <div
                 ref={tableContainerRef}
-                onScroll={handleAudienceTableScroll}
                 className="flex-1 min-h-0 overflow-auto"
               >
-                <table className="w-[2750px] min-w-[2750px] table-fixed text-left text-xs border-collapse">
+                <table className="w-[2860px] min-w-[2860px] table-fixed text-left text-xs border-collapse">
                   <colgroup>
                     <col className="w-[48px]" />
                     <col className="w-[140px]" />
                     <col className="w-[190px]" />
                     <col className="w-[130px]" />
                     <col className="w-[160px]" />
-                    <col className="w-[150px]" />
+                    <col className="w-[210px]" />
                     <col className="w-[110px]" />
                     <col className="w-[110px]" />
                     <col className="w-[140px]" />
                     <col className="w-[180px]" />
-                    <col className="w-[140px]" />
+                    <col className="w-[190px]" />
                     <col className="w-[90px]" />
                     <col className="w-[110px]" />
                     <col className="w-[130px]" />
@@ -1212,12 +1197,12 @@ export function SmsRolloutSimulator({
                       <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA] truncate w-[190px]">Name</th>
                       <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA] truncate w-[130px]">Telephone</th>
                       <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA] truncate w-[160px]">ID</th>
-                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA] truncate w-[150px]">Owner Digital Address</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA] truncate w-[210px]">Owner Digital Address</th>
                       <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA] truncate w-[110px]">House No</th>
                       <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA] truncate w-[110px]">Plot No</th>
                       <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA] truncate w-[140px]">Valuation No</th>
                       <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA] truncate w-[180px]">Municipality</th>
-                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA] truncate w-[140px]">Property Cat</th>
+                      <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA] truncate w-[190px]">Property Cat</th>
                       <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA] truncate w-[90px]">Bill Year</th>
                       <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA] truncate w-[110px]">Bill Date</th>
                       <th className="py-2.5 px-3 text-right whitespace-nowrap bg-[#F8F9FA] truncate w-[130px]">Rateable Value</th>
@@ -1232,7 +1217,33 @@ export function SmsRolloutSimulator({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#E5E5EA] bg-white">
-                    {liveAudience.length === 0 ? (
+                    {isLoadingAudience ? (
+                      Array.from({ length: 9 }).map((_, i) => (
+                        <tr key={`aud-skel-${i}`} className="animate-pulse">
+                          <td className="py-2.5 px-3 text-center"><div className="w-3.5 h-3.5 bg-[#E5E5EA] rounded mx-auto" /></td>
+                          <td className="py-2.5 px-3"><div className="h-3.5 w-24 bg-[#E5E5EA] rounded" /></td>
+                          <td className="py-2.5 px-3"><div className="h-3.5 w-28 bg-[#E5E5EA] rounded" /></td>
+                          <td className="py-2.5 px-3"><div className="h-3.5 w-20 bg-[#E5E5EA] rounded" /></td>
+                          <td className="py-2.5 px-3"><div className="h-3.5 w-20 bg-[#E5E5EA] rounded" /></td>
+                          <td className="py-2.5 px-3"><div className="h-3.5 w-16 bg-[#E5E5EA] rounded" /></td>
+                          <td className="py-2.5 px-3"><div className="h-3.5 w-16 bg-[#E5E5EA] rounded" /></td>
+                          <td className="py-2.5 px-3"><div className="h-3.5 w-16 bg-[#E5E5EA] rounded" /></td>
+                          <td className="py-2.5 px-3"><div className="h-3.5 w-20 bg-[#E5E5EA] rounded" /></td>
+                          <td className="py-2.5 px-3"><div className="h-3.5 w-20 bg-[#E5E5EA] rounded" /></td>
+                          <td className="py-2.5 px-3"><div className="h-3.5 w-14 bg-[#E5E5EA] rounded" /></td>
+                          <td className="py-2.5 px-3"><div className="h-3.5 w-18 bg-[#E5E5EA] rounded" /></td>
+                          <td className="py-2.5 px-3 text-right"><div className="h-3.5 w-16 bg-[#E5E5EA] rounded ml-auto" /></td>
+                          <td className="py-2.5 px-3 text-right"><div className="h-3.5 w-14 bg-[#E5E5EA] rounded ml-auto" /></td>
+                          <td className="py-2.5 px-3 text-right"><div className="h-3.5 w-16 bg-[#E5E5EA] rounded ml-auto" /></td>
+                          <td className="py-2.5 px-3 text-right"><div className="h-3.5 w-16 bg-[#E5E5EA] rounded ml-auto" /></td>
+                          <td className="py-2.5 px-3 text-right"><div className="h-3.5 w-16 bg-[#E5E5EA] rounded ml-auto" /></td>
+                          <td className="py-2.5 px-3 text-right"><div className="h-3.5 w-16 bg-[#E5E5EA] rounded ml-auto" /></td>
+                          <td className="py-2.5 px-3 text-right"><div className="h-3.5 w-16 bg-[#E5E5EA] rounded ml-auto" /></td>
+                          <td className="py-2.5 px-3"><div className="h-3.5 w-20 bg-[#E5E5EA] rounded" /></td>
+                          <td className="py-2.5 px-3 text-right"><div className="h-3.5 w-18 bg-[#E5E5EA] rounded ml-auto" /></td>
+                        </tr>
+                      ))
+                    ) : liveAudience.length === 0 ? (
                       <tr>
                         <td colSpan={22} className="py-12 text-center text-[#8E8E93] italic text-xs">
                           No properties match the selected audience filters.
@@ -1318,7 +1329,7 @@ export function SmsRolloutSimulator({
                                         {group.ownerName}
                                       </span>
                                       <span className="text-[11px] font-mono text-[#6C6C70]">
-                                        &bull; {cleanDash(group.phone)}
+                                        • {cleanDash(group.phone)}
                                       </span>
 
                                       <span className="text-[#E5E5EA] mx-0.5">|</span>
@@ -1341,7 +1352,8 @@ export function SmsRolloutSimulator({
                                 </td>
                                 <td
                                   onClick={() => toggleGroupCollapse(group.key)}
-                                  className="py-2.5 px-3 text-right whitespace-nowrap font-bold text-xs text-[#1C1C1E] tabular-nums cursor-pointer relative"
+                                  className="py-2.5 px-3 text-right whitespace-nowrap font-bold text-xs text-[#1C1C1E] tabular-nums cursor-pointer relative truncate"
+                                  title={`GH₵ ${group.totalAmountDue.toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
                                 >
                                   {isExpanded && (
                                     <div className="absolute left-3 bottom-0 h-2.5 w-px border-l border-dashed border-[#E5E5EA]" />
@@ -1353,28 +1365,22 @@ export function SmsRolloutSimulator({
                                 </td>
                               </tr>
 
-                              {/* Child Property Rows with Smooth Apple-like Drawer Animation */}
+                              {/* Nested Properties with Collapsible Animation */}
                               <AnimatePresence initial={false}>
                                 {isExpanded &&
-                                  group.properties.map((prop, idx) => {
+                                  group.properties.map((prop, pIdx) => {
+                                    const isLast = pIdx === group.properties.length - 1;
                                     const isSelected = selectedSpecificAccounts.some(
-                                      (p) =>
-                                        (p.id || p.accountNumber) ===
-                                        (prop.id || prop.accountNumber)
+                                      (p) => (p.id || p.accountNumber) === (prop.id || prop.accountNumber)
                                     );
-                                    const isLast = idx === group.properties.length - 1;
 
                                     return (
                                       <motion.tr
                                         key={prop.id || prop.accountNumber}
-                                        initial={{ opacity: 0, y: -4 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        exit={{ opacity: 0, y: -4 }}
-                                        transition={{
-                                          duration: 0.2,
-                                          ease: [0.16, 1, 0.3, 1],
-                                          delay: idx * 0.02,
-                                        }}
+                                        initial={{ opacity: 0, height: 0 }}
+                                        animate={{ opacity: 1, height: "auto" }}
+                                        exit={{ opacity: 0, height: 0 }}
+                                        transition={{ duration: 0.18, ease: "easeOut" }}
                                         onClick={() => {
                                           if (isSelected) {
                                             setSelectedSpecificAccounts((prev) => {
@@ -1396,58 +1402,58 @@ export function SmsRolloutSimulator({
                                           isSelected ? "bg-[#007AFF]/10" : "bg-white hover:bg-[#F8F9FA]"
                                         }`}
                                       >
-                                      <td className="py-2.5 px-3 text-center w-10 border-l-4 border-transparent">
-                                        <input
-                                          type="checkbox"
-                                          checked={isSelected}
-                                          readOnly
-                                          className="w-3.5 h-3.5 rounded border-[#C7C7CC] text-[#007AFF] focus:ring-[#007AFF] accent-[#007AFF] cursor-pointer pointer-events-none"
-                                        />
-                                      </td>
-                                      <td className="py-2.5 px-3 whitespace-nowrap font-mono font-bold text-[#007AFF] text-[11px] relative">
-                                        {/* Tree Guide Lines: Continuous Vertical Line & Horizontal Branch */}
-                                        <div
-                                          className={`absolute left-[22px] w-px border-l border-dashed border-[#E5E5EA] ${
-                                            isLast ? "top-0 h-1/2" : "top-0 h-full"
-                                          }`}
-                                        />
-                                        <div className="absolute left-[22px] top-1/2 w-4 border-t border-dashed border-[#E5E5EA]" />
-                                        <span className="pl-8 inline-block font-mono font-bold text-[#007AFF] text-[11px]">
-                                          {cleanDash(prop.accountNumber)}
-                                        </span>
-                                      </td>
-                                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] max-w-[150px] truncate">{cleanDash(prop.ownerName)}</td>
-                                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.ownerPhone)}</td>
-                                      <td className="py-2.5 px-3 whitespace-nowrap font-mono font-medium text-[11px] text-[#1C1C1E]">{cleanDash(prop.id)}</td>
-                                      <td className="py-2.5 px-3 whitespace-nowrap font-mono font-medium text-[11px] text-[#1C1C1E]">{cleanDash(prop.ownerDigitalAddress)}</td>
-                                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.houseNo)}</td>
-                                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.plotNo)}</td>
-                                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.valuationNo)}</td>
-                                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.municipality)}</td>
-                                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.propertyClassification)}</td>
-                                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{prop.billYear || "—"}</td>
-                                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{prop.billDateFormatted || "—"}</td>
-                                      <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums">{prop.rateableValueFormatted || "—"}</td>
-                                      <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums">{prop.rateImposed ?? "—"}</td>
-                                      <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums">{prop.previousYearBillFormatted || "—"}</td>
-                                      <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums">GH₵ {(Number(prop.amountPaidLastYear || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
-                                      <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums"><span className={prop.arrears > 0 ? "text-[#FF3B30] font-semibold" : ""}>{prop.arrearsFormatted || "—"}</span></td>
-                                      <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums">GH₵ {(Number(prop.currentFee || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
-                                      <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums">GH₵ {(Number(prop.totalAmountDue || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
-                                      <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.electoralArea)}</td>
-                                      <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] text-[#6C6C70] tabular-nums font-normal relative">
-                                        {/* Tree Guide Lines for Outstanding Amt */}
-                                        <div
-                                          className={`absolute left-3 w-px border-l border-dashed border-[#E5E5EA] ${
-                                            isLast ? "top-0 h-1/2" : "top-0 h-full"
-                                          }`}
-                                        />
-                                        <div className="absolute left-3 top-1/2 w-3 border-t border-dashed border-[#E5E5EA]" />
-                                        <span>
-                                          GH₵ {(Number(prop.totalAmountDue || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                                        </span>
-                                      </td>
-                                    </motion.tr>
+                                        <td className="py-2.5 px-3 text-center w-10 border-l-4 border-transparent">
+                                          <input
+                                            type="checkbox"
+                                            checked={isSelected}
+                                            readOnly
+                                            className="w-3.5 h-3.5 rounded border-[#C7C7CC] text-[#007AFF] focus:ring-[#007AFF] accent-[#007AFF] cursor-pointer pointer-events-none"
+                                          />
+                                        </td>
+                                        <td className="py-2.5 px-3 whitespace-nowrap font-mono font-bold text-[#007AFF] text-[11px] relative truncate">
+                                          {/* Tree Guide Lines: Continuous Vertical Line & Horizontal Branch */}
+                                          <div
+                                            className={`absolute left-[22px] w-px border-l border-dashed border-[#E5E5EA] ${
+                                              isLast ? "top-0 h-1/2" : "top-0 h-full"
+                                            }`}
+                                          />
+                                          <div className="absolute left-[22px] top-1/2 w-4 border-t border-dashed border-[#E5E5EA]" />
+                                          <span className="pl-8 inline-block font-mono font-bold text-[#007AFF] text-[11px] truncate max-w-full" title={cleanDash(prop.accountNumber)}>
+                                            {cleanDash(prop.accountNumber)}
+                                          </span>
+                                        </td>
+                                        <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] truncate" title={cleanDash(prop.ownerName)}>{cleanDash(prop.ownerName)}</td>
+                                        <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E] truncate" title={cleanDash(prop.ownerPhone)}>{cleanDash(prop.ownerPhone)}</td>
+                                        <td className="py-2.5 px-3 whitespace-nowrap font-mono font-medium text-[11px] text-[#1C1C1E] truncate" title={cleanDash(prop.id)}>{cleanDash(prop.id)}</td>
+                                        <td className="py-2.5 px-3 whitespace-nowrap font-mono font-medium text-[11px] text-[#1C1C1E] truncate" title={cleanDash(prop.ownerDigitalAddress)}>{cleanDash(prop.ownerDigitalAddress)}</td>
+                                        <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E] truncate" title={cleanDash(prop.houseNo)}>{cleanDash(prop.houseNo)}</td>
+                                        <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E] truncate" title={cleanDash(prop.plotNo)}>{cleanDash(prop.plotNo)}</td>
+                                        <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E] truncate" title={cleanDash(prop.valuationNo)}>{cleanDash(prop.valuationNo)}</td>
+                                        <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E] truncate" title={cleanDash(prop.municipality)}>{cleanDash(prop.municipality)}</td>
+                                        <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E] truncate" title={cleanDash(prop.propertyClassification)}>{cleanDash(prop.propertyClassification)}</td>
+                                        <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E] truncate" title={String(prop.billYear || "—")}>{prop.billYear || "—"}</td>
+                                        <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E] truncate" title={String(prop.billDateFormatted || "—")}>{prop.billDateFormatted || "—"}</td>
+                                        <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums truncate" title={String(prop.rateableValueFormatted || "—")}>{prop.rateableValueFormatted || "—"}</td>
+                                        <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums truncate" title={String(prop.rateImposed ?? "—")}>{prop.rateImposed ?? "—"}</td>
+                                        <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums truncate" title={String(prop.previousYearBillFormatted || "—")}>{prop.previousYearBillFormatted || "—"}</td>
+                                        <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums truncate" title={`GH₵ ${(Number(prop.amountPaidLastYear || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}`}>GH₵ {(Number(prop.amountPaidLastYear || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                                        <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums truncate" title={String(prop.arrearsFormatted || "—")}><span className={prop.arrears > 0 ? "text-[#FF3B30] font-semibold" : ""}>{prop.arrearsFormatted || "—"}</span></td>
+                                        <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums truncate" title={`GH₵ ${(Number(prop.currentFee || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}`}>GH₵ {(Number(prop.currentFee || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                                        <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums truncate" title={`GH₵ ${(Number(prop.totalAmountDue || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}`}>GH₵ {(Number(prop.totalAmountDue || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                                        <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E] truncate" title={cleanDash(prop.electoralArea)}>{cleanDash(prop.electoralArea)}</td>
+                                        <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] text-[#6C6C70] tabular-nums font-normal relative truncate">
+                                          {/* Tree Guide Lines for Outstanding Amt */}
+                                          <div
+                                            className={`absolute left-3 w-px border-l border-dashed border-[#E5E5EA] ${
+                                              isLast ? "top-0 h-1/2" : "top-0 h-full"
+                                            }`}
+                                          />
+                                          <div className="absolute left-3 top-1/2 w-3 border-t border-dashed border-[#E5E5EA]" />
+                                          <span title={`GH₵ ${(Number(prop.totalAmountDue || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}`}>
+                                            GH₵ {(Number(prop.totalAmountDue || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                                          </span>
+                                        </td>
+                                      </motion.tr>
                                       );
                                     })}
                               </AnimatePresence>
@@ -1491,27 +1497,27 @@ export function SmsRolloutSimulator({
                                 className="w-3.5 h-3.5 rounded border-[#C7C7CC] text-[#007AFF] focus:ring-[#007AFF] accent-[#007AFF] cursor-pointer pointer-events-none"
                               />
                             </td>
-                            <td className="py-2.5 px-3 whitespace-nowrap font-mono font-bold text-[#007AFF] text-[11px]">{cleanDash(prop.accountNumber)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] max-w-[150px] truncate">{cleanDash(prop.ownerName)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.ownerPhone)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap font-mono font-medium text-[11px] text-[#1C1C1E]">{cleanDash(prop.id)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap font-mono font-medium text-[11px] text-[#1C1C1E]">{cleanDash(prop.ownerDigitalAddress)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.houseNo)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.plotNo)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.valuationNo)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.municipality)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.propertyClassification)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.billYear)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.billDateFormatted)}</td>
-                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums">{prop.rateableValueFormatted || "—"}</td>
-                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums">{prop.rateImposed ?? "—"}</td>
-                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums">{prop.previousYearBillFormatted || "—"}</td>
-                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums">GH₵ {(Number(prop.amountPaidLastYear || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
-                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums"><span className={prop.arrears > 0 ? "text-[#FF3B30] font-semibold" : ""}>{prop.arrearsFormatted || "—"}</span></td>
-                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums">GH₵ {(Number(prop.currentFee || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
-                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums">GH₵ {(Number(prop.totalAmountDue || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.electoralArea)}</td>
-                            <td className="py-2.5 px-3 text-right whitespace-nowrap font-bold text-[#1C1C1E] text-[11px] tabular-nums">GH₵ {(Number(prop.totalAmountDue || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap font-mono font-bold text-[#007AFF] text-[11px] truncate" title={cleanDash(prop.accountNumber)}>{cleanDash(prop.accountNumber)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] truncate" title={cleanDash(prop.ownerName)}>{cleanDash(prop.ownerName)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E] truncate" title={cleanDash(prop.ownerPhone)}>{cleanDash(prop.ownerPhone)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap font-mono font-medium text-[11px] text-[#1C1C1E] truncate" title={cleanDash(prop.id)}>{cleanDash(prop.id)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap font-mono font-medium text-[11px] text-[#1C1C1E] truncate" title={cleanDash(prop.ownerDigitalAddress)}>{cleanDash(prop.ownerDigitalAddress)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E] truncate" title={cleanDash(prop.houseNo)}>{cleanDash(prop.houseNo)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E] truncate" title={cleanDash(prop.plotNo)}>{cleanDash(prop.plotNo)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E] truncate" title={cleanDash(prop.valuationNo)}>{cleanDash(prop.valuationNo)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E] truncate" title={cleanDash(prop.municipality)}>{cleanDash(prop.municipality)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E] truncate" title={cleanDash(prop.propertyClassification)}>{cleanDash(prop.propertyClassification)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E] truncate" title={cleanDash(prop.billYear)}>{cleanDash(prop.billYear)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E] truncate" title={cleanDash(prop.billDateFormatted)}>{cleanDash(prop.billDateFormatted)}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums truncate" title={String(prop.rateableValueFormatted || "—")}>{prop.rateableValueFormatted || "—"}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums truncate" title={String(prop.rateImposed ?? "—")}>{prop.rateImposed ?? "—"}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums truncate" title={String(prop.previousYearBillFormatted || "—")}>{prop.previousYearBillFormatted || "—"}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums truncate" title={`GH₵ ${(Number(prop.amountPaidLastYear || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}`}>GH₵ {(Number(prop.amountPaidLastYear || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums truncate" title={String(prop.arrearsFormatted || "—")}><span className={prop.arrears > 0 ? "text-[#FF3B30] font-semibold" : ""}>{prop.arrearsFormatted || "—"}</span></td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums truncate" title={`GH₵ ${(Number(prop.currentFee || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}`}>GH₵ {(Number(prop.currentFee || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums truncate" title={`GH₵ ${(Number(prop.totalAmountDue || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}`}>GH₵ {(Number(prop.totalAmountDue || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E] truncate" title={cleanDash(prop.electoralArea)}>{cleanDash(prop.electoralArea)}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap font-bold text-[#1C1C1E] text-[11px] tabular-nums truncate" title={`GH₵ ${(Number(prop.totalAmountDue || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}`}>GH₵ {(Number(prop.totalAmountDue || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
                           </tr>
                         );
                       })
@@ -1546,116 +1552,48 @@ export function SmsRolloutSimulator({
                                 className="w-3.5 h-3.5 rounded border-[#C7C7CC] text-[#007AFF] focus:ring-[#007AFF] accent-[#007AFF] cursor-pointer pointer-events-none"
                               />
                             </td>
-                            <td className="py-2.5 px-3 whitespace-nowrap font-mono font-bold text-[#007AFF] text-[11px]">{cleanDash(prop.accountNumber)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] max-w-[150px] truncate">{cleanDash(prop.ownerName)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.ownerPhone)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap font-mono font-medium text-[11px] text-[#1C1C1E]">{cleanDash(prop.id)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap font-mono font-medium text-[11px] text-[#1C1C1E]">{cleanDash(prop.ownerDigitalAddress)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.houseNo)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.plotNo)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.valuationNo)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.municipality)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.propertyClassification)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.billYear)}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.billDateFormatted)}</td>
-                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums">{prop.rateableValueFormatted || "—"}</td>
-                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums">{prop.rateImposed ?? "—"}</td>
-                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums">{prop.previousYearBillFormatted || "—"}</td>
-                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums">GH₵ {(Number(prop.amountPaidLastYear || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
-                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums"><span className={prop.arrears > 0 ? "text-[#FF3B30] font-semibold" : ""}>{prop.arrearsFormatted || "—"}</span></td>
-                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums">GH₵ {(Number(prop.currentFee || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
-                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums">GH₵ {(Number(prop.totalAmountDue || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
-                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E]">{cleanDash(prop.electoralArea)}</td>
-                            <td className="py-2.5 px-3 text-right whitespace-nowrap font-bold text-[#1C1C1E] text-[11px] tabular-nums">GH₵ {(Number(prop.totalAmountDue || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap font-mono font-bold text-[#007AFF] text-[11px] truncate" title={cleanDash(prop.accountNumber)}>{cleanDash(prop.accountNumber)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] truncate" title={cleanDash(prop.ownerName)}>{cleanDash(prop.ownerName)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E] truncate" title={cleanDash(prop.ownerPhone)}>{cleanDash(prop.ownerPhone)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap font-mono font-medium text-[11px] text-[#1C1C1E] truncate" title={cleanDash(prop.id)}>{cleanDash(prop.id)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap font-mono font-medium text-[11px] text-[#1C1C1E] truncate" title={cleanDash(prop.ownerDigitalAddress)}>{cleanDash(prop.ownerDigitalAddress)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E] truncate" title={cleanDash(prop.houseNo)}>{cleanDash(prop.houseNo)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E] truncate" title={cleanDash(prop.plotNo)}>{cleanDash(prop.plotNo)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E] truncate" title={cleanDash(prop.valuationNo)}>{cleanDash(prop.valuationNo)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E] truncate" title={cleanDash(prop.municipality)}>{cleanDash(prop.municipality)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E] truncate" title={cleanDash(prop.propertyClassification)}>{cleanDash(prop.propertyClassification)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E] truncate" title={cleanDash(prop.billYear)}>{cleanDash(prop.billYear)}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E] truncate" title={cleanDash(prop.billDateFormatted)}>{cleanDash(prop.billDateFormatted)}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums truncate" title={String(prop.rateableValueFormatted || "—")}>{prop.rateableValueFormatted || "—"}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums truncate" title={String(prop.rateImposed ?? "—")}>{prop.rateImposed ?? "—"}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums truncate" title={String(prop.previousYearBillFormatted || "—")}>{prop.previousYearBillFormatted || "—"}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums truncate" title={`GH₵ ${(Number(prop.amountPaidLastYear || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}`}>GH₵ {(Number(prop.amountPaidLastYear || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums truncate" title={String(prop.arrearsFormatted || "—")}><span className={prop.arrears > 0 ? "text-[#FF3B30] font-semibold" : ""}>{prop.arrearsFormatted || "—"}</span></td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums truncate" title={`GH₵ ${(Number(prop.currentFee || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}`}>GH₵ {(Number(prop.currentFee || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums truncate" title={`GH₵ ${(Number(prop.totalAmountDue || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}`}>GH₵ {(Number(prop.totalAmountDue || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                            <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E] truncate" title={cleanDash(prop.electoralArea)}>{cleanDash(prop.electoralArea)}</td>
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap font-bold text-[#1C1C1E] text-[11px] tabular-nums truncate" title={`GH₵ ${(Number(prop.totalAmountDue || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}`}>GH₵ {(Number(prop.totalAmountDue || 0)).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
                           </tr>
                         );
                       })
                     )}
 
-                    {/* Endless Scroll Loading Skeleton Rows — matches Cadastre table pattern */}
-                    {isLoadingMoreAudience && (
-                      <>
-                        {[...Array(6)].map((_, i) => (
-                          <tr key={`sms-skel-${i}`} className="animate-pulse border-b border-[#E5E5EA]">
-                            <td className="py-2.5 px-3">
-                              <div className="w-4 h-4 rounded bg-[#E5E5EA] mx-auto" />
-                            </td>
-                            <td className="py-2.5 px-3">
-                              <div className="h-3 bg-[#E5E5EA] rounded w-28" />
-                            </td>
-                            <td className="py-2.5 px-3">
-                              <div className="h-3 bg-[#E5E5EA] rounded w-32" />
-                              <div className="h-2.5 bg-[#F2F2F7] rounded w-24 mt-1" />
-                            </td>
-                            <td className="py-2.5 px-3">
-                              <div className="h-3 bg-[#E5E5EA] rounded w-24" />
-                            </td>
-                            {[...Array(18)].map((_, j) => (
-                              <td key={j} className="py-2.5 px-3">
-                                <div className="h-3 bg-[#F2F2F7] rounded w-16" />
-                              </td>
-                            ))}
-                          </tr>
-                        ))}
-                      </>
-                    )}
-
-                    {/* Endless Scroll Sentinel Row */}
-                    {hasMoreAudience && (
-                      <tr ref={audienceSentinelRef}>
-                        <td colSpan={22} className="h-6 p-0 border-0 pointer-events-none" />
-                      </tr>
-                    )}
-
-                    {/* Clean End-of-Roll Marker */}
-                    {!hasMoreAudience && liveAudience.length > 0 && (
-                      <tr className="border-t border-[#E5E5EA] bg-[#F8F9FA]">
-                        <td colSpan={22} className="py-3 text-center text-[11px] font-medium text-[#6C6C70]">
-                          &bull; End of audience roll ({(totalAudienceCount || liveAudience.length).toLocaleString()} properties loaded)
-                        </td>
-                      </tr>
-                    )}
                   </tbody>
                 </table>
               </div>
 
-              {/* Pagination Bar (Zero Pills - Google Enterprise Standard) */}
-              <div className="px-4 py-2.5 border-t border-[#E5E5EA] bg-white flex flex-col sm:flex-row items-center justify-between gap-2.5 shrink-0 select-none">
-                <div className="flex items-center gap-2 text-xs text-[#6C6C70]">
-                  <span>
-                    Showing <strong className="text-[#1C1C1E]">{liveAudience.length.toLocaleString()}</strong> of{" "}
-                    <strong className="text-[#1C1C1E]">{(totalAudienceCount || liveAudience.length).toLocaleString()}</strong> properties
-                  </span>
-                  {hasMoreAudience && (
-                    <span className="text-[11px] text-[#8E8E93] hidden sm:inline">
-                      &bull; Page {audiencePage} of {Math.max(1, Math.ceil((totalAudienceCount || liveAudience.length) / 50))}
-                    </span>
-                  )}
-                </div>
-
-                {hasMoreAudience ? (
-                  <button
-                    type="button"
-                    onClick={() => loadNextAudiencePage()}
-                    disabled={isLoadingMoreAudience}
-                    className="h-7.5 px-3.5 rounded-lg border border-[#E5E5EA] bg-[#F2F2F7] hover:bg-[#E5E5EA] hover:border-[#007AFF]/40 text-xs font-semibold text-[#007AFF] flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Load next batch of matching properties"
-                  >
-                    {isLoadingMoreAudience ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-[#007AFF]" />
-                        <span>Loading more properties...</span>
-                      </>
-                    ) : (
-                      <span>Load More Records</span>
-                    )}
-                  </button>
-                ) : (
-                  <span className="text-[11px] font-medium text-[#6C6C70]">
-                    &bull; All matching properties loaded
-                  </span>
-                )}
-              </div>
+              {/* Supabase Studio-Style Table Pagination Bar */}
+              <SupabaseTablePagination
+                currentPage={audiencePage}
+                totalPages={Math.max(1, Math.ceil(totalAudienceCount / audienceLimit))}
+                totalRecords={totalAudienceCount}
+                pageSize={audienceLimit}
+                pageSizeOptions={[25, 50, 100]}
+                onPageChange={handleAudiencePageChange}
+                onPageSizeChange={handleAudiencePageSizeChange}
+                isLoading={isLoadingAudience}
+                entityLabel="properties"
+              />
             </div>
           </div>
         </div>
@@ -1689,7 +1627,6 @@ export function SmsRolloutSimulator({
             {/* Delivery Logs Container */}
             <div
               ref={logsTableContainerRef}
-              onScroll={handleLogsTableScroll}
               className="flex-1 min-h-0 overflow-auto"
             >
               <table className="min-w-[700px] w-full text-left text-xs border-collapse">
@@ -1710,68 +1647,22 @@ export function SmsRolloutSimulator({
                         <td className={`py-2.5 px-3 text-center text-xs font-bold ${log.deliveryStatus === "DELIVERED" ? "text-[#34C759]" : log.deliveryStatus === "FAILED" ? "text-[#FF3B30]" : "text-[#FF9500]"}`}>{log.deliveryStatus}</td>
                       </tr>
                     ))}
-                    {/* Logs Loading Skeleton Rows — matches Cadastre table pattern */}
-                    {isLoadingMoreLogs && (
-                      <>
-                        {[...Array(4)].map((_, i) => (
-                          <tr key={`log-skel-${i}`} className="animate-pulse border-b border-[#E5E5EA]">
-                            <td className="py-2.5 px-3">
-                              <div className="h-3 bg-[#E5E5EA] rounded w-24" />
-                            </td>
-                            <td className="py-2.5 px-3">
-                              <div className="h-3 bg-[#E5E5EA] rounded w-36" />
-                              <div className="h-2.5 bg-[#F2F2F7] rounded w-28 mt-1" />
-                            </td>
-                            <td className="py-2.5 px-3">
-                              <div className="h-3 bg-[#F2F2F7] rounded w-48" />
-                            </td>
-                            <td className="py-2.5 px-3 text-center">
-                              <div className="h-3 bg-[#E5E5EA] rounded w-16 mx-auto" />
-                            </td>
-                          </tr>
-                        ))}
-                      </>
-                    )}
-                    {hasMoreLogs && (
-                      <tr ref={logsSentinelRef}>
-                        <td colSpan={4} className="h-6 p-0 border-0 pointer-events-none" />
-                      </tr>
-                    )}
-                    {!hasMoreLogs && logsList.length > 0 && (
-                      <tr className="bg-[#F8F9FA] border-t border-[#E5E5EA]">
-                        <td colSpan={4} className="py-3 text-center text-[11px] font-medium text-[#6C6C70]">
-                          &bull; End of dispatch delivery history ({logsList.length} entries loaded)
-                        </td>
-                      </tr>
-                    )}
                   </tbody>
                 </table>
               </div>
 
-              {/* Delivery Logs Pagination Bar (Zero Pills - Google Enterprise Standard) */}
-              {hasMoreLogs && (
-                <div className="px-4 py-2.5 border-t border-[#E5E5EA] bg-white flex items-center justify-between gap-2.5 shrink-0 select-none">
-                  <span className="text-xs text-[#6C6C70]">
-                    Showing <strong className="text-[#1C1C1E]">{logsList.length}</strong> recorded dispatches
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => loadNextLogsPage()}
-                    disabled={isLoadingMoreLogs}
-                    className="h-7.5 px-3.5 rounded-lg border border-[#E5E5EA] bg-[#F2F2F7] hover:bg-[#E5E5EA] hover:border-[#007AFF]/40 text-xs font-semibold text-[#007AFF] flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Load more delivery logs"
-                  >
-                    {isLoadingMoreLogs ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-[#007AFF]" />
-                        <span>Loading more logs...</span>
-                      </>
-                    ) : (
-                      <span>Load More Logs</span>
-                    )}
-                  </button>
-                </div>
-              )}
+              {/* Delivery Logs Supabase-Style Table Pagination Bar */}
+              <SupabaseTablePagination
+                currentPage={logsPage}
+                totalPages={Math.max(1, Math.ceil(logsTotal / logsLimit))}
+                totalRecords={logsTotal}
+                pageSize={logsLimit}
+                pageSizeOptions={[25, 50, 100]}
+                onPageChange={handleLogsPageChange}
+                onPageSizeChange={handleLogsPageSizeChange}
+                isLoading={isLoadingLogs}
+                entityLabel="dispatches"
+              />
             </div>
           </div>
         </motion.div>

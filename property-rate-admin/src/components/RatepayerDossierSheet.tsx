@@ -46,7 +46,7 @@ interface RatepayerDossierSheetProps {
   isLoading?: boolean;
   isOpen: boolean;
   onClose: () => void;
-  onSelectProperty?: (accountNumber: string) => void;
+  onSelectProperty?: (accountNumber: string, origin?: { id: string; name: string; preview: any }) => void;
 }
 
 type DossierTab = "PROPERTIES" | "PAYMENTS" | "SMS_NOTICES" | "AUDIT_TRAIL";
@@ -239,23 +239,28 @@ export function RatepayerDossierSheet({
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end">
+        <motion.div 
+          key="ratepayer-dossier-wrapper"
+          className="fixed inset-0 z-50 flex justify-end pointer-events-auto"
+        >
           {/* Backdrop */}
           <motion.div
+            key="ratepayer-dossier-backdrop"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.18 }}
+            transition={{ duration: 0.28, ease: "easeOut" }}
             className="fixed inset-0 bg-black/35"
             onClick={onClose}
           />
 
           {/* Sliding Panel */}
           <motion.aside
+            key="ratepayer-dossier-panel"
             initial={{ x: "100%" }}
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
-            transition={{ type: "spring", damping: 26, stiffness: 280 }}
+            transition={{ type: "tween", ease: [0.16, 1, 0.3, 1], duration: 0.32 }}
             className="relative z-10 w-full max-w-2xl bg-white/95 backdrop-blur-2xl h-full shadow-2xl flex flex-col border-l border-[#E5E5EA] font-sans"
           >
             {/* Header */}
@@ -566,7 +571,12 @@ export function RatepayerDossierSheet({
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    onSelectProperty(prop.accountNumber);
+                                    const originInfo = user
+                                      ? { id: user.id, name: user.name, preview: preview || null }
+                                      : preview
+                                        ? { id: preview.id, name: preview.name, preview }
+                                        : undefined;
+                                    onSelectProperty(prop.accountNumber, originInfo);
                                     onClose();
                                   }}
                                   className="text-[#007AFF] hover:underline font-medium cursor-pointer"
@@ -864,7 +874,7 @@ export function RatepayerDossierSheet({
               </div>
             </div>
           )}
-        </div>
+        </motion.div>
       )}
     </AnimatePresence>
   );

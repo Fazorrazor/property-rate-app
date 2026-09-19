@@ -269,14 +269,10 @@ export const adminDb = {
         ]);
 
         const directPropIds = (linksRes.data || []).map((l: any) => l.A);
-        const ownerIds = (ownersRes.data || []).map((o: any) => o.ownerId);
 
         const propQueries: any[] = [];
         if (directPropIds.length > 0) {
           propQueries.push(supabase.from('Property').select('*').in('id', directPropIds));
-        }
-        if (ownerIds.length > 0) {
-          propQueries.push(supabase.from('Property').select('*').in('ownerId', ownerIds));
         }
         if (data.phoneNumber) {
           propQueries.push(supabase.from('Property').select('*').eq('telephone', data.phoneNumber));
@@ -335,76 +331,47 @@ export const adminDb = {
         const userChunks = chunkArray(userIds, 60);
         const phoneChunks = chunkArray(phoneNumbers, 40);
 
-        const [linkResults, ownerResults] = await Promise.all([
-          Promise.all(userChunks.map((chunk) => supabase.from('_PropertyToUser').select('A, B').in('B', chunk))),
-          Promise.all(phoneChunks.map((chunk) =>
-            supabase.from('PropertyOwner').select('ownerId, tel, mobileNumber').or(chunk.map((p: string) => `tel.eq.${p},mobileNumber.eq.${p}`).join(','))
-          )),
-        ]);
+        const linkResults = await Promise.all(
+          userChunks.map((chunk) => supabase.from('_PropertyToUser').select('A, B').in('B', chunk))
+        );
 
-        const allLinks: any[] = linkResults.flatMap((r) => r.data || []);
-        const allOwners: any[] = ownerResults.flatMap((r) => r.data || []);
-
-        const phoneToOwnerIds: Record<string, string[]> = {};
-        for (const o of allOwners) {
-          if (o.tel) {
-            if (!phoneToOwnerIds[o.tel]) phoneToOwnerIds[o.tel] = [];
-            phoneToOwnerIds[o.tel].push(o.ownerId);
-          }
-          if (o.mobileNumber && o.mobileNumber !== o.tel) {
-            if (!phoneToOwnerIds[o.mobileNumber]) phoneToOwnerIds[o.mobileNumber] = [];
-            phoneToOwnerIds[o.mobileNumber].push(o.ownerId);
-          }
-        }
-
+        const allLinks: any[] = linkResults.flatMap((r: any) => r.data || []);
         const directPropIds = Array.from(new Set(allLinks.map((l: any) => l.A)));
-        const allOwnerIds = Array.from(new Set(Object.values(phoneToOwnerIds).flat()));
-
         const directPropChunks = chunkArray(directPropIds, 60);
-        const ownerPropChunks = chunkArray(allOwnerIds, 60);
 
         const propQueries = [
           ...directPropChunks.map((chunk) =>
-            supabase.from('Property').select('id, account_no, valuationNo, ownerId, ownerDigitalAddress, property_cat, rateableValue, arrears, current_bill, amount_paid, billYear, municipality, telephone').in('id', chunk)
-          ),
-          ...ownerPropChunks.map((chunk) =>
-            supabase.from('Property').select('id, account_no, valuationNo, ownerId, ownerDigitalAddress, property_cat, rateableValue, arrears, current_bill, amount_paid, billYear, municipality, telephone').in('ownerId', chunk)
+            supabase
+              .from('Property')
+              .select('id, account_no, valuationNo, ownerDigitalAddress, property_cat, rateableValue, arrears, current_bill, amount_paid, billYear, municipality, telephone, outstanding_amt')
+              .in('id', chunk)
           ),
           ...phoneChunks.map((chunk) =>
-            supabase.from('Property').select('id, account_no, valuationNo, ownerId, ownerDigitalAddress, property_cat, rateableValue, arrears, current_bill, amount_paid, billYear, municipality, telephone').in('telephone', chunk)
+            supabase
+              .from('Property')
+              .select('id, account_no, valuationNo, ownerDigitalAddress, property_cat, rateableValue, arrears, current_bill, amount_paid, billYear, municipality, telephone, outstanding_amt')
+              .in('telephone', chunk)
           ),
         ];
 
         const propResults = await Promise.all(propQueries);
-        const allProps = propResults.flatMap((r) => (r.data || []).map(mapPropertyRow));
+        const allProps = propResults.flatMap((r: any) => (r.data || []).map(mapPropertyRow));
 
         const propsById: Record<string, any> = {};
-        const propsByOwnerId: Record<string, any[]> = {};
-
         for (const p of allProps) {
-          propsById[p.id] = p;
-          if (p.ownerId) {
-            if (!propsByOwnerId[p.ownerId]) propsByOwnerId[p.ownerId] = [];
-            propsByOwnerId[p.ownerId].push(p);
+          if (p && p.id) {
+            propsById[p.id] = p;
           }
         }
 
         for (const u of data) {
           const uDirectIds = allLinks.filter((l: any) => l.B === u.id).map((l: any) => l.A);
-          const uOwnerIds = phoneToOwnerIds[u.phoneNumber] || [];
-
           const userPropMap = new Map<string, any>();
           for (const pid of uDirectIds) {
             if (propsById[pid]) userPropMap.set(pid, propsById[pid]);
           }
-          for (const oid of uOwnerIds) {
-            const oProps = propsByOwnerId[oid] || [];
-            for (const op of oProps) {
-              userPropMap.set(op.id, op);
-            }
-          }
           for (const p of allProps) {
-            if (p.telephone && p.telephone === u.phoneNumber) {
+            if (p && p.telephone && p.telephone === u.phoneNumber) {
               userPropMap.set(p.id, p);
             }
           }
@@ -514,7 +481,7 @@ export const adminDb = {
           // Status filter at DB level using actual columns (no 'status' column in DB)
           if (args.where.status && args.where.status !== 'ALL') {
             if (args.where.status === 'UNPAID') {
-              query = query.gt('outstanding_amt', 0);
+              query = query.or('outstanding_amt.gt.0,and(outstanding_amt.is.null,or(arrears.gt.0,current_bill.gt.0))');
             } else if (args.where.status === 'DEFAULTER') {
               query = query.gt('arrears', 0).gt('outstanding_amt', 0);
             } else if (args.where.status === 'PAID') {
@@ -524,7 +491,7 @@ export const adminDb = {
             } else if (args.where.status === 'PARTIALLY_PAID') {
               query = query.gt('amount_paid', 0).gt('outstanding_amt', 0);
             } else if (typeof args.where.status === 'object' && args.where.status.not === 'PAID') {
-              query = query.gt('outstanding_amt', 0);
+              query = query.or('outstanding_amt.gt.0,and(outstanding_amt.is.null,or(arrears.gt.0,current_bill.gt.0))');
             }
           }
           if (args.where.arrears && typeof args.where.arrears === 'object' && args.where.arrears.gt !== undefined) {
@@ -839,7 +806,7 @@ export const adminDb = {
       if (args?.where) {
         if (args.where.status && args.where.status !== 'ALL') {
           if (args.where.status === 'UNPAID') {
-            query = query.gt('outstanding_amt', 0);
+            query = query.or('outstanding_amt.gt.0,and(outstanding_amt.is.null,or(arrears.gt.0,current_bill.gt.0))');
           } else if (args.where.status === 'DEFAULTER') {
             query = query.gt('arrears', 0).gt('outstanding_amt', 0);
           } else if (args.where.status === 'PAID') {
@@ -849,7 +816,7 @@ export const adminDb = {
           } else if (args.where.status === 'PARTIALLY_PAID') {
             query = query.gt('amount_paid', 0).gt('outstanding_amt', 0);
           } else if (typeof args.where.status === 'object' && args.where.status.not === 'PAID') {
-            query = query.gt('outstanding_amt', 0);
+            query = query.or('outstanding_amt.gt.0,and(outstanding_amt.is.null,or(arrears.gt.0,current_bill.gt.0))');
           }
         }
         if (args.where.totalAmountDue && typeof args.where.totalAmountDue === 'object' && args.where.totalAmountDue.gt !== undefined) {
@@ -890,7 +857,7 @@ export const adminDb = {
       if (args?.where) {
         if (args.where.status && args.where.status !== 'ALL') {
           if (args.where.status === 'UNPAID') {
-            query = query.gt('outstanding_amt', 0);
+            query = query.or('outstanding_amt.gt.0,and(outstanding_amt.is.null,or(arrears.gt.0,current_bill.gt.0))');
           } else if (args.where.status === 'DEFAULTER') {
             query = query.gt('arrears', 0).gt('outstanding_amt', 0);
           } else if (args.where.status === 'PAID') {
@@ -900,7 +867,7 @@ export const adminDb = {
           } else if (args.where.status === 'PARTIALLY_PAID') {
             query = query.gt('amount_paid', 0).gt('outstanding_amt', 0);
           } else if (typeof args.where.status === 'object' && args.where.status.not === 'PAID') {
-            query = query.gt('outstanding_amt', 0);
+            query = query.or('outstanding_amt.gt.0,and(outstanding_amt.is.null,or(arrears.gt.0,current_bill.gt.0))');
           }
         }
         if (args.where.propertyClassification && args.where.propertyClassification !== 'ALL') {
