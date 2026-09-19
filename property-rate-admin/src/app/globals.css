@@ -54,8 +54,10 @@
   }
 
   .apple-material-header {
-    @apply sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-[#E5E5EA];
+    @apply sticky top-0 z-30 bg-white/95 border-b border-[#E5E5EA] transition-all duration-200;
   }
+
+
 
   /* Backward compatibility shims: convert old 3D classes into flat Apple HIG aesthetics */
   .btn-3d-primary {

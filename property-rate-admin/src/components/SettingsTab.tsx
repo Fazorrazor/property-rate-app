@@ -16,6 +16,7 @@ import {
   Smartphone,
   Info,
   ExternalLink,
+  Sparkles,
 } from "lucide-react";
 import {
   getSmsSettings,
@@ -469,6 +470,8 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
             </div>
           </form>
         </div>
+
+
 
         {/* SECTION 3: SYSTEM REFERENCE DETAILS */}
         <div className="bg-white border border-[#E5E5EA] rounded-2xl p-5 sm:p-6 shadow-xs space-y-3">

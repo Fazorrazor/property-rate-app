@@ -828,8 +828,8 @@ export function SmsRolloutSimulator({
           <div className="w-full h-full min-h-0 flex flex-col overflow-hidden">
 
             {/* Audience & Field Selection */}
-            <div className="bg-white border-0 rounded-none shadow-none flex-1 min-h-0 flex flex-col">
-              <div className="p-3.5 border-b border-[#E5E5EA] shrink-0 space-y-2.5 bg-white relative z-20">
+            <div className="border-0 rounded-none shadow-none shrink-0 flex flex-col bg-white">
+              <div className="shrink-0 space-y-2.5 relative z-20 p-3.5 border-b border-[#E5E5EA] bg-white">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-semibold text-[#1C1C1E] flex items-center gap-1.5">
                     <Filter className="w-3.5 h-3.5 text-[#007AFF]" />
@@ -860,7 +860,7 @@ export function SmsRolloutSimulator({
                         <div className="w-2.5 h-2.5 bg-white/95 backdrop-blur-xl border-l border-t border-[#E5E5EA] rotate-45 -mb-1 mr-2.5" />
                         <div className="bg-white/95 backdrop-blur-xl border border-[#E5E5EA] text-[#1C1C1E] text-xs px-3 py-1.5 rounded-lg shadow-xl whitespace-nowrap flex items-center gap-2">
                           <span className="font-semibold text-[#1C1C1E]">Delivery Logs</span>
-                          <span className="text-[#8E8E93] text-[10px]">&bull;</span>
+                          <span className="text-[#8E8E93] text-[10px]">•</span>
                           <span className="text-[#1C1C1E] text-[11px] font-mono tabular-nums">
                             {smsLogs.length.toLocaleString()} records
                           </span>
@@ -903,10 +903,11 @@ export function SmsRolloutSimulator({
                     ref={fieldsFilterBtnRef}
                     type="button"
                     onClick={handleOpenFieldsFilter}
-                    className={`h-8 px-3 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${requiredFields.length > 0
-                      ? "bg-[#007AFF] text-white font-medium border-[#007AFF] shadow-xs"
-                      : "bg-[#F2F2F7] text-[#1C1C1E] border-[#E5E5EA] hover:bg-[#E5E5EA]"
-                      }`}
+                    className={`h-8 px-3 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      requiredFields.length > 0
+                        ? "bg-[#007AFF] text-white font-medium border-[#007AFF] shadow-xs"
+                        : "bg-[#F2F2F7] text-[#1C1C1E] border-[#E5E5EA] hover:bg-[#E5E5EA]"
+                    }`}
                   >
                     <SlidersHorizontal className="w-3.5 h-3.5" />
                     <span>Fields Filter</span>
@@ -1082,7 +1083,7 @@ export function SmsRolloutSimulator({
                       <span className="text-[#6C6C70] text-[11px]">
                         {audienceScope === "SELECTED" ? "accounts selected" : "accounts matching filter criteria"}
                       </span>
-                      <span className="text-[#E5E5EA] text-[10px]">&bull;</span>
+                      <span className="text-[#E5E5EA] text-[10px]">•</span>
                       <span className="text-[#1C1C1E] text-[11px] font-mono tabular-nums">
                         {effectiveRolloutTotalDueFormatted}
                       </span>
@@ -1096,12 +1097,12 @@ export function SmsRolloutSimulator({
 
             {/* Matched Audience Rollout Queue Table (Consumes All Vertical Space) */}
             <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-white">
-              <div className="px-3.5 py-2 border-b border-[#E5E5EA] bg-[#F8F9FA] flex items-center justify-between gap-3 shrink-0">
+              <div className="px-3.5 py-2 border-b flex items-center justify-between gap-3 shrink-0 bg-[#F8F9FA] border-[#E5E5EA]">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs font-bold text-[#1C1C1E]">Matched Audience Rollout Queue</span>
                   <span className="text-[11px] text-[#6C6C70]">
-                    ({ratepayerGroups.length.toLocaleString()} ratepayers &bull; {liveAudience.length.toLocaleString()} properties
-                    {multiPropertyRatepayersCount > 0 && ` &bull; ${multiPropertyRatepayersCount} multi-account portfolios`})
+                    ({ratepayerGroups.length.toLocaleString()} ratepayers • {liveAudience.length.toLocaleString()} properties
+                    {multiPropertyRatepayersCount > 0 && ` • ${multiPropertyRatepayersCount} multi-account portfolios`})
                   </span>
                 </div>
                 <div className="flex items-center gap-2.5 shrink-0">
@@ -1155,7 +1156,7 @@ export function SmsRolloutSimulator({
                 className="flex-1 min-h-0 overflow-y-auto overflow-x-auto"
               >
                 <table className="w-full text-left text-xs border-collapse">
-                  <thead className="bg-[#F8F9FA] border-b border-[#E5E5EA] text-[#6C6C70] font-semibold text-[11px] sticky top-0 z-20">
+                  <thead className="border-b text-[#6C6C70] font-semibold text-[11px] sticky top-0 z-20 bg-[#F8F9FA] border-[#E5E5EA]">
                     <tr>
                       <th className="py-2.5 px-3 whitespace-nowrap bg-[#F8F9FA] w-10 text-center border-l-4 border-[#F8F9FA]">
                         <input
@@ -1590,8 +1591,8 @@ export function SmsRolloutSimulator({
       </div>
 
         {/* PANE 2: DELIVERY LOGS */}
-        <div className="w-1/2 h-full flex flex-col min-h-0 p-0 overflow-hidden relative">
-          <div className="h-full flex flex-col bg-white border-0 rounded-none overflow-hidden shadow-none">
+        <div className="w-1/2 h-full flex flex-col min-h-0 p-0 overflow-hidden relative bg-[#F2F2F7]">
+          <div className="h-full flex flex-col overflow-hidden bg-white border-0 rounded-none shadow-none">
             <div className="p-3 border-b border-[#E5E5EA] bg-[#F8F9FA] flex items-center justify-between gap-3 shrink-0">
               <button
                 type="button"
@@ -1622,7 +1623,7 @@ export function SmsRolloutSimulator({
               className="flex-1 min-h-0 overflow-y-auto overflow-x-auto"
             >
               <table className="w-full text-left text-xs">
-                  <thead className="bg-[#F8F9FA] border-b border-[#E5E5EA] text-[#6C6C70] sticky top-0">
+                  <thead className="border-b text-[#6C6C70] sticky top-0 bg-[#F8F9FA] border-[#E5E5EA]">
                     <tr>
                       <th className="py-2.5 px-3">Timestamp</th>
                       <th className="py-2.5 px-3">Recipient</th>
@@ -1678,10 +1679,10 @@ export function SmsRolloutSimulator({
 
       {/* Message Template Configuration Modal Popup */}
       {showTemplateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-xs font-sans">
-          <div className="bg-white/95 backdrop-blur-2xl rounded-2xl border border-[#E5E5EA] max-w-2xl w-full shadow-2xl flex flex-col overflow-hidden max-h-[90vh]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/35 backdrop-blur-md font-sans">
+          <div className="rounded-2xl max-w-2xl w-full shadow-2xl flex flex-col overflow-hidden max-h-[90vh] bg-white border border-[#E5E5EA]">
             {/* Modal Header */}
-            <div className="px-5 py-3.5 border-b border-[#E5E5EA] flex items-center justify-between shrink-0 bg-[#F8F9FA]">
+            <div className="px-5 py-3.5 border-b border-[#E5E5EA] bg-[#F8F9FA] flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
                 <FileText className="w-4 h-4 text-[#007AFF]" />
                 <div>
@@ -1897,7 +1898,7 @@ export function SmsRolloutSimulator({
             </div>
 
             {/* Modal Footer */}
-            <div className="px-5 py-3 border-t border-[#E5E5EA] bg-[#F8F9FA] flex items-center justify-between shrink-0">
+            <div className="px-5 py-3 border-t flex items-center justify-between shrink-0 bg-[#F8F9FA] border-[#E5E5EA]">
               <button
                 type="button"
                 onClick={() => setShowTemplateModal(false)}
@@ -1924,8 +1925,8 @@ export function SmsRolloutSimulator({
 
       {/* Security Modal */}
       {showAuthModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-xs font-sans">
-          <div className="bg-white/95 backdrop-blur-2xl rounded-2xl border border-[#E5E5EA] p-6 max-w-md w-full space-y-4 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/35 backdrop-blur-md font-sans">
+          <div className="rounded-2xl p-6 max-w-md w-full space-y-4 shadow-2xl transition-all bg-white border border-[#E5E5EA]">
             <h3 className="text-sm font-semibold text-[#1C1C1E]">Authorize Rollout Dispatch</h3>
             <p className="text-xs text-[#6C6C70]">
               Targeting <span className="font-bold text-[#1C1C1E]">{effectiveRolloutCount.toLocaleString()}</span> properties {audienceScope === "SELECTED" ? "(manually selected)" : "matching active filter criteria"} with total outstanding due of <span className="font-bold text-[#1C1C1E]">{effectiveRolloutTotalDueFormatted}</span>.
