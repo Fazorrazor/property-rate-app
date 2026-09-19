@@ -54,6 +54,12 @@ import {
   getTreasuryReceipts,
   AdminTreasuryReceipt,
 } from "./actions";
+import {
+  exportCadastreCsv,
+  exportRatepayersCsv,
+  exportTreasuryCsv,
+  exportAuditLogsCsv,
+} from "@/lib/csv-export";
 import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "framer-motion";
 import { AdminDashboardSkeleton } from "@/components/Skeletons";
@@ -406,47 +412,6 @@ export default function AdminDashboardPage() {
     } finally {
       setIsLoadingAuditLogs(false);
     }
-  };
-
-  const handleExportAuditLogsCsv = () => {
-    if (auditLogs.length === 0) {
-      showToast("No audit records available to export.", "info");
-      return;
-    }
-
-    const headers = [
-      "Log ID",
-      "Timestamp",
-      "Action Code",
-      "Action Description",
-      "Entity Type",
-      "Entity Reference",
-      "Administrator Name",
-      "Administrator ID",
-      "Audit Narrative",
-    ];
-
-    const rows = auditLogs.map((log) => [
-      `"${log.id}"`,
-      `"${log.createdAtFormatted} ${log.timeFormatted}"`,
-      `"${log.action}"`,
-      `"${log.actionLabel}"`,
-      `"${log.entityType}"`,
-      `"${log.entityId || "N/A"}"`,
-      `"${log.adminName}"`,
-      `"${log.adminId}"`,
-      `"${log.details.replace(/"/g, '""')}"`,
-    ]);
-
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `KKMA_Audit_Trail_${new Date().toISOString().split("T")[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showToast("Audit trail CSV downloaded.", "success");
   };
 
 
@@ -864,53 +829,102 @@ export default function AdminDashboardPage() {
     }
   };
 
-  const handleExportCsv = (filteredOnly = false) => {
-    if (!data || data.properties.length === 0) return;
+  const handleExportPropertiesCsv = (filteredOnly = false) => {
+    const listToExport = filteredOnly && selectedIds.length > 0
+      ? propertiesList.filter((p) => selectedIds.includes(p.accountNumber))
+      : (filteredProperties.length > 0 ? filteredProperties : propertiesList);
 
-    const listToExport = filteredOnly ? filteredProperties : data.properties;
+    if (listToExport.length === 0) {
+      showToast("No property records available to export.", "info");
+      return;
+    }
 
-    const headers = [
-      "Account Number",
-      "Municipality",
-      "Owner Name",
-      "Owner Phone",
-      "Digital Address",
-      "Classification",
-      "Bill Year",
-      "Rateable Value (GH₵)",
-      "Previous Year Bill (GH₵)",
-      "Amount Paid Last Year (GH₵)",
-      "Arrears (GH₵)",
-      "Current Fee (GH₵)",
-      "Total Due (GH₵)",
-      "Status",
-    ];
+    const scopeDesc = selectedIds.length > 0
+      ? `Selected Accounts (${selectedIds.length} properties)`
+      : `Classification: ${classificationFilter} | Status: ${statusFilter} | Search: "${searchQuery || 'None'}"`;
 
-    const rows = listToExport.map((p) => [
-      `"${p.accountNumber}"`,
-      `"${p.municipality}"`,
-      `"${p.ownerName}"`,
-      `"${p.ownerPhone}"`,
-      `"${p.ownerDigitalAddress}"`,
-      `"${p.propertyClassification}"`,
-      p.billYear,
-      p.rateableValue,
-      p.previousYearBill,
-      p.amountPaidLastYear,
-      p.arrears,
-      p.currentFee,
-      p.totalAmountDue,
-      `"${p.status}"`,
-    ]);
+    const totalVal = listToExport.reduce((sum, p) => sum + (p.rateableValue || 0), 0);
+    const totalArr = listToExport.reduce((sum, p) => sum + (p.arrears || 0), 0);
+    const totalDue = listToExport.reduce((sum, p) => sum + (p.totalAmountDue || 0), 0);
 
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `KKMA_Property_Rate_${activeTab}_${new Date().toISOString().split("T")[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    exportCadastreCsv(listToExport, {
+      reportTitle: "Cadastre Master Valuation Roll & Property Register",
+      filterScope: scopeDesc,
+      generatedBy: currentAdmin?.name ? `${currentAdmin.name} (${currentAdmin.role})` : "Revenue Administrator",
+      recordCount: listToExport.length,
+      financialSummary: {
+        totalValuation: totalVal,
+        totalArrears: totalArr,
+        totalDue: totalDue,
+      },
+    });
+
+    showToast(`Exported ${listToExport.length} property records with linked portfolio hierarchy.`, "success");
+  };
+
+  const handleExportRatepayersCsv = () => {
+    const listToExport = ratepayers;
+    if (listToExport.length === 0) {
+      showToast("No ratepayer records available to export.", "info");
+      return;
+    }
+
+    const totalVal = propertiesList.reduce((sum, p) => sum + (p.rateableValue || 0), 0);
+    const totalArr = propertiesList.reduce((sum, p) => sum + (p.arrears || 0), 0);
+    const totalDue = propertiesList.reduce((sum, p) => sum + (p.totalAmountDue || 0), 0);
+
+    exportRatepayersCsv(listToExport, propertiesList, {
+      reportTitle: "Ratepayer Portfolios & Linked Accounts Master Roll",
+      filterScope: ratepayerSearchQuery ? `Search: "${ratepayerSearchQuery}"` : "All Registered Ratepayers",
+      generatedBy: currentAdmin?.name ? `${currentAdmin.name} (${currentAdmin.role})` : "Revenue Administrator",
+      recordCount: listToExport.length,
+      financialSummary: {
+        totalValuation: totalVal,
+        totalArrears: totalArr,
+        totalDue: totalDue,
+      },
+    });
+
+    showToast(`Exported ${listToExport.length} ratepayer portfolios with linked accounts hierarchy.`, "success");
+  };
+
+  const handleExportTreasuryCsv = () => {
+    const listToExport = filteredTreasuryReceipts.length > 0 ? filteredTreasuryReceipts : treasuryReceipts;
+    if (listToExport.length === 0) {
+      showToast("No treasury records available to export.", "info");
+      return;
+    }
+
+    const totalCollected = listToExport.reduce((sum, r) => sum + (r.amount || 0), 0);
+
+    exportTreasuryCsv(listToExport, {
+      reportTitle: "Treasury Revenue Collection & GCR Reconciliation",
+      filterScope: `Channel: ${treasuryMethodFilter} | Search: "${treasurySearchQuery || 'None'}"`,
+      generatedBy: currentAdmin?.name ? `${currentAdmin.name} (${currentAdmin.role})` : "Revenue Administrator",
+      recordCount: listToExport.length,
+      financialSummary: {
+        totalCollected,
+      },
+    });
+
+    showToast(`Exported ${listToExport.length} treasury receipt records.`, "success");
+  };
+
+  const handleExportAuditLogsCsv = () => {
+    const listToExport = filteredAuditLogs.length > 0 ? filteredAuditLogs : auditLogs;
+    if (listToExport.length === 0) {
+      showToast("No audit records available to export.", "info");
+      return;
+    }
+
+    exportAuditLogsCsv(listToExport, {
+      reportTitle: "System Security & Governance Audit Trail",
+      filterScope: `Action: ${auditLogActionFilter} | Search: "${auditLogSearchQuery || 'None'}"`,
+      generatedBy: currentAdmin?.name ? `${currentAdmin.name} (${currentAdmin.role})` : "Revenue Administrator",
+      recordCount: listToExport.length,
+    });
+
+    showToast(`Exported ${listToExport.length} audit trail event logs.`, "success");
   };
 
   const toggleSelectAll = () => {
@@ -1550,11 +1564,12 @@ export default function AdminDashboardPage() {
 
                     <button
                       type="button"
-                      onClick={() => handleExportCsv(selectedIds.length > 0)}
+                      onClick={() => handleExportPropertiesCsv(selectedIds.length > 0)}
                       className="btn-3d-secondary h-8 px-3 rounded-lg font-medium text-xs flex items-center gap-1.5 cursor-pointer shrink-0"
+                      title="Export Professional Excel/CSV with Linked Portfolios"
                     >
                       <Download className="w-3.5 h-3.5" />
-                      <span>{selectedIds.length > 0 ? `Export (${selectedIds.length})` : "Export CSV"}</span>
+                      <span>{selectedIds.length > 0 ? `Export Selected (${selectedIds.length})` : "Export Cadastre CSV"}</span>
                     </button>
                   </div>
                 </div>
@@ -1958,9 +1973,20 @@ export default function AdminDashboardPage() {
                     )}
                   </div>
                 </div>
-                <span className="text-xs text-[#848E9C] font-mono shrink-0">
-                  {ratepayers.length} of {ratepayersTotal} Ratepayers
-                </span>
+                <div className="flex items-center gap-2.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleExportRatepayersCsv}
+                    className="btn-3d-secondary h-8 px-3 rounded-lg font-medium text-xs flex items-center gap-1.5 cursor-pointer shrink-0 text-[#FCD535] border-[#FCD535]/30"
+                    title="Export Professional Excel/CSV with Linked Accounts Hierarchy"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Export Ratepayers CSV</span>
+                  </button>
+                  <span className="text-xs text-[#848E9C] font-mono">
+                    {ratepayers.length} of {ratepayersTotal} Ratepayers
+                  </span>
+                </div>
               </div>
 
               {/* Ratepayers Directory Table */}
@@ -2142,7 +2168,7 @@ export default function AdminDashboardPage() {
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
                     <select
                       value={treasuryMethodFilter}
                       onChange={(e) => setTreasuryMethodFilter(e.target.value)}
@@ -2154,7 +2180,16 @@ export default function AdminDashboardPage() {
                       <option value="Card">Card / Online Gateway</option>
                       <option value="Counter Cash">Counter Cash Treasury</option>
                     </select>
-                    <span className="text-xs text-[#848E9C] font-medium">
+                    <button
+                      type="button"
+                      onClick={handleExportTreasuryCsv}
+                      className="btn-3d-secondary h-8 px-3 rounded-lg font-medium text-xs flex items-center gap-1.5 cursor-pointer shrink-0 text-[#FCD535] border-[#FCD535]/30"
+                      title="Export Professional Treasury Reconciliation CSV"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Export Treasury CSV</span>
+                    </button>
+                    <span className="text-xs text-[#848E9C] font-medium shrink-0">
                       {filteredTreasuryReceipts.length} record{filteredTreasuryReceipts.length === 1 ? "" : "s"}
                     </span>
                   </div>
@@ -2352,8 +2387,19 @@ export default function AdminDashboardPage() {
                   </select>
                 </div>
 
-                <div className="text-xs text-[#848E9C] font-medium">
-                  {auditLogsTotal} event{auditLogsTotal === 1 ? "" : "s"} logged
+                <div className="flex items-center gap-2.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleExportAuditLogsCsv}
+                    className="btn-3d-secondary h-8 px-3 rounded-lg font-medium text-xs flex items-center gap-1.5 cursor-pointer shrink-0 text-[#FCD535] border-[#FCD535]/30"
+                    title="Export System Audit Trail CSV"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Export Audit Logs CSV</span>
+                  </button>
+                  <div className="text-xs text-[#848E9C] font-medium">
+                    {auditLogsTotal} event{auditLogsTotal === 1 ? "" : "s"} logged
+                  </div>
                 </div>
               </div>
 

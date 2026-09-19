@@ -16,7 +16,9 @@ import {
   CheckCircle2,
   AlertCircle,
   Send,
+  Download,
 } from "lucide-react";
+import { exportRatepayerDossierCsv } from "@/lib/csv-export";
 import {
   RatepayerHistoryDossier,
   AdminPropertyReceipt,
@@ -78,6 +80,23 @@ export function RatepayerDossierSheet({
       setLocalReceipts(dossier.receipts);
     }
   }, [dossier]);
+
+  const handleExportDossier = () => {
+    if (!dossier) return;
+    const totalVal = (dossier.properties || []).reduce((sum, p) => sum + (p.rateableValue || 0), 0);
+    const totalArr = (dossier.properties || []).reduce((sum, p) => sum + (p.arrears || 0), 0);
+    const totalDue = (dossier.properties || []).reduce((sum, p) => sum + (p.totalAmountDue || 0), 0);
+    exportRatepayerDossierCsv(dossier, {
+      reportTitle: `Ratepayer Historical Dossier - ${dossier.user.name || "Citizen"}`,
+      filterScope: `Ratepayer ID: ${dossier.user.id} | Phone: ${dossier.user.phoneNumber}`,
+      recordCount: (dossier.properties || []).length,
+      financialSummary: {
+        totalValuation: totalVal,
+        totalArrears: totalArr,
+        totalDue: totalDue,
+      },
+    });
+  };
 
   const handleFileSelected = (
     receiptId: string,
@@ -282,14 +301,27 @@ export function RatepayerDossierSheet({
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={onClose}
-                className="p-1.5 rounded-lg text-[#848E9C] hover:text-[#EAECEF] transition-colors cursor-pointer"
-                aria-label="Close dossier"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                {dossier && (
+                  <button
+                    type="button"
+                    onClick={handleExportDossier}
+                    className="btn-3d-secondary h-8 px-2.5 rounded-lg text-xs font-semibold text-[#FCD535] border-[#FCD535]/30 flex items-center gap-1.5 cursor-pointer"
+                    title="Export Ratepayer Dossier CSV"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Export Dossier CSV</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="p-1.5 rounded-lg text-[#848E9C] hover:text-[#EAECEF] transition-colors cursor-pointer"
+                  aria-label="Close dossier"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* Citizen Quick Profile Bar */}
