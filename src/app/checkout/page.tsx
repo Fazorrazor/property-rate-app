@@ -805,8 +805,8 @@ function CheckoutContent() {
                   </div>
 
                   {/* Mobile Phone Number */}
-                  <div className="px-4 py-2 flex items-center justify-between text-xs gap-3">
-                    <label htmlFor="momo-phone" className="text-on-surface-muted shrink-0">
+                  <div className="px-4 py-2.5 space-y-1">
+                    <label htmlFor="momo-phone" className="text-[11px] font-medium text-on-surface-muted block">
                       Mobile Number
                     </label>
                     <input
@@ -820,14 +820,14 @@ function CheckoutContent() {
                         if (detected) setNetwork(detected);
                       }}
                       placeholder="024 000 0000"
-                      className="w-full text-right text-xs font-medium text-foreground bg-transparent focus:outline-none placeholder:text-on-surface-muted/40"
+                      className="w-full h-10 px-3 rounded-lg bg-surface-subtle border border-border-light/80 text-xs font-medium text-foreground focus:outline-none focus:border-[#007AFF] focus:bg-surface focus:ring-1 focus:ring-[#007AFF] transition-all placeholder:text-on-surface-muted/50"
                     />
                   </div>
 
                   {/* Account Name with Subtle Status */}
-                  <div className="px-4 py-2 flex items-center justify-between text-xs gap-3">
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <label htmlFor="momo-name" className="text-on-surface-muted">
+                  <div className="px-4 py-2.5 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <label htmlFor="momo-name" className="text-[11px] font-medium text-on-surface-muted">
                         Account Name
                       </label>
                       {isVerifyingSubscriber ? (
@@ -848,7 +848,7 @@ function CheckoutContent() {
                         setIsHubtelVerified(false);
                       }}
                       placeholder="Kwame Mensah"
-                      className="w-full text-right text-xs font-medium text-foreground bg-transparent focus:outline-none placeholder:text-on-surface-muted/40"
+                      className="w-full h-10 px-3 rounded-lg bg-surface-subtle border border-border-light/80 text-xs font-medium text-foreground focus:outline-none focus:border-[#007AFF] focus:bg-surface focus:ring-1 focus:ring-[#007AFF] transition-all placeholder:text-on-surface-muted/50"
                     />
                   </div>
                 </div>
@@ -862,9 +862,9 @@ function CheckoutContent() {
                   Card Details
                 </p>
                 <div className="bg-surface rounded-xl border border-border-light/70 overflow-hidden divide-y divide-border-light/60">
-                  <div className="px-4 py-2 flex items-center justify-between text-xs gap-3">
-                    <label htmlFor="card-name" className="text-on-surface-muted shrink-0">
-                      Cardholder
+                  <div className="px-4 py-2.5 space-y-1">
+                    <label htmlFor="card-name" className="text-[11px] font-medium text-on-surface-muted block">
+                      Cardholder Name
                     </label>
                     <input
                       id="card-name"
@@ -872,12 +872,12 @@ function CheckoutContent() {
                       value={cardholderName}
                       onChange={(e) => setCardholderName(e.target.value)}
                       placeholder="Name as printed on card"
-                      className="w-full text-right text-xs font-medium text-foreground bg-transparent focus:outline-none placeholder:text-on-surface-muted/40"
+                      className="w-full h-10 px-3 rounded-lg bg-surface-subtle border border-border-light/80 text-xs font-medium text-foreground focus:outline-none focus:border-[#007AFF] focus:bg-surface focus:ring-1 focus:ring-[#007AFF] transition-all placeholder:text-on-surface-muted/50"
                     />
                   </div>
 
-                  <div className="px-4 py-2 flex items-center justify-between text-xs gap-3">
-                    <label htmlFor="card-number" className="text-on-surface-muted shrink-0">
+                  <div className="px-4 py-2.5 space-y-1">
+                    <label htmlFor="card-number" className="text-[11px] font-medium text-on-surface-muted block">
                       Card Number
                     </label>
                     <input
@@ -886,13 +886,13 @@ function CheckoutContent() {
                       value={cardNumber}
                       onChange={handleCardNumberChange}
                       placeholder="•••• •••• •••• ••••"
-                      className="w-full text-right font-mono text-xs font-medium text-foreground bg-transparent focus:outline-none placeholder:text-on-surface-muted/40 tracking-wider"
+                      className="w-full h-10 px-3 rounded-lg bg-surface-subtle border border-border-light/80 font-mono text-xs font-medium text-foreground focus:outline-none focus:border-[#007AFF] focus:bg-surface focus:ring-1 focus:ring-[#007AFF] tracking-wider transition-all placeholder:text-on-surface-muted/50"
                     />
                   </div>
 
                   <div className="grid grid-cols-2 divide-x divide-border-light/60">
-                    <div className="px-4 py-2 flex items-center justify-between text-xs gap-2">
-                      <label htmlFor="card-expiry" className="text-on-surface-muted shrink-0">
+                    <div className="px-4 py-2.5 space-y-1">
+                      <label htmlFor="card-expiry" className="text-[11px] font-medium text-on-surface-muted block">
                         Expires
                       </label>
                       <input
@@ -902,12 +902,12 @@ function CheckoutContent() {
                         onChange={handleExpiryChange}
                         placeholder="MM/YY"
                         maxLength={5}
-                        className="w-full text-right font-mono text-xs font-medium text-foreground bg-transparent focus:outline-none placeholder:text-on-surface-muted/40"
+                        className="w-full h-10 px-3 rounded-lg bg-surface-subtle border border-border-light/80 font-mono text-xs font-medium text-foreground focus:outline-none focus:border-[#007AFF] focus:bg-surface focus:ring-1 focus:ring-[#007AFF] transition-all placeholder:text-on-surface-muted/50"
                       />
                     </div>
 
-                    <div className="px-4 py-2 flex items-center justify-between text-xs gap-2">
-                      <label htmlFor="card-cvc" className="text-on-surface-muted shrink-0">
+                    <div className="px-4 py-2.5 space-y-1">
+                      <label htmlFor="card-cvc" className="text-[11px] font-medium text-on-surface-muted block">
                         CVC
                       </label>
                       <input
@@ -917,7 +917,7 @@ function CheckoutContent() {
                         value={cardCvc}
                         onChange={handleCvcChange}
                         placeholder="•••"
-                        className="w-full text-right font-mono text-xs font-medium text-foreground bg-transparent focus:outline-none placeholder:text-on-surface-muted/40"
+                        className="w-full h-10 px-3 rounded-lg bg-surface-subtle border border-border-light/80 font-mono text-xs font-medium text-foreground focus:outline-none focus:border-[#007AFF] focus:bg-surface focus:ring-1 focus:ring-[#007AFF] transition-all placeholder:text-on-surface-muted/50"
                       />
                     </div>
                   </div>
