@@ -9,33 +9,41 @@ export function middleware(request: NextRequest) {
 
   // Handle Tokenized Direct Access (Instant Citizen Login via SMS deep link)
   if (tokenParam) {
-    const requestHeaders = new Headers(request.headers);
-    const existingCookie = requestHeaders.get('cookie') || '';
-    requestHeaders.set('cookie', `${existingCookie ? existingCookie + '; ' : ''}auth_session=${tokenParam}; portal_access_only=true`);
+    // If navigating directly to the access verification portal, let /auth/access handle token validation and session minting cleanly
+    if (pathname.startsWith('/auth/access')) {
+      return NextResponse.next();
+    }
 
-    const response = NextResponse.next({
-      request: {
-        headers: requestHeaders,
-      },
-    });
+    const existingAuth = request.cookies.get('auth_session')?.value;
+    if (!existingAuth) {
+      const requestHeaders = new Headers(request.headers);
+      const existingCookie = requestHeaders.get('cookie') || '';
+      requestHeaders.set('cookie', `${existingCookie ? existingCookie + '; ' : ''}auth_session=${tokenParam}; portal_access_only=true`);
 
-    response.cookies.set('auth_session', tokenParam, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 365,
-      path: '/',
-    });
+      const response = NextResponse.next({
+        request: {
+          headers: requestHeaders,
+        },
+      });
 
-    response.cookies.set('portal_access_only', 'true', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 30,
-      path: '/',
-    });
+      response.cookies.set('auth_session', tokenParam, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 * 365,
+        path: '/',
+      });
 
-    return response;
+      response.cookies.set('portal_access_only', 'true', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 * 30,
+        path: '/',
+      });
+
+      return response;
+    }
   }
 
   const hasDirectDeepLink = Boolean(tokenParam || searchParams.get('accountNumber') || searchParams.get('propertyId'));

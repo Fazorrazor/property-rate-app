@@ -71,7 +71,9 @@ interface CheckoutState {
 function CheckoutContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const propertyId = searchParams.get("propertyId") || searchParams.get("accountNumber") || "ALL";
+  const rawPropId = searchParams.get("propertyId") || searchParams.get("accountNumber") || "ALL";
+  const propertyId = rawPropId.startsWith("ALL:") ? "ALL" : rawPropId;
+  const rawAccountNumber = searchParams.get("accountNumber") || (rawPropId.startsWith("ALL:") ? rawPropId.substring(4) : undefined);
   const settlementTypeParam = (searchParams.get("type") as SettlementType) || "TOTAL";
   const amountParamStr = searchParams.get("amount");
   const customAmount = amountParamStr ? parseFloat(amountParamStr) : undefined;
@@ -108,7 +110,6 @@ function CheckoutContent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
-  const rawAccountNumber = searchParams.get("accountNumber") || undefined;
   const [selectedPropertyIds, setSelectedPropertyIds] = useState<string[]>([]);
 
   const showToast = (message: string, type: "success" | "error" | "info" = "error") => {

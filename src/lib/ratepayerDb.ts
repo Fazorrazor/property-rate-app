@@ -186,14 +186,30 @@ export const ratepayerDb = {
           const userId = args.where.users.some.id;
           const { data: userRecord } = await supabase.from('User').select('id, phoneNumber').eq('id', userId).maybeSingle();
 
-          const [linksRes, ownersRes] = await Promise.all([
+          const cleanPhone = userRecord?.phoneNumber ? userRecord.phoneNumber.replace(/\D/g, '') : '';
+          const phone10 = cleanPhone.length === 12 && cleanPhone.startsWith('233') ? '0' + cleanPhone.substring(3) : cleanPhone;
+          const phone9 = cleanPhone.length === 10 && cleanPhone.startsWith('0') ? cleanPhone.substring(1) : cleanPhone;
+          const phone233 = cleanPhone.length === 10 && cleanPhone.startsWith('0') ? '233' + cleanPhone.substring(1) : cleanPhone;
+
+          const phoneOrClauses: string[] = [];
+          if (userRecord?.phoneNumber) phoneOrClauses.push(`telephone.eq.${userRecord.phoneNumber}`);
+          if (cleanPhone && cleanPhone !== userRecord?.phoneNumber) phoneOrClauses.push(`telephone.eq.${cleanPhone}`);
+          if (phone10 && phone10 !== cleanPhone) phoneOrClauses.push(`telephone.eq.${phone10}`);
+          if (phone9) phoneOrClauses.push(`telephone.eq.${phone9}`);
+          if (phone233) phoneOrClauses.push(`telephone.eq.${phone233}`);
+
+          const [linksRes, ownersRes, directPropsRes] = await Promise.all([
             supabase.from('_PropertyToUser').select('A').eq('B', userId),
             userRecord?.phoneNumber
               ? supabase.from('PropertyOwner').select('ownerId').or(`tel.eq.${userRecord.phoneNumber},mobileNumber.eq.${userRecord.phoneNumber}`)
-              : Promise.resolve({ data: [] as any })
+              : Promise.resolve({ data: [] as any }),
+            phoneOrClauses.length > 0
+              ? supabase.from('Property').select('id').or(phoneOrClauses.join(','))
+              : Promise.resolve({ data: [] as any }),
           ]);
           const directPropIds = (linksRes?.data || []).map((l: any) => l.A);
           const ownerIds = (ownersRes?.data || []).map((o: any) => o.ownerId);
+          const phonePropIds = (directPropsRes?.data || []).map((p: any) => p.id);
 
           let ownerPropIds: string[] = [];
           if (ownerIds.length > 0) {
@@ -201,7 +217,7 @@ export const ratepayerDb = {
             ownerPropIds = (opData || []).map((p: any) => p.id);
           }
 
-          const allPropIds = Array.from(new Set([...directPropIds, ...ownerPropIds]));
+          const allPropIds = Array.from(new Set([...directPropIds, ...ownerPropIds, ...phonePropIds]));
           if (allPropIds.length === 0) return [];
           query = query.in('id', allPropIds);
         }
@@ -256,9 +272,7 @@ export const ratepayerDb = {
 
     async findFirst(args?: { where?: any; include?: any }) {
       if (!args?.where) {
-        const { data: rawData, error } = await supabase.from('Property').select('*').limit(1).maybeSingle();
-        if (error || !rawData) return null;
-        return mapPropertyRow(rawData);
+        return null;
       }
 
       let query = supabase.from('Property').select('*');
@@ -304,9 +318,11 @@ export const ratepayerDb = {
         if (userIds.length > 0) {
           const { data: users } = await supabase.from('User').select('*').in('id', userIds);
           data.users = users || [];
-        } else if (data.owner?.mobileNumber || data.owner?.tel) {
-          const phone = data.owner.mobileNumber || data.owner.tel;
-          const { data: matchedUsers } = await supabase.from('User').select('*').eq('phoneNumber', phone);
+        } else if (data.owner?.mobileNumber || data.owner?.tel || data.telephone) {
+          const rawPhone = data.owner?.mobileNumber || data.owner?.tel || data.telephone;
+          const cleanPhone = (rawPhone || '').replace(/\D/g, '');
+          const phone10 = cleanPhone.length === 12 && cleanPhone.startsWith('233') ? '0' + cleanPhone.substring(3) : cleanPhone;
+          const { data: matchedUsers } = await supabase.from('User').select('*').or(`phoneNumber.eq.${rawPhone},phoneNumber.eq.${cleanPhone},phoneNumber.eq.${phone10}`);
           data.users = matchedUsers || [];
         } else {
           data.users = [];
@@ -346,9 +362,11 @@ export const ratepayerDb = {
         if (userIds.length > 0) {
           const { data: users } = await supabase.from('User').select('*').in('id', userIds);
           data.users = users || [];
-        } else if (data.owner?.mobileNumber || data.owner?.tel) {
-          const phone = data.owner.mobileNumber || data.owner.tel;
-          const { data: matchedUsers } = await supabase.from('User').select('*').eq('phoneNumber', phone);
+        } else if (data.owner?.mobileNumber || data.owner?.tel || data.telephone) {
+          const rawPhone = data.owner?.mobileNumber || data.owner?.tel || data.telephone;
+          const cleanPhone = (rawPhone || '').replace(/\D/g, '');
+          const phone10 = cleanPhone.length === 12 && cleanPhone.startsWith('233') ? '0' + cleanPhone.substring(3) : cleanPhone;
+          const { data: matchedUsers } = await supabase.from('User').select('*').or(`phoneNumber.eq.${rawPhone},phoneNumber.eq.${cleanPhone},phoneNumber.eq.${phone10}`);
           data.users = matchedUsers || [];
         } else {
           data.users = [];
@@ -363,12 +381,25 @@ export const ratepayerDb = {
     },
 
     async update(args: { where: { id?: string; accountNumber?: string }; data: any }) {
-      const { row } = preparePropertyWritePayload(args.data);
+      const { users, ...restData } = args.data || {};
+      const { row } = preparePropertyWritePayload(restData);
       let query = supabase.from('Property').update(row);
       if (args.where.id) query = query.eq('id', args.where.id);
       if (args.where.accountNumber) query = query.eq('account_no', args.where.accountNumber);
       const { data, error } = await query.select().single();
       if (error) throw new Error(error.message);
+
+      if (users?.connect?.id && data?.id) {
+        try {
+          await supabase.from('_PropertyToUser').upsert([{
+            A: data.id,
+            B: users.connect.id,
+          }], { onConflict: 'A,B' });
+        } catch {
+          // ignore duplicate conflict error
+        }
+      }
+
       return mapPropertyRow(data);
     },
 

@@ -31,9 +31,20 @@ function AccessTokenProcessor() {
         if (!isMounted) return;
 
         if (res.success) {
-          const dest = res.destination === "dashboard" ? "/dashboard" : "/checkout";
-          const queryParam = res.accountNumber ? (res.destination === "dashboard" ? `?accountNumber=${encodeURIComponent(res.accountNumber)}` : `?propertyId=${encodeURIComponent(res.accountNumber)}`) : "";
-          router.replace(`${dest}${queryParam}`);
+          if (res.destination === "dashboard") {
+            const param = res.accountNumber ? `?accountNumber=${encodeURIComponent(res.accountNumber)}` : "";
+            router.replace(`/dashboard${param}`);
+          } else {
+            if (res.isMulti) {
+              const param = res.accountNumber
+                ? `?propertyId=ALL&accountNumber=${encodeURIComponent(res.accountNumber)}`
+                : `?propertyId=ALL`;
+              router.replace(`/checkout${param}`);
+            } else {
+              const param = res.accountNumber ? `?propertyId=${encodeURIComponent(res.accountNumber)}` : "";
+              router.replace(`/checkout${param}`);
+            }
+          }
         } else {
           if (res.error === "DEVICE_MISMATCH") {
             setStatus("DEVICE_MISMATCH");

@@ -50,35 +50,32 @@ function DashboardContent() {
 
   const properties = [...(data?.properties || [])].sort((a, b) => {
     if (accountNumberParam) {
-      if (a.accountNumber === accountNumberParam || a.id === accountNumberParam) return -1;
-      if (b.accountNumber === accountNumberParam || b.id === accountNumberParam) return 1;
+      const cleanOverride = accountNumberParam.replace(/^ALL:/, "");
+      if (a.accountNumber === cleanOverride || a.id === cleanOverride) return -1;
+      if (b.accountNumber === cleanOverride || b.id === cleanOverride) return 1;
     }
-    const aPaid = a.status === "PAID";
-    const bPaid = b.status === "PAID";
+    const aPaid = a.status === "PAID" || a.totalAmountDue <= 0;
+    const bPaid = b.status === "PAID" || b.totalAmountDue <= 0;
     if (aPaid && !bPaid) return 1;
     if (!aPaid && bPaid) return -1;
     return b.totalAmountDue - a.totalAmountDue;
   });
 
-  const isAllPaid = properties.length > 0 && properties.every((p) => p.status === "PAID");
+  const isAllPaid = properties.length > 0 && properties.every((p) => p.status === "PAID" || p.totalAmountDue <= 0);
 
   const metrics = data?.metrics || {
-    totalValuation: 0,
     totalValuationFormatted: "GH₵ 0.00",
-    totalOutstanding: 0,
     totalOutstandingFormatted: "GH₵ 0.00",
-    totalProperties: 0,
-    paidCount: 0,
-    unpaidCount: 0,
-    complianceStatus: "Compliant" as const,
+    complianceStatus: "Compliant",
   };
 
   if (isLoading) {
     return <DashboardSkeleton />;
   }
 
+  const hasMultipleProperties = properties.length > 1;
   const primaryProp = properties[0];
-  const primaryPropId = primaryProp ? primaryProp.accountNumber : "ALL";
+  const primaryPropId = hasMultipleProperties ? "ALL" : (primaryProp ? primaryProp.accountNumber : "ALL");
 
   return (
     <main className="min-h-screen bg-background text-foreground flex flex-col max-w-md mx-auto w-full p-4 sm:p-5 font-sans relative">

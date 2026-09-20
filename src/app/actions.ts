@@ -344,14 +344,41 @@ export async function claimAccessGrant(token: string) {
     const cookieStore = await cookies();
     const existingSessionToken = cookieStore.get('auth_session')?.value;
 
+    const isMulti = (grant.accountNumber || '').startsWith('ALL:');
+    const cleanAcc = (grant.accountNumber || '').replace(/^ALL:/, '');
+
     // Check if grant is already claimed by another device/session
     if (grant.claimedSession) {
-      // If current browser already holds this exact session token, grant access smoothly!
-      if (existingSessionToken && existingSessionToken === grant.claimedSession) {
+      let isSameDeviceOrUser = false;
+      if (existingSessionToken) {
+        if (existingSessionToken === grant.claimedSession) {
+          isSameDeviceOrUser = true;
+        } else {
+          // Check if current session belongs to the user matching this grant's phone number
+          const activeSession = await prisma.session.findUnique({
+            where: { token: existingSessionToken },
+            include: { user: true },
+          });
+          if (activeSession?.user) {
+            const activeDigits = (activeSession.user.phoneNumber || '').replace(/\D/g, '');
+            const grantDigits = (grant.phoneNumber || '').replace(/\D/g, '');
+            if (activeDigits && grantDigits && (activeDigits.endsWith(grantDigits.slice(-9)) || grantDigits.endsWith(activeDigits.slice(-9)))) {
+              isSameDeviceOrUser = true;
+              await ratepayerDb.accessGrant.update({
+                where: { id: grant.id },
+                data: { claimedSession: existingSessionToken },
+              }).catch(() => {});
+            }
+          }
+        }
+      }
+
+      if (isSameDeviceOrUser) {
         return {
           success: true,
           destination: grant.destination || 'checkout',
-          accountNumber: grant.accountNumber,
+          accountNumber: cleanAcc,
+          isMulti,
         };
       }
 
@@ -362,7 +389,7 @@ export async function claimAccessGrant(token: string) {
         error: 'DEVICE_MISMATCH',
         phoneNumber: grant.phoneNumber,
         maskedPhoneNumber: maskedPhone,
-        accountNumber: grant.accountNumber,
+        accountNumber: cleanAcc,
         message: `This secure billing link was already activated on another device. To protect ratepayer privacy, please verify your mobile number (${maskedPhone}).`,
       };
     }
@@ -376,14 +403,36 @@ export async function claimAccessGrant(token: string) {
     }
 
     // Resolve or create ratepayer user
-    let user = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { phoneNumber: cleanPhone },
-          { phoneNumber: grant.phoneNumber },
-        ],
-      },
-    });
+    let user: any = null;
+    let sessionTokenToUse = existingSessionToken;
+    let reuseSession = false;
+
+    if (existingSessionToken) {
+      const activeSession = await prisma.session.findUnique({
+        where: { token: existingSessionToken },
+        include: { user: true },
+      });
+      if (activeSession?.user) {
+        const activeDigits = (activeSession.user.phoneNumber || '').replace(/\D/g, '');
+        const grantDigits = cleanPhone.replace(/\D/g, '');
+        if (activeDigits.endsWith(grantDigits.slice(-9)) || grantDigits.endsWith(activeDigits.slice(-9))) {
+          user = activeSession.user;
+          reuseSession = true;
+        }
+      }
+    }
+
+    if (!user) {
+      user = await prisma.user.findFirst({
+        where: {
+          OR: [
+            { phoneNumber: cleanPhone },
+            { phoneNumber: grant.phoneNumber },
+            { phoneNumber: `233${cleanPhone.replace(/^0/, '')}` },
+          ],
+        },
+      });
+    }
 
     if (!user) {
       user = await prisma.user.create({
@@ -396,15 +445,33 @@ export async function claimAccessGrant(token: string) {
       });
     }
 
-    // Associate target property if not already connected
-    const targetAcc = grant.accountNumber.startsWith('ALL:')
-      ? grant.accountNumber.split(':')[1]
-      : grant.accountNumber;
+    // Connect all properties matching this ratepayer's telephone to user in _PropertyToUser
+    const matchedProps = await ratepayerDb.property.findMany({
+      where: {
+        OR: [
+          { telephone: cleanPhone },
+          { telephone: grant.phoneNumber },
+          { telephone: `233${cleanPhone.replace(/^0/, '')}` },
+        ],
+      },
+    }).catch(() => []);
 
-    if (targetAcc) {
+    for (const p of matchedProps) {
+      await prisma.property.update({
+        where: { id: p.id },
+        data: {
+          users: {
+            connect: { id: user.id },
+          },
+        },
+      }).catch(() => {});
+    }
+
+    // Also associate target property if not already connected
+    if (cleanAcc && !matchedProps.some((p: any) => p.accountNumber === cleanAcc || p.id === cleanAcc)) {
       const prop = await prisma.property.findFirst({
         where: {
-          OR: [{ accountNumber: targetAcc }, { id: targetAcc }],
+          OR: [{ accountNumber: cleanAcc }, { id: cleanAcc }],
         },
       });
       if (prop) {
@@ -419,17 +486,18 @@ export async function claimAccessGrant(token: string) {
       }
     }
 
-    // Mint device session
-    const newSessionToken = `dev_${Math.random().toString(36).substring(2, 15)}_${Math.random().toString(36).substring(2, 15)}`;
-    await prisma.session.create({
-      data: {
-        token: newSessionToken,
-        userId: user.id,
-      },
-    });
+    if (!reuseSession || !sessionTokenToUse) {
+      sessionTokenToUse = `dev_${Math.random().toString(36).substring(2, 15)}_${Math.random().toString(36).substring(2, 15)}`;
+      await prisma.session.create({
+        data: {
+          token: sessionTokenToUse,
+          userId: user.id,
+        },
+      });
+    }
 
     // Set secure cookie on this device
-    cookieStore.set('auth_session', newSessionToken, {
+    cookieStore.set('auth_session', sessionTokenToUse, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
@@ -442,14 +510,15 @@ export async function claimAccessGrant(token: string) {
       where: { id: grant.id },
       data: {
         claimedAt: new Date().toISOString(),
-        claimedSession: newSessionToken,
+        claimedSession: sessionTokenToUse,
       },
     });
 
     return {
       success: true,
       destination: grant.destination || 'checkout',
-      accountNumber: grant.accountNumber,
+      accountNumber: cleanAcc,
+      isMulti,
     };
   } catch (error) {
     console.error('Error claiming access grant:', error);
@@ -474,7 +543,9 @@ export async function getDashboardData(accountNumberOverride?: string): Promise<
     let unpaidCount = 0;
 
     let userProps: any[] = user.properties || [];
-    if (userProps.length === 0 && user.phoneNumber) {
+
+    // Ensure all properties matching user's phone number are retrieved and merged
+    if (user.phoneNumber) {
       const cleanDigits = user.phoneNumber.replace(/\D/g, '');
       const normalized10 = cleanDigits.length === 12 && cleanDigits.startsWith('233') ? '0' + cleanDigits.substring(3) : cleanDigits;
       const matched = await ratepayerDb.property.findMany({
@@ -486,19 +557,37 @@ export async function getDashboardData(accountNumberOverride?: string): Promise<
           ],
         },
       }).catch(() => []);
-      if (matched.length > 0) {
-        userProps = matched;
+
+      const existingIds = new Set(userProps.map((p: any) => p.id));
+      for (const m of matched) {
+        if (!existingIds.has(m.id)) {
+          userProps.push(m);
+          existingIds.add(m.id);
+        }
+      }
+    }
+
+    // If accountNumberOverride provided and not in userProps, fetch and include it
+    const cleanOverride = accountNumberOverride?.trim().replace(/^ALL:/, '');
+    if (cleanOverride && !userProps.some((p: any) => p.accountNumber === cleanOverride || p.id === cleanOverride)) {
+      const specificProp = await prisma.property.findFirst({
+        where: {
+          OR: [{ accountNumber: cleanOverride }, { id: cleanOverride }],
+        },
+      }).catch(() => null);
+      if (specificProp) {
+        userProps.unshift(specificProp);
       }
     }
 
     const formattedProperties: DashboardProperty[] = userProps.map((p: any) => {
       totalValuation += p.rateableValue;
-      totalOutstanding += p.status === 'PAID' ? 0 : p.totalAmountDue;
-
-      if (p.status === 'PAID') {
-        paidCount++;
-      } else {
+      const isPaid = p.status === 'PAID' || p.totalAmountDue <= 0;
+      if (!isPaid) {
+        totalOutstanding += p.totalAmountDue;
         unpaidCount++;
+      } else {
+        paidCount++;
       }
 
       const billDateObj = new Date(p.billDate);
@@ -522,7 +611,7 @@ export async function getDashboardData(accountNumberOverride?: string): Promise<
           month: 'short',
           year: 'numeric',
         }),
-        isOverdue: p.status !== 'PAID' && deadlineObj < new Date(),
+        isOverdue: !isPaid && deadlineObj < new Date(),
         rateableValue: p.rateableValue,
         rateableValueFormatted: `GH₵ ${p.rateableValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
         rateImposed: p.rateImposed,
@@ -537,18 +626,18 @@ export async function getDashboardData(accountNumberOverride?: string): Promise<
         currentFeeFormatted: `GH₵ ${p.currentFee.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
         totalAmountDue: p.totalAmountDue,
         totalAmountDueFormatted: `GH₵ ${p.totalAmountDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-        status: p.status as 'PAID' | 'PARTIALLY_PAID' | 'UNPAID',
+        status: (isPaid ? 'PAID' : (p.status as any)) as 'PAID' | 'PARTIALLY_PAID' | 'UNPAID',
       };
     });
 
     // Non-settled / due properties on top, settled properties at the bottom
     formattedProperties.sort((a, b) => {
-      if (accountNumberOverride) {
-        if (a.accountNumber === accountNumberOverride || a.id === accountNumberOverride) return -1;
-        if (b.accountNumber === accountNumberOverride || b.id === accountNumberOverride) return 1;
+      if (cleanOverride) {
+        if (a.accountNumber === cleanOverride || a.id === cleanOverride) return -1;
+        if (b.accountNumber === cleanOverride || b.id === cleanOverride) return 1;
       }
-      const aPaid = a.status === 'PAID';
-      const bPaid = b.status === 'PAID';
+      const aPaid = a.status === 'PAID' || a.totalAmountDue <= 0;
+      const bPaid = b.status === 'PAID' || b.totalAmountDue <= 0;
       if (aPaid && !bPaid) return 1;
       if (!aPaid && bPaid) return -1;
       return b.totalAmountDue - a.totalAmountDue;
@@ -667,7 +756,8 @@ export async function resolvePropertyUser(propertyId: string, authenticatedUser:
   }
 
   // 2. If property has an owner with phone number, resolve or create linked ratepayer user
-  const ownerPhone = prop.owner?.mobileNumber || prop.owner?.tel;
+  const rawProp = prop as any;
+  const ownerPhone = prop.owner?.mobileNumber || prop.owner?.tel || rawProp.telephone || rawProp.ownerPhoneDirect;
   if (ownerPhone) {
     const cleanDigits = ownerPhone.replace(/\D/g, '');
     const formatted10 = cleanDigits.length === 12 && cleanDigits.startsWith('233') ? '0' + cleanDigits.substring(3) : cleanDigits;
@@ -686,7 +776,7 @@ export async function resolvePropertyUser(propertyId: string, authenticatedUser:
       matchedUser = await prisma.user.create({
         data: {
           phoneNumber: formatted10 || cleanDigits || ownerPhone,
-          name: prop.owner?.name || 'Municipal Ratepayer',
+          name: prop.owner?.name || rawProp.name || rawProp.ownerNameDirect || 'Municipal Ratepayer',
           role: 'RATEPAYER',
           properties: { connect: { id: prop.id } },
         },
@@ -742,7 +832,39 @@ export async function getCheckoutData(
   accountNumberOverride?: string
 ) {
   try {
+    let cleanPropertyId = propertyId;
+    let cleanOverride = accountNumberOverride?.trim();
+    if (cleanPropertyId && cleanPropertyId.startsWith('ALL:')) {
+      cleanOverride = cleanOverride || cleanPropertyId.substring(4);
+      cleanPropertyId = 'ALL';
+    }
+
     let user = await getAuthenticatedSession();
+
+    // Ensure all properties matching user's phone number are retrieved and merged
+    if (user && user.phoneNumber) {
+      const cleanDigits = user.phoneNumber.replace(/\D/g, '');
+      const normalized10 = cleanDigits.length === 12 && cleanDigits.startsWith('233') ? '0' + cleanDigits.substring(3) : cleanDigits;
+      const matched = await ratepayerDb.property.findMany({
+        where: {
+          OR: [
+            { telephone: user.phoneNumber },
+            { telephone: cleanDigits },
+            { telephone: normalized10 },
+          ],
+        },
+      }).catch(() => []);
+
+      const userProps = user.properties || [];
+      const existingIds = new Set(userProps.map((p: any) => p.id));
+      for (const m of matched) {
+        if (!existingIds.has(m.id)) {
+          userProps.push(m);
+          existingIds.add(m.id);
+        }
+      }
+      user.properties = userProps;
+    }
 
     let totalAmount = 0;
     let actualBill = 0;
@@ -765,9 +887,9 @@ export async function getCheckoutData(
       status: string;
     }> = [];
 
-    // If propertyId === 'ALL' and we have an accountNumberOverride, resolve all properties under that owner/number
-    if (propertyId === 'ALL' && !user && accountNumberOverride) {
-      const cleanAcc = accountNumberOverride.trim();
+    // If cleanPropertyId === 'ALL' and we have an accountNumberOverride, resolve all properties under that owner/number
+    if (cleanPropertyId === 'ALL' && !user && cleanOverride) {
+      const cleanAcc = cleanOverride.replace(/^ALL:/, '').trim();
       const seedProp = await prisma.property.findFirst({
         where: { OR: [{ accountNumber: cleanAcc }, { id: cleanAcc }] },
         include: { users: { include: { properties: true } }, owner: true },
@@ -809,13 +931,14 @@ export async function getCheckoutData(
       }
     }
 
-    if (propertyId === 'ALL') {
+    if (cleanPropertyId === 'ALL') {
       if (!user) return null;
-      const unpaidProps = (user.properties || []).filter((p: any) => p.status !== 'PAID');
+      // Filter strictly to UNPAID properties with an outstanding balance
+      const unpaidProps = (user.properties || []).filter((p: any) => p.status !== 'PAID' && p.totalAmountDue > 0);
       actualBill = unpaidProps.reduce((sum: number, p: any) => sum + p.totalAmountDue, 0);
       totalAmount = actualBill;
       title = 'All Municipal Property Rates';
-      subtitle = `${unpaidProps.length} Account Head${unpaidProps.length === 1 ? '' : 's'} assessed under KKMA`;
+      subtitle = `${unpaidProps.length} Outstanding Account Head${unpaidProps.length === 1 ? '' : 's'} assessed under KKMA`;
       accountNumber = unpaidProps.map((p: any) => p.accountNumber).join(', ');
       ownerName = user.name || 'Municipal Ratepayer';
       arrears = unpaidProps.reduce((sum: number, p: any) => sum + (p.arrears || 0), 0);
@@ -832,11 +955,11 @@ export async function getCheckoutData(
       }));
     } else {
       targetProp = await prisma.property.findUnique({
-        where: propertyId.startsWith('prop_') ? { id: propertyId } : { accountNumber: propertyId },
+        where: cleanPropertyId.startsWith('prop_') ? { id: cleanPropertyId } : { accountNumber: cleanPropertyId },
         include: { users: true, owner: true }
       });
       if (!targetProp && user?.properties) {
-        const found = user.properties.find((p: any) => p.id === propertyId || p.accountNumber === propertyId);
+        const found = user.properties.find((p: any) => p.id === cleanPropertyId || p.accountNumber === cleanPropertyId);
         if (found) {
           targetProp = await prisma.property.findUnique({
             where: { id: found.id },
@@ -888,10 +1011,10 @@ export async function getCheckoutData(
 
     // Deterministically resolve user for this property/account (no arbitrary findFirst)
     let deterministicUser: any = null;
-    if (propertyId === 'ALL') {
+    if (cleanPropertyId === 'ALL') {
       deterministicUser = user;
     } else if (targetProp) {
-      deterministicUser = await resolvePropertyUser(propertyId, user);
+      deterministicUser = await resolvePropertyUser(cleanPropertyId, user);
     }
 
     const resolvedUserPhone = deterministicUser?.phoneNumber || targetProp?.owner?.mobileNumber || targetProp?.owner?.tel || '';
