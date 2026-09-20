@@ -1304,16 +1304,47 @@ export async function getSmsRolloutAudience(params: {
     const limit = params.limit !== undefined ? params.limit : 50;
     const skip = (page - 1) * limit;
 
-    const [totalCount, propAggregate, properties] = await Promise.all([
+    const [totalCount, propAggregate, initialProperties] = await Promise.all([
       adminDb.property.count({ where: whereClause }),
       adminDb.property.aggregate({ where: whereClause }),
       adminDb.property.findMany({
         where: whereClause,
-        orderBy: { accountNumber: 'asc' },
+        orderBy: [{ telephone: 'asc' }, { name: 'asc' }, { accountNumber: 'asc' }],
         ...(limit > 0 ? { skip, take: limit } : {}),
         include: { users: true, owner: true },
       }),
     ]);
+
+    let properties = [...initialProperties];
+
+    // Ensure complete portfolios: if any ratepayer on this page has accounts spanning beyond the page limit, pull them in
+    const pagePhones = Array.from(
+      new Set(
+        properties
+          .map((p: any) => (p.telephone || p.ownerPhoneDirect || p.owner?.tel || p.owner?.mobileNumber || '').trim())
+          .filter((ph: string) => ph && ph !== '0' && ph.length >= 7)
+      )
+    );
+
+    if (pagePhones.length > 0) {
+      const existingAccs = new Set(properties.map((p: any) => p.account_no || p.accountNumber));
+      const siblingProps = await adminDb.property.findMany({
+        where: {
+          ...whereClause,
+          telephone: { in: pagePhones },
+        },
+        orderBy: [{ telephone: 'asc' }, { name: 'asc' }, { accountNumber: 'asc' }],
+        include: { users: true, owner: true },
+      }).catch(() => []);
+
+      for (const sp of siblingProps) {
+        const acc = sp.account_no || sp.accountNumber;
+        if (!existingAccs.has(acc)) {
+          properties.push(sp);
+          existingAccs.add(acc);
+        }
+      }
+    }
 
     const formattedProperties: AdminProperty[] = properties.map((p: any) => {
       const primaryUser = p.users?.[0];

@@ -478,6 +478,13 @@ export const adminDb = {
           }
           if (args.where.ownerDigitalAddress) query = query.eq('ownerDigitalAddress', args.where.ownerDigitalAddress);
           if (args.where.municipality) query = query.eq('municipality', args.where.municipality);
+          if (args.where.telephone) {
+            if (typeof args.where.telephone === 'object' && Array.isArray(args.where.telephone.in)) {
+              query = query.in('telephone', args.where.telephone.in);
+            } else if (typeof args.where.telephone === 'string') {
+              query = query.eq('telephone', args.where.telephone);
+            }
+          }
           // Status filter at DB level using actual columns (no 'status' column in DB)
           if (args.where.status && args.where.status !== 'ALL') {
             if (args.where.status === 'UNPAID') {
@@ -503,14 +510,18 @@ export const adminDb = {
         }
 
         if (args?.orderBy) {
-          let field = Object.keys(args.orderBy)[0];
-          if (field === 'accountNumber') field = 'account_no';
-          if (field === 'propertyClassification') field = 'property_cat';
-          if (field === 'currentFee') field = 'current_bill';
-          if (field === 'amountPaidLastYear') field = 'amount_paid';
+          const orderSpecs = Array.isArray(args.orderBy) ? args.orderBy : [args.orderBy];
+          for (const spec of orderSpecs) {
+            for (let [field, dirVal] of Object.entries(spec)) {
+              if (field === 'accountNumber') field = 'account_no';
+              if (field === 'propertyClassification') field = 'property_cat';
+              if (field === 'currentFee') field = 'current_bill';
+              if (field === 'amountPaidLastYear') field = 'amount_paid';
 
-          const dir = args.orderBy[field] === 'desc' ? { ascending: false } : { ascending: true };
-          query = query.order(field, dir);
+              const ascending = dirVal !== 'desc';
+              query = query.order(field, { ascending });
+            }
+          }
         }
 
         return query;
