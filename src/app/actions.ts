@@ -351,24 +351,27 @@ export async function claimAccessGrant(token: string) {
     if (grant.claimedSession) {
       let isSameDeviceOrUser = false;
       if (existingSessionToken) {
-        if (existingSessionToken === grant.claimedSession) {
-          isSameDeviceOrUser = true;
-        } else {
-          // Check if current session belongs to the user matching this grant's phone number
-          const activeSession = await prisma.session.findUnique({
-            where: { token: existingSessionToken },
-            include: { user: true },
-          });
-          if (activeSession?.user) {
-            const activeDigits = (activeSession.user.phoneNumber || '').replace(/\D/g, '');
-            const grantDigits = (grant.phoneNumber || '').replace(/\D/g, '');
-            if (activeDigits && grantDigits && (activeDigits.endsWith(grantDigits.slice(-9)) || grantDigits.endsWith(activeDigits.slice(-9)))) {
-              isSameDeviceOrUser = true;
-              await ratepayerDb.accessGrant.update({
-                where: { id: grant.id },
-                data: { claimedSession: existingSessionToken },
-              }).catch(() => {});
-            }
+        const activeSession = await prisma.session.findUnique({
+          where: { token: existingSessionToken },
+          include: { user: true },
+        });
+        if (activeSession?.user) {
+          const activeDigits = (activeSession.user.phoneNumber || '').replace(/\D/g, '');
+          const grantDigits = (grant.phoneNumber || '').replace(/\D/g, '');
+          const phoneMatches = Boolean(
+            activeDigits &&
+            grantDigits &&
+            (activeDigits.endsWith(grantDigits.slice(-9)) || grantDigits.endsWith(activeDigits.slice(-9)))
+          );
+
+          if (existingSessionToken === grant.claimedSession && phoneMatches) {
+            isSameDeviceOrUser = true;
+          } else if (phoneMatches) {
+            isSameDeviceOrUser = true;
+            await ratepayerDb.accessGrant.update({
+              where: { id: grant.id },
+              data: { claimedSession: existingSessionToken },
+            }).catch(() => {});
           }
         }
       }
@@ -382,16 +385,38 @@ export async function claimAccessGrant(token: string) {
         };
       }
 
-      // DEVICE MISMATCH: Token was claimed on another device/browser
-      const maskedPhone = grant.phoneNumber ? grant.phoneNumber.replace(/(\d{3})\d+(\d{3})/, '$1****$2') : 'your registered number';
-      return {
-        success: false,
-        error: 'DEVICE_MISMATCH',
-        phoneNumber: grant.phoneNumber,
-        maskedPhoneNumber: maskedPhone,
-        accountNumber: cleanAcc,
-        message: `This secure billing link was already activated on another device. To protect ratepayer privacy, please verify your mobile number (${maskedPhone}).`,
-      };
+      // Check if the claimed session was actually for this ratepayer's phone number
+      const claimedSessionRecord = await prisma.session.findUnique({
+        where: { token: grant.claimedSession },
+        include: { user: true },
+      }).catch(() => null);
+
+      const claimedUserPhone = (claimedSessionRecord?.user?.phoneNumber || '').replace(/\D/g, '');
+      const expectedGrantPhone = (grant.phoneNumber || '').replace(/\D/g, '');
+      const claimedPhoneMatches = Boolean(
+        claimedUserPhone &&
+        expectedGrantPhone &&
+        (claimedUserPhone.endsWith(expectedGrantPhone.slice(-9)) || expectedGrantPhone.endsWith(claimedUserPhone.slice(-9)))
+      );
+
+      if (!claimedPhoneMatches) {
+        // Corrupt or cross-user claimedSession: reset so the authentic recipient can claim cleanly
+        await ratepayerDb.accessGrant.update({
+          where: { id: grant.id },
+          data: { claimedSession: null, claimedAt: null },
+        }).catch(() => {});
+      } else {
+        // Legitimate DEVICE MISMATCH: Token was claimed on another device/browser
+        const maskedPhone = grant.phoneNumber ? grant.phoneNumber.replace(/(\d{3})\d+(\d{3})/, '$1****$2') : 'your registered number';
+        return {
+          success: false,
+          error: 'DEVICE_MISMATCH',
+          phoneNumber: grant.phoneNumber,
+          maskedPhoneNumber: maskedPhone,
+          accountNumber: cleanAcc,
+          message: `This secure billing link was already activated on another device. To protect ratepayer privacy, please verify your mobile number (${maskedPhone}).`,
+        };
+      }
     }
 
     // FIRST-TIME ACTIVATION ON RECIPIENT'S DEVICE
@@ -431,6 +456,12 @@ export async function claimAccessGrant(token: string) {
             { phoneNumber: `233${cleanPhone.replace(/^0/, '')}` },
           ],
         },
+      });
+    }
+
+    if (!user && (cleanPhone || grant.phoneNumber)) {
+      user = await prisma.user.findUnique({
+        where: { phoneNumber: cleanPhone || grant.phoneNumber },
       });
     }
 

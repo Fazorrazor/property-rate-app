@@ -84,8 +84,35 @@ export const ratepayerDb = {
       return data;
     },
 
-    async findFirst(args?: { include?: any }) {
-      const { data, error } = await supabase.from('User').select('*').limit(1).maybeSingle();
+    async findFirst(args?: { where?: any; include?: any }) {
+      if (!args?.where) {
+        return null;
+      }
+
+      let query = supabase.from('User').select('*');
+      const w = args.where;
+
+      if (w.id) {
+        query = query.eq('id', w.id);
+      }
+      if (w.phoneNumber) {
+        query = query.eq('phoneNumber', w.phoneNumber);
+      }
+      if (w.role) {
+        query = query.eq('role', w.role);
+      }
+      if (w.OR && Array.isArray(w.OR)) {
+        const orClauses: string[] = [];
+        for (const cond of w.OR) {
+          if (cond.phoneNumber) orClauses.push(`phoneNumber.eq.${cond.phoneNumber}`);
+          if (cond.id) orClauses.push(`id.eq.${cond.id}`);
+        }
+        if (orClauses.length > 0) {
+          query = query.or(orClauses.join(','));
+        }
+      }
+
+      const { data, error } = await query.limit(1).maybeSingle();
       if (error || !data) return null;
       if (args?.include?.properties) {
         data.properties = await ratepayerDb.property.findMany({ where: { users: { some: { id: data.id } } } });
