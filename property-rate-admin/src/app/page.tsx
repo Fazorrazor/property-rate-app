@@ -32,7 +32,6 @@ import {
   LogOut,
   Flag,
   XCircle,
-  Clock,
   ArrowLeft,
 } from "lucide-react";
 import {
@@ -154,26 +153,6 @@ export default function AdminDashboardPage() {
   // Return to Ratepayer Dossier from Property Roll
   const [returnToRatepayerDossier, setReturnToRatepayerDossier] = useState<{ id: string; name: string; preview: any } | null>(null);
 
-  // Activity-Based 10-Minute Session Watchdog & 9-Minute Warning Modal States
-  const [showInactivityModal, setShowInactivityModal] = useState(false);
-  const [inactivityCountdown, setInactivityCountdown] = useState(60);
-  const lastActivityTimestampRef = useRef(Date.now());
-  const showInactivityModalRef = useRef(false);
-
-  const handleConfirmActive = () => {
-    lastActivityTimestampRef.current = Date.now();
-    showInactivityModalRef.current = false;
-    setShowInactivityModal(false);
-  };
-
-  const handleInactivityLogout = async () => {
-    try {
-      await adminLogout();
-    } finally {
-      window.location.href = "/login?expired=true";
-    }
-  };
-
   useEffect(() => {
     const verifySession = async () => {
       try {
@@ -190,59 +169,14 @@ export default function AdminDashboardPage() {
 
     verifySession();
 
-    // User activity listeners across page/window events
-    const recordActivity = () => {
-      // Only reset activity timestamp if the warning modal is not active
-      if (!showInactivityModalRef.current) {
-        lastActivityTimestampRef.current = Date.now();
-      }
-    };
-
-    const activityEvents = ["mousemove", "mousedown", "keydown", "scroll", "touchstart"];
-    activityEvents.forEach((ev) => {
-      window.addEventListener(ev, recordActivity, { passive: true });
-    });
-
-    // 1-second watchdog interval checking idle thresholds (9m prompt, 10m logout)
-    const TEN_MINUTES_MS = 10 * 60 * 1000;
-    const NINE_MINUTES_MS = 9 * 60 * 1000;
-
-    const watchdogInterval = setInterval(async () => {
-      const idleDuration = Date.now() - lastActivityTimestampRef.current;
-
-      if (idleDuration >= TEN_MINUTES_MS) {
-        clearInterval(watchdogInterval);
-        try {
-          await adminLogout();
-        } finally {
-          window.location.href = "/login?expired=true";
-        }
-      } else if (idleDuration >= NINE_MINUTES_MS) {
-        showInactivityModalRef.current = true;
-        setShowInactivityModal(true);
-        const remainingSec = Math.max(0, Math.ceil((TEN_MINUTES_MS - idleDuration) / 1000));
-        setInactivityCountdown(remainingSec);
-      } else {
-        if (showInactivityModalRef.current) {
-          showInactivityModalRef.current = false;
-          setShowInactivityModal(false);
-        }
-      }
-    }, 1000);
-
-    // Periodic single-session & expiration heartbeat check every 30 seconds
+    // Periodic session heartbeat check every 30 seconds
     const handleFocus = () => {
-      recordActivity();
       verifySession();
     };
     window.addEventListener("focus", handleFocus);
     const sessionHeartbeat = setInterval(verifySession, 30000);
 
     return () => {
-      activityEvents.forEach((ev) => {
-        window.removeEventListener(ev, recordActivity);
-      });
-      clearInterval(watchdogInterval);
       window.removeEventListener("focus", handleFocus);
       clearInterval(sessionHeartbeat);
     };
@@ -3461,66 +3395,6 @@ export default function AdminDashboardPage() {
         }}
       />
 
-      {/* 9-MINUTE SESSION INACTIVITY WARNING MODAL */}
-      <AnimatePresence>
-        {showInactivityModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 font-sans">
-            {/* Blurred Backdrop */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/40 backdrop-blur-md"
-            />
-
-            {/* Modal Card */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 12 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 12 }}
-              transition={{ type: "spring", damping: 26, stiffness: 320 }}
-              className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl border border-[#E5E5EA] overflow-hidden p-6 z-10"
-            >
-              <div className="flex items-start gap-4">
-                <div className="w-10 h-10 rounded-xl bg-[#FF9500]/10 flex items-center justify-center shrink-0 text-[#FF9500]">
-                  <Clock className="w-5 h-5" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-base font-semibold text-[#1C1C1E]">
-                    Still working?
-                  </h3>
-                  <p className="text-xs text-[#6C6C70] mt-1.5 leading-relaxed">
-                    You&apos;ve been inactive for a while. Signing out in:
-                  </p>
-                  <div className="mt-3 flex items-baseline gap-1.5">
-                    <span className="text-3xl font-bold font-mono text-[#FF3B30] tabular-nums">
-                      {inactivityCountdown}
-                    </span>
-                    <span className="text-xs font-medium text-[#8E8E93]">seconds</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-6 pt-4 border-t border-[#E5E5EA] flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={handleInactivityLogout}
-                  className="px-4 py-2.5 text-xs font-medium text-[#6C6C70] hover:text-[#1C1C1E] hover:bg-[#F2F2F7] rounded-lg transition-colors cursor-pointer"
-                >
-                  Sign Out
-                </button>
-                <button
-                  type="button"
-                  onClick={handleConfirmActive}
-                  className="px-5 py-2.5 text-xs font-semibold text-white bg-[#007AFF] hover:bg-[#0062CC] rounded-lg transition-colors cursor-pointer shadow-xs"
-                >
-                  Continue Working
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

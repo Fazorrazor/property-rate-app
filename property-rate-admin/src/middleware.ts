@@ -8,18 +8,6 @@ export function middleware(request: NextRequest) {
   const isAuthPath = pathname.startsWith('/login');
   const isBypass = searchParams.has('superseded') || searchParams.has('logout') || searchParams.has('expired');
 
-  // Check 10-minute session expiration at Edge/Middleware layer
-  if (adminSession) {
-    const parts = adminSession.split(':');
-    if (parts.length >= 3) {
-      const createdAt = Number(parts[2]);
-      if (!isNaN(createdAt) && Date.now() - createdAt > 10 * 60 * 1000) {
-        const res = NextResponse.redirect(new URL('/login?expired=true', request.url));
-        res.cookies.delete('admin_session');
-        return res;
-      }
-    }
-  }
 
   // If trying to access protected route without session
   if (!isAuthPath && !adminSession) {

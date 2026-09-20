@@ -216,16 +216,7 @@ export async function verifyAdminSession() {
     return null;
   }
 
-  const [adminId, sessionToken, createdAtStr] = session.value.split(':');
-
-  // Enforce strict 10-minute admin session expiration
-  if (createdAtStr) {
-    const sessionAgeMs = Date.now() - Number(createdAtStr);
-    if (sessionAgeMs > 10 * 60 * 1000) {
-      cookieStore.delete('admin_session');
-      return null;
-    }
-  }
+  const [adminId, sessionToken] = session.value.split(':');
 
   const admin = await prisma.adminUser.findUnique({
     where: { id: adminId }
@@ -323,7 +314,7 @@ export async function adminLogin(username: string, passwordHash: string, remembe
     cookieStore.set('admin_session', `${admin.id}:${sessionToken}:${Date.now()}`, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      maxAge: 10 * 60, // Exactly 10 minutes
+      maxAge: 365 * 24 * 60 * 60, // Persistent session (1 year)
       path: '/',
       sameSite: 'lax'
     });

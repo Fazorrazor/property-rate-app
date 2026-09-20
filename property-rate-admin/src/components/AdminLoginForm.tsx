@@ -19,7 +19,7 @@ export default function AdminLoginForm() {
       if (params.get('expired') === 'true') {
         setStatus('error');
         setErrorMessage('Session expired. Please sign in again.');
-        setErrorTooltip('Sessions automatically expire after 10 minutes of inactivity to protect your account.');
+        setErrorTooltip('Please sign in to access your municipal administrative console.');
       } else if (params.get('superseded') === 'true') {
         setStatus('error');
         setErrorMessage('Signed out: account active on another device.');
