@@ -17,12 +17,14 @@ import {
   AlertCircle,
   Send,
   Download,
+  FileImage,
 } from "lucide-react";
 import { exportRatepayerDossierCsv } from "@/lib/csv-export";
 import {
   RatepayerHistoryDossier,
   AdminPropertyReceipt,
   attachScannedReceiptImage,
+  attachPropertyBillImage,
   sendReceiptNoticeSMS,
 } from "@/app/actions";
 
@@ -74,6 +76,14 @@ export function RatepayerDossierSheet({
   } | null>(null);
   const [sendingSmsReceiptId, setSendingSmsReceiptId] = useState<string | null>(null);
   const [smsStatus, setSmsStatus] = useState<{ [receiptId: string]: string }>({});
+  // Bill image state per property
+  const [localBillImages, setLocalBillImages] = useState<Record<string, string | null>>({});
+  const [billConfirmUpload, setBillConfirmUpload] = useState<{
+    accountNumber: string;
+    dataUrl: string;
+    mimeType: string;
+  } | null>(null);
+  const [isBillUploading, setIsBillUploading] = useState(false);
 
   useEffect(() => {
     if (dossier?.receipts) {
@@ -172,6 +182,50 @@ export function RatepayerDossierSheet({
     }
   };
 
+  const handleBillFileSelected = (
+    accountNumber: string,
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setBillConfirmUpload({
+        accountNumber,
+        dataUrl: reader.result as string,
+        mimeType: file.type || "image/jpeg",
+      });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  const handleConfirmBillUpload = async () => {
+    if (!billConfirmUpload) return;
+    setIsBillUploading(true);
+    try {
+      const res = await attachPropertyBillImage(
+        billConfirmUpload.accountNumber,
+        billConfirmUpload.dataUrl,
+        billConfirmUpload.mimeType
+      );
+      if (res.success && res.publicUrl) {
+        setLocalBillImages((prev) => ({
+          ...prev,
+          [billConfirmUpload.accountNumber]: res.publicUrl!,
+        }));
+        setBillConfirmUpload(null);
+      } else {
+        alert(res.error || "Failed to attach bill scan.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("An unexpected error occurred while uploading the bill scan.");
+    } finally {
+      setIsBillUploading(false);
+    }
+  };
+
   // Keyboard escape listener for prompt accessibility
   useEffect(() => {
     if (!isOpen) return;
@@ -217,22 +271,22 @@ export function RatepayerDossierSheet({
     {
       key: "PROPERTIES",
       label: isDossierLoaded
-        ? `Linked Properties (${properties.length})`
+        ? `Properties (${properties.length})`
         : summary?.totalProperties !== undefined
-        ? `Linked Properties (${summary.totalProperties})`
-        : "Linked Properties",
+        ? `Properties (${summary.totalProperties})`
+        : "Properties",
     },
     {
       key: "PAYMENTS",
-      label: isDossierLoaded ? `Payment Ledger (${receipts.length})` : "Payment Ledger",
+      label: isDossierLoaded ? `Payments (${receipts.length})` : "Payments",
     },
     {
       key: "SMS_NOTICES",
-      label: isDossierLoaded ? `SMS Communications (${notifications.length})` : "SMS Communications",
+      label: isDossierLoaded ? `SMS Notices (${notifications.length})` : "SMS Notices",
     },
     {
       key: "AUDIT_TRAIL",
-      label: isDossierLoaded ? `Audit Trail (${auditLogs.length})` : "Audit Trail",
+      label: isDossierLoaded ? `Activity Log (${auditLogs.length})` : "Activity Log",
     },
   ];
 
@@ -272,7 +326,7 @@ export function RatepayerDossierSheet({
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-[11px] text-[#6C6C70] uppercase tracking-wider font-semibold">
-                      Ratepayer Dossier
+                      Owner Profile
                     </span>
                     {summary ? (
                       <span
@@ -315,7 +369,7 @@ export function RatepayerDossierSheet({
                     title="Export Ratepayer Dossier CSV"
                   >
                     <Download className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">Export Dossier CSV</span>
+                    <span className="hidden sm:inline">Export Profile CSV</span>
                   </button>
                 )}
                 <button
@@ -532,7 +586,11 @@ export function RatepayerDossierSheet({
                       {properties.length === 0 ? (
                         <p className="text-[#6C6C70] py-8 text-center italic">No property parcels linked to this ratepayer.</p>
                       ) : (
-                        properties.map((prop) => (
+                        properties.map((prop) => {
+                          const billImgUrl = localBillImages[prop.accountNumber] !== undefined
+                            ? localBillImages[prop.accountNumber]
+                            : prop.billImageUrl || null;
+                          return (
                           <div
                             key={prop.id}
                             className="p-4 bg-white border border-[#E5E5EA] rounded-xl shadow-xs space-y-3 hover:border-[#007AFF]/40 transition-colors"
@@ -560,9 +618,43 @@ export function RatepayerDossierSheet({
                                 </span>
                                 <p className="font-semibold text-[#1C1C1E] text-sm mt-1 whitespace-nowrap tabular-nums">{prop.totalAmountDueFormatted}</p>
                                 {prop.arrears > 0 && (
-                                  <p className="text-[#FF3B30] text-[11px] whitespace-nowrap tabular-nums">Arrears: {prop.arrearsFormatted}</p>
+                                  <p
+                                    className={`text-[11px] whitespace-nowrap tabular-nums ${
+                                      prop.status === "PAID"
+                                        ? "line-through text-[#8E8E93]"
+                                        : "text-[#FF3B30]"
+                                    }`}
+                                    title={prop.status === "PAID" ? "Arrears cleared" : undefined}
+                                  >
+                                    Arrears: {prop.arrearsFormatted}
+                                  </p>
                                 )}
                               </div>
+                            </div>
+
+                            {/* Bill Scan attachment row */}
+                            <div className="flex items-center justify-between gap-2 text-[11px]">
+                              {billImgUrl ? (
+                                <span className="text-[#34C759] flex items-center gap-1 font-medium">
+                                  <CheckCircle2 className="w-3 h-3" />
+                                  Official Bill Scan Attached
+                                </span>
+                              ) : (
+                                <span className="text-[#8E8E93] italic flex items-center gap-1">
+                                  <FileImage className="w-3 h-3" />
+                                  No Bill Scan Uploaded
+                                </span>
+                              )}
+                              <label className="text-[#007AFF] hover:underline font-medium flex items-center gap-1 cursor-pointer">
+                                <Camera className="w-3 h-3" />
+                                <span>{billImgUrl ? "Replace Bill Scan" : "Attach Official Bill Scan"}</span>
+                                <input
+                                  type="file"
+                                  accept="image/*,application/pdf"
+                                  className="hidden"
+                                  onChange={(e) => handleBillFileSelected(prop.accountNumber, e)}
+                                />
+                              </label>
                             </div>
 
                             <div className="pt-2 border-t border-[#E5E5EA] flex items-center justify-between text-[11px] text-[#6C6C70]">
@@ -581,12 +673,13 @@ export function RatepayerDossierSheet({
                                   }}
                                   className="text-[#007AFF] hover:underline font-medium cursor-pointer"
                                 >
-                                  Inspect Assessment Roll &rarr;
+                                  View Property Details &rarr;
                                 </button>
                               )}
                             </div>
                           </div>
-                        ))
+                          );
+                        })
                       )}
                     </div>
                   )}
@@ -757,6 +850,80 @@ export function RatepayerDossierSheet({
               </button>
             </div>
           </motion.aside>
+
+          {/* Bill Scan Upload Confirmation Modal */}
+          {billConfirmUpload && (
+            <div className="fixed inset-0 z-60 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="bg-white border border-[#E5E5EA] shadow-2xl rounded-2xl max-w-sm w-full p-5 space-y-4 text-xs"
+              >
+                <div className="flex items-center justify-between border-b border-[#E5E5EA] pb-2.5">
+                  <div>
+                    <h4 className="font-semibold text-sm text-[#1C1C1E]">Attach Official Bill Scan</h4>
+                    <p className="text-[11px] text-[#6C6C70]">Property #{billConfirmUpload.accountNumber}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setBillConfirmUpload(null)}
+                    className="w-7 h-7 rounded-lg flex items-center justify-center text-[#8E8E93] hover:text-[#1C1C1E] hover:bg-[#F2F2F7] transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="rounded-xl overflow-hidden border border-[#E5E5EA] bg-[#F2F2F7] max-h-56 flex items-center justify-center">
+                  {billConfirmUpload.mimeType === 'application/pdf' ? (
+                    <div className="p-6 flex flex-col items-center gap-2">
+                      <FileImage className="w-8 h-8 text-[#007AFF]" />
+                      <span className="text-xs text-[#6C6C70]">PDF Document Selected</span>
+                    </div>
+                  ) : (
+                    <img
+                      src={billConfirmUpload.dataUrl}
+                      alt="Bill Scan Preview"
+                      className="max-h-56 w-auto object-contain"
+                    />
+                  )}
+                </div>
+
+                <p className="text-[11px] text-[#6C6C70] leading-relaxed">
+                  Confirm attaching this official municipal rate bill scan. Citizens will be able to view it from their SMS bill link.
+                </p>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#E5E5EA]">
+                  <button
+                    type="button"
+                    disabled={isBillUploading}
+                    onClick={() => setBillConfirmUpload(null)}
+                    className="apple-btn-secondary h-8 px-3.5"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isBillUploading}
+                    onClick={handleConfirmBillUpload}
+                    className="apple-btn-primary h-8 px-4"
+                  >
+                    {isBillUploading ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Uploading Bill Scan...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Confirm &amp; Attach</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
 
           {/* Scanned Receipt Upload Confirmation Modal */}
           {confirmUpload && (

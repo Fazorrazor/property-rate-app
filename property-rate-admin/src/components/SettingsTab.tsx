@@ -230,10 +230,10 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
           <div className="lg:col-span-4 space-y-1">
             <div className="flex items-center gap-2 text-sm font-semibold text-[#1C1C1E]">
               <Radio className="w-4 h-4 text-[#007AFF]" />
-              <span>Outbound SMS Mode</span>
+              <span>SMS Delivery Mode</span>
             </div>
             <p className="text-xs text-[#6C6C70] leading-relaxed">
-              Select whether rollout demand notices and SMS messages are broadcast live to citizens or tested safely in simulation mode.
+              Select whether billing notices and SMS messages are sent live to citizens or tested safely in simulation mode.
             </p>
           </div>
 
@@ -261,7 +261,7 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
                     )}
                   </span>
                   <span className="text-xs font-semibold text-[#1C1C1E]">
-                    Test / Simulation Mode
+                    Test Mode (Free Simulation)
                   </span>
                 </div>
                 <span className="text-[11px] font-semibold text-[#007AFF] shrink-0">
@@ -296,7 +296,7 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
                     )}
                   </span>
                   <span className="text-xs font-semibold text-[#1C1C1E]">
-                    Live Gateway Mode
+                    Live SMS Mode (Real Dispatch)
                   </span>
                 </div>
                 <span className="text-[11px] font-semibold text-[#34C759] shrink-0">
@@ -315,10 +315,10 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
           <div className="lg:col-span-4 space-y-1">
             <div className="flex items-center gap-2 text-sm font-semibold text-[#1C1C1E]">
               <Key className="w-4 h-4 text-[#007AFF]" />
-              <span>Gateway Credentials</span>
+              <span>SMS Provider Credentials</span>
             </div>
             <p className="text-xs text-[#6C6C70] leading-relaxed">
-              Direct HTTP gateway credentials for Ghanaian E.164 mobile numbers (+233). Required for live dispatches and balance queries.
+              API credentials for sending SMS across Ghanaian networks. Required for live messages and balance lookups.
             </p>
           </div>
 

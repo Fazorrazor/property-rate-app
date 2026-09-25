@@ -53,7 +53,7 @@ export class ArkeselProvider implements ISMSProvider {
     const encodedAccount = encodeURIComponent(accountNumber);
     return {
       billLinkUrl:
-        `${host}/dashboard?accountNumber=${encodedAccount}${tokenQuery}`,
+        `${host}/bill?accountNumber=${encodedAccount}${tokenQuery}`,
       paymentLinkUrl:
         `${host}/checkout?accountNumber=${encodedAccount}${tokenQuery}`,
     };
@@ -124,9 +124,10 @@ export class ArkeselProvider implements ISMSProvider {
           ownerDigitalAddress.trim() || 'N/A'
         )
         .replace(/{{billLink}}/g, billLinkUrl)
+        .replace(/{{link_bill}}/g, billLinkUrl)
         .replace(/{{paymentLink}}/g, paymentLinkUrl)
-        .replace(/{{link_assessment}}/g, billLinkUrl)
         .replace(/{{link_checkout}}/g, paymentLinkUrl)
+        .replace(/{{link_assessment}}/g, billLinkUrl)
       : defaultMsg;
     return {
       recipientPhone: this.formatPhoneNumber(phoneNumber),

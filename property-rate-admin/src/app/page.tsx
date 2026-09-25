@@ -92,12 +92,12 @@ const SmsRolloutSimulator = dynamic(
 type NavTab = "REGISTRY" | "RATEPAYERS" | "SMS_CENTER" | "TREASURY" | "AUDIT_LOGS" | "SETTINGS";
 
 const NAV_TABS: { key: NavTab; label: string; shortLabel: string; icon: any }[] = [
-  { key: "REGISTRY", label: "Cadastre & Property Roll", shortLabel: "Registry", icon: Building2 },
-  { key: "RATEPAYERS", label: "Ratepayer Portfolios & Dossiers", shortLabel: "Ratepayers", icon: Users },
-  { key: "SMS_CENTER", label: "SMS Bill Rollout Engine", shortLabel: "SMS Engine", icon: MessageSquare },
-  { key: "TREASURY", label: "Treasury Reconciliation", shortLabel: "Treasury", icon: Landmark },
-  { key: "AUDIT_LOGS", label: "System Audit Trail", shortLabel: "Audit Logs", icon: ShieldCheck },
-  { key: "SETTINGS", label: "Settings & SMS Gateway", shortLabel: "Settings", icon: Settings },
+  { key: "REGISTRY", label: "Properties", shortLabel: "Properties", icon: Building2 },
+  { key: "RATEPAYERS", label: "Property Owners", shortLabel: "Owners", icon: Users },
+  { key: "SMS_CENTER", label: "Send SMS Bills", shortLabel: "SMS Bills", icon: MessageSquare },
+  { key: "TREASURY", label: "Payments & Receipts", shortLabel: "Payments", icon: Landmark },
+  { key: "AUDIT_LOGS", label: "Activity Log", shortLabel: "Activity", icon: ShieldCheck },
+  { key: "SETTINGS", label: "SMS & App Settings", shortLabel: "Settings", icon: Settings },
 ];
 
 export default function AdminDashboardPage() {
@@ -1281,10 +1281,10 @@ export default function AdminDashboardPage() {
                 type="button"
                 onClick={() => setShowBatchModal(true)}
                 className="h-8 px-2.5 rounded-lg border border-[#E5E5EA] bg-[#F2F2F7] hover:bg-[#E5E5EA] text-[#007AFF] font-semibold text-[11px] flex items-center gap-1 cursor-pointer focus:outline-none transition-colors"
-                title="Run Annual Billing Batch"
+                title="Generate & Send Annual Bills"
               >
                 <RefreshCw className="w-3 h-3 text-[#007AFF]" />
-                <span className="hidden sm:inline">Batch Rollout</span>
+                <span className="hidden sm:inline">Send Annual Bills</span>
               </button>
             )}
 
@@ -1362,7 +1362,7 @@ export default function AdminDashboardPage() {
                 {/* 1. Total Assessed Demand */}
                 <div className="p-3.5 bg-white border border-[#E5E5EA] rounded-xl hover:border-[#D1D1D6] transition-colors flex flex-col justify-between min-h-[96px]">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-[#8E8E93]">Total Assessed Demand</span>
+                    <span className="text-xs font-medium text-[#8E8E93]">Total Amount Billed</span>
                     <Building2 className="w-4 h-4 text-[#8E8E93]" />
                   </div>
                   <div className="mt-2">
@@ -1376,7 +1376,7 @@ export default function AdminDashboardPage() {
                     <div className="text-[11px] text-[#8E8E93] mt-1 flex items-center gap-1.5 flex-wrap">
                       <span className="font-medium text-[#007AFF]">FY 2025</span>
                       <span>&bull;</span>
-                      <span>{(data?.pagination?.total ?? metrics.totalProperties).toLocaleString()} cadastre accounts</span>
+                      <span>{(data?.pagination?.total ?? metrics.totalProperties).toLocaleString()} property accounts</span>
                     </div>
                   </div>
                 </div>
@@ -1398,7 +1398,7 @@ export default function AdminDashboardPage() {
                     <div className="text-[11px] text-[#8E8E93] mt-1 flex items-center gap-1.5 flex-wrap">
                       <span className="font-medium text-[#34C759]">+{metrics.collectionRateFormatted}</span>
                       <span>&bull;</span>
-                      <span>Direct treasury mobilization</span>
+                      <span>Total direct collections</span>
                     </div>
                   </div>
                 </div>
@@ -1406,7 +1406,7 @@ export default function AdminDashboardPage() {
                 {/* 3. Cumulative Arrears */}
                 <div className="p-3.5 bg-white border border-[#E5E5EA] rounded-xl hover:border-[#D1D1D6] transition-colors flex flex-col justify-between min-h-[96px]">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-[#8E8E93]">Cumulative Arrears</span>
+                    <span className="text-xs font-medium text-[#8E8E93]">Total Overdue (Arrears)</span>
                     <XCircle className="w-4 h-4 text-[#FF3B30]" />
                   </div>
                   <div className="mt-2">
@@ -1420,7 +1420,7 @@ export default function AdminDashboardPage() {
                     <div className="text-[11px] text-[#8E8E93] mt-1 flex items-center gap-1.5 flex-wrap">
                       <span className="font-medium text-[#FF3B30]">Prior Debt</span>
                       <span>&bull;</span>
-                      <span>Enforceable under Act 936</span>
+                      <span>Outstanding municipal balance</span>
                     </div>
                   </div>
                 </div>
@@ -1428,7 +1428,7 @@ export default function AdminDashboardPage() {
                 {/* 4. Accounts with Arrears */}
                 <div className="p-3.5 bg-white border border-[#E5E5EA] rounded-xl hover:border-[#D1D1D6] transition-colors flex flex-col justify-between min-h-[96px]">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-[#8E8E93]">Accounts with Arrears</span>
+                    <span className="text-xs font-medium text-[#8E8E93]">Accounts with Overdue Bills</span>
                     <Flag className="w-4 h-4 text-[#FF9500]" />
                   </div>
                   <div className="mt-2">
@@ -1441,7 +1441,7 @@ export default function AdminDashboardPage() {
                     )}
                     <div className="text-[11px] text-[#8E8E93] mt-1 flex items-center gap-1.5 flex-wrap">
                       <span className={`font-medium ${metrics.defaultersCount > 0 ? "text-[#FF9500]" : "text-[#34C759]"}`}>
-                        {metrics.defaultersCount > 0 ? "Recovery active" : "Compliant"}
+                        {metrics.defaultersCount > 0 ? "Payment follow-up active" : "Compliant"}
                       </span>
                       <span>&bull;</span>
                       <button
@@ -1449,7 +1449,7 @@ export default function AdminDashboardPage() {
                         onClick={() => { setActiveTab("REGISTRY"); setStatusFilter("DEFAULTER"); }}
                         className="text-[#007AFF] hover:underline cursor-pointer"
                       >
-                        Inspect delinquent accounts &rarr;
+                        View overdue accounts &rarr;
                       </button>
                     </div>
                   </div>
@@ -1465,10 +1465,10 @@ export default function AdminDashboardPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <h2 className="text-base font-semibold text-[#1C1C1E]">
-                      Municipal Property Cadastre &amp; Valuation Roll
+                      Property Register
                     </h2>
                     <p className="text-xs text-[#6C6C70] mt-0.5">
-                      Master register of municipal property accounts, GhanaPost GPS codes, and rating valuations
+                      Register of property accounts, GhanaPost GPS addresses, and billing amounts
                     </p>
                   </div>
 
@@ -1576,10 +1576,10 @@ export default function AdminDashboardPage() {
                       type="button"
                       onClick={() => handleExportPropertiesCsv(selectedIds.length > 0)}
                       className="apple-btn-secondary h-8 px-3 rounded-lg font-medium text-xs flex items-center gap-1.5 cursor-pointer shrink-0"
-                      title="Export Professional Excel/CSV with Linked Portfolios"
+                      title="Export Properties CSV"
                     >
                       <Download className="w-3.5 h-3.5" />
-                      <span>{selectedIds.length > 0 ? `Export Selected (${selectedIds.length})` : "Export Cadastre CSV"}</span>
+                      <span>{selectedIds.length > 0 ? `Export Selected (${selectedIds.length})` : "Export Properties CSV"}</span>
                     </button>
                   </div>
                 </div>
@@ -1783,7 +1783,16 @@ export default function AdminDashboardPage() {
                             <td className="py-2.5 px-3 text-right whitespace-nowrap tabular-nums">
                               <p className="font-semibold text-[#1C1C1E] whitespace-nowrap tabular-nums">{prop.totalAmountDueFormatted}</p>
                               {prop.arrears > 0 && (
-                                <p className="text-[#FF3B30] text-[11px] mt-0.5 whitespace-nowrap tabular-nums">Arrears: {prop.arrearsFormatted}</p>
+                                <p
+                                  className={`text-[11px] mt-0.5 whitespace-nowrap tabular-nums ${
+                                    isPaid
+                                      ? "line-through text-[#8E8E93]"
+                                      : "text-[#FF3B30]"
+                                  }`}
+                                  title={isPaid ? "Arrears cleared" : undefined}
+                                >
+                                  Arrears: {prop.arrearsFormatted}
+                                </p>
                               )}
                             </td>
                             <td className="py-2.5 px-3 text-center whitespace-nowrap">
@@ -1907,7 +1916,7 @@ export default function AdminDashboardPage() {
             </section>
           )}
 
-          {/* TAB 2: RATEPAYER DIRECTORY & CONSOLIDATED PORTFOLIOS */}
+          {/* TAB 2: PROPERTY OWNERS */}
           {activeTab === "RATEPAYERS" && (
             <section className="bg-white flex-1 flex flex-col min-h-0 overflow-hidden w-full border-0 rounded-none shadow-none">
               {/* Directory Header Bar */}
@@ -1915,11 +1924,11 @@ export default function AdminDashboardPage() {
                 <div>
                   <div className="flex items-center gap-2">
                     <h2 className="text-base font-semibold text-[#1C1C1E] tracking-tight">
-                      Ratepayer Directory &amp; Portfolios
+                      Property Owners
                     </h2>
                   </div>
                   <p className="text-xs text-[#6C6C70] mt-0.5">
-                    Directory of registered ratepayers and linked property portfolios.
+                    Directory of registered property owners and their linked accounts.
                   </p>
                 </div>
                 <div className="flex items-center gap-2.5 shrink-0">
@@ -2126,19 +2135,19 @@ export default function AdminDashboardPage() {
             </div>
           )}
 
-          {/* TAB 5: TREASURY RECONCILIATION */}
+          {/* TAB 4: PAYMENTS & RECEIPTS */}
           {activeTab === "TREASURY" && (
             <section className="bg-white flex-1 min-h-0 flex flex-col overflow-hidden w-full border-0 rounded-none shadow-none">
               <div className="px-4 lg:px-6 py-3.5 border-b border-[#E5E5EA] bg-white flex flex-col gap-3 shrink-0">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div>
-                    <h2 className="text-base font-semibold text-[#1C1C1E] tracking-tight">Municipal Treasury Collections &amp; GCR Audit Log</h2>
+                    <h2 className="text-base font-semibold text-[#1C1C1E] tracking-tight">Payment Transactions &amp; Receipts</h2>
                     <p className="text-xs text-[#6C6C70] mt-0.5">
-                      Real-time transaction logs of all rate payments settled across Mobile Money, Card, and Counter Cash Treasury.
+                      Real-time record of all rate payments completed via Mobile Money, Card, and Cash.
                     </p>
                   </div>
                   <span className="text-xs font-semibold text-[#34C759]">
-                    Total Reconciled: {metrics.totalCollectedFormatted}
+                    Total Collected: {metrics.totalCollectedFormatted}
                   </span>
                 </div>
 
@@ -2337,7 +2346,7 @@ export default function AdminDashboardPage() {
             </section>
           )}
 
-          {/* TAB: SYSTEM AUDIT TRAIL */}
+          {/* TAB: ACTIVITY LOG */}
           {activeTab === "AUDIT_LOGS" && (
             <section className="bg-white flex-1 flex flex-col min-h-0 overflow-hidden w-full border-0 rounded-none shadow-none">
               {/* Audit Header Bar */}
@@ -2345,12 +2354,12 @@ export default function AdminDashboardPage() {
                 <div>
                   <div className="flex items-center gap-2">
                     <h2 className="text-base font-semibold text-[#1C1C1E] tracking-tight">
-                      Municipal Revenue Directorate — Master Audit Trail
+                      System Activity Log
                     </h2>
-                    <span className="text-xs text-[#34C759] font-medium">&bull; Immutable Ledger</span>
+                    <span className="text-xs text-[#34C759] font-medium">&bull; System Log</span>
                   </div>
                   <p className="text-xs text-[#6C6C70] mt-0.5">
-                    Chronological audit event logs for manual settlements, rate revisions, SMS bill rollouts, and assembly administrative overrides under Act 936.
+                    Chronological record of bill rollouts, payments, rate revisions, and system actions.
                   </p>
                 </div>
                 <div className="flex items-center gap-2.5 shrink-0">
@@ -2369,7 +2378,7 @@ export default function AdminDashboardPage() {
                     className="apple-btn-secondary h-8 px-3 rounded-lg text-xs font-medium flex items-center gap-1.5 cursor-pointer text-[#007AFF] border-[#007AFF]/20 hover:bg-[#007AFF]/5 transition-colors"
                   >
                     <Download className="w-3.5 h-3.5" />
-                    <span>Export Audit Log (CSV)</span>
+                    <span>Export Activity Log (CSV)</span>
                   </button>
                 </div>
               </div>
@@ -2757,7 +2766,16 @@ export default function AdminDashboardPage() {
                     </div>
                     <div className="flex justify-between py-1 border-b border-[#E5E5EA]">
                       <dt className="text-[#6C6C70]">Carried Cumulative Arrears</dt>
-                      <dd className={`font-medium whitespace-nowrap tabular-nums ${selectedAccount.arrears > 0 ? "text-[#FF3B30]" : "text-[#1C1C1E]"}`}>
+                      <dd
+                        className={`font-medium whitespace-nowrap tabular-nums ${
+                          selectedAccount.status === "PAID" && selectedAccount.arrears > 0
+                            ? "line-through text-[#8E8E93]"
+                            : selectedAccount.arrears > 0
+                            ? "text-[#FF3B30]"
+                            : "text-[#1C1C1E]"
+                        }`}
+                        title={selectedAccount.status === "PAID" && selectedAccount.arrears > 0 ? "Arrears cleared" : undefined}
+                      >
                         {selectedAccount.arrearsFormatted}
                       </dd>
                     </div>
@@ -2897,9 +2915,9 @@ export default function AdminDashboardPage() {
                     </div>
                     <div>
                       <h3 className="text-sm font-semibold text-[#1C1C1E]">
-                        Annual Batch Billing Rollout
+                        Generate Annual Bills
                       </h3>
-                      <p className="text-xs text-[#6C6C70]">Statutory Assessment Cycle</p>
+                      <p className="text-xs text-[#6C6C70]">Annual Billing Cycle</p>
                     </div>
                   </div>
                   <button
@@ -2914,7 +2932,7 @@ export default function AdminDashboardPage() {
 
                 <div className="p-3.5 rounded-xl bg-[#F8F9FA] border border-[#E5E5EA] text-xs text-[#1C1C1E] space-y-2">
                   <p className="font-semibold text-[#007AFF]">
-                    Execute Annual Rollout for {properties.length} Properties
+                    Generate &amp; Send Bills for {properties.length} Properties
                   </p>
                   <div className="space-y-3 pt-2">
                     <div className="space-y-1">
@@ -2950,11 +2968,11 @@ export default function AdminDashboardPage() {
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[#6C6C70] font-medium block">Dual-Link SMS Notice Template</label>
+                      <label className="text-[#6C6C70] font-medium block">SMS Bill Message Template</label>
                       <textarea
                         value={messageTemplate}
                         onChange={(e) => setMessageTemplate(e.target.value)}
-                        aria-label="Dual-Link SMS Notice Template"
+                        aria-label="SMS Bill Message Template"
                         rows={4}
                         className="w-full p-2.5 rounded-lg border border-[#E5E5EA] bg-white text-xs text-[#1C1C1E] focus:outline-none focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] resize-none transition-colors"
                       />
@@ -2964,7 +2982,7 @@ export default function AdminDashboardPage() {
                     <div className="space-y-1 pt-2 border-t border-[#E5E5EA]">
                       <div className="flex items-center gap-1.5">
                         <ShieldCheck className="w-3.5 h-3.5 text-[#007AFF]" />
-                        <label className="text-[#007AFF] font-semibold text-xs block">Administrator Authorization Password *</label>
+                        <label className="text-[#007AFF] font-semibold text-xs block">Admin Password Confirmation *</label>
                       </div>
                       <div className="relative">
                         <input
@@ -3008,7 +3026,7 @@ export default function AdminDashboardPage() {
                     className="apple-btn-primary h-11 sm:h-9 px-4 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 flex-1 sm:flex-none bg-[#007AFF] text-white hover:bg-[#0062CC]"
                   >
                     {isProcessing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                    <span>Confirm &amp; Rollout Bills</span>
+                    <span>Confirm &amp; Send Bills</span>
                   </button>
                 </div>
               </form>

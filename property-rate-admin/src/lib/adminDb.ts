@@ -43,6 +43,7 @@ export function mapPropertyRow(p: any) {
     arrears,
     totalAmountDue,
     status,
+    billImageUrl: p.bill_image_url || p.billImageUrl || null,
   };
 }
 
@@ -53,6 +54,10 @@ function preparePropertyWritePayload(data: any) {
     updatedAt: new Date().toISOString(),
   };
 
+  if (cleanData.billImageUrl !== undefined) {
+    row.bill_image_url = cleanData.billImageUrl;
+    delete row.billImageUrl;
+  }
   if (cleanData.accountNumber !== undefined) {
     row.account_no = cleanData.accountNumber;
     delete row.accountNumber;
@@ -978,19 +983,52 @@ export const adminDb = {
   },
 
   notification: {
-    async findMany(args?: { where?: any; orderBy?: any; take?: number; skip?: number }) {
+    async count(args?: { where?: any }) {
+      try {
+        let query = supabase.from('Notification').select('*', { count: 'exact', head: true });
+        if (args?.where?.deliveryMethod) query = query.eq('deliveryMethod', args.where.deliveryMethod);
+        if (args?.where?.userId) query = query.eq('userId', args.where.userId);
+        if (args?.where?.type) query = query.eq('type', args.where.type);
+        if (args?.where?.deliveryStatus) query = query.eq('deliveryStatus', args.where.deliveryStatus);
+        const { count, error } = await query;
+        if (error) return 0;
+        return count || 0;
+      } catch {
+        return 0;
+      }
+    },
+
+    async findMany(args?: { where?: any; include?: any; orderBy?: any; take?: number; skip?: number }) {
       let query = supabase.from('Notification').select('*');
       if (args?.where?.userId) query = query.eq('userId', args.where.userId);
       if (args?.where?.deliveryMethod) query = query.eq('deliveryMethod', args.where.deliveryMethod);
+      if (args?.where?.type) query = query.eq('type', args.where.type);
+      if (args?.where?.deliveryStatus) query = query.eq('deliveryStatus', args.where.deliveryStatus);
+
       if (args?.orderBy?.createdAt) {
         query = query.order('createdAt', { ascending: args.orderBy.createdAt === 'asc' });
       } else {
         query = query.order('createdAt', { ascending: false });
       }
-      if (args?.take) query = query.limit(args.take);
-      if (args?.skip) query = query.range(args.skip, (args.skip + (args.take || 10)) - 1);
+      if (args?.skip !== undefined && args?.take !== undefined) {
+        query = query.range(args.skip, args.skip + args.take - 1);
+      } else if (args?.take) {
+        query = query.limit(args.take);
+      }
       const { data, error } = await query;
       if (error || !data) return [];
+
+      if (args?.include?.user) {
+        const userIds = Array.from(new Set(data.map((n: any) => n.userId).filter(Boolean)));
+        if (userIds.length > 0) {
+          const { data: users } = await supabase.from('User').select('*').in('id', userIds);
+          const userMap = new Map((users || []).map((u: any) => [u.id, u]));
+          for (const n of data) {
+            n.user = userMap.get(n.userId) || null;
+          }
+        }
+      }
+
       return data;
     },
 
