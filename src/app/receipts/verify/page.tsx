@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { getPublicReceiptVerification, PublicReceiptVerificationData } from "@/app/actions";
 import { ShieldCheck, ShieldAlert, CheckCircle2, Search, ArrowLeft, Building2, Landmark, Clock, FileText, Image as ImageIcon, ZoomIn, X, ExternalLink } from "lucide-react";
 import Link from "next/link";
+import { AppleSpinner } from "@/components/ui/AppleSpinner";
 
 function ReceiptVerifyContent() {
   const searchParams = useSearchParams();
@@ -109,7 +110,7 @@ function ReceiptVerifyContent() {
         {/* Loading State */}
         {isLoading && (
           <div className="bg-white border border-[#DADCE0] rounded-xl p-8 text-center space-y-2 shadow-xs">
-            <div className="w-6 h-6 border-2 border-[#612D53] border-t-transparent rounded-full animate-spin mx-auto" />
+            <AppleSpinner size="md" className="text-[#612D53] mx-auto" />
             <p className="text-xs text-[#717171]">Querying KKMA Municipal Treasury ledger...</p>
           </div>
         )}
@@ -337,7 +338,7 @@ export default function ReceiptVerifyPage() {
     <Suspense
       fallback={
         <div className="min-h-screen bg-[#F6ECF2] flex items-center justify-center">
-          <div className="w-8 h-8 border-[3px] border-[#612D53] border-t-transparent rounded-full animate-spin" />
+          <AppleSpinner size="lg" className="text-[#612D53]" />
         </div>
       }
     >

@@ -92,7 +92,7 @@ export class TwilioProvider implements ISMSProvider {
       customTemplate,
       municipality = 'Kpone-Katamanso (KKMA)',
       billYear = new Date().getFullYear(),
-      supportPhone = '0256039385/0538702445',
+      supportPhone = '0243756235',
       ussdCode = process.env.NEXT_PUBLIC_USSD_CODE || process.env.USSD_SHORT_CODE || '*227*4362#',
     } = params;
 

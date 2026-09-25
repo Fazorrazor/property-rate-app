@@ -15,6 +15,7 @@ import {
   AdminAuditLogItem,
   SmsRolloutLogItem,
   RatepayerHistoryDossier,
+  AdminPaidUserRecord,
 } from "@/app/actions";
 
 export interface CsvReportMetadata {
@@ -612,4 +613,68 @@ export function exportRatepayerDossierCsv(
   const cleanName = (dossier.user.name || "Ratepayer").replace(/[^a-zA-Z0-9]/g, "_");
   const dateStr = new Date().toISOString().split("T")[0];
   downloadCsvFile(`KKMA_Dossier_${cleanName}_${dateStr}.csv`, sections.join("\r\n"));
+}
+
+/**
+ * Exports the Paid Ratepayers Directory to corporate CSV
+ */
+export function exportPaidUsersCsv(
+  records: AdminPaidUserRecord[],
+  filterType: "ALL" | "LIVE" | "TEST" = "ALL",
+  officerName = "System Administrator"
+) {
+  const totalCollected = records.reduce((sum, r) => sum + r.amountPaid, 0);
+
+  const filterLabel =
+    filterType === "LIVE"
+      ? "Live Ratepayer Payments Only"
+      : filterType === "TEST"
+      ? "Sandbox Test Accounts Only"
+      : "Complete Paid Ratepayers Directory (Live & Test)";
+
+  const headerBanner = buildCorporateHeader({
+    reportTitle: "PAID RATEPAYERS DIRECTORY & COLLECTIONS REGISTRY",
+    subtitle: "Official Municipal Rate Collections Registry & Reconciled Ratepayer Dossiers",
+    filterScope: filterLabel,
+    generatedBy: officerName,
+    recordCount: records.length,
+    financialSummary: {
+      totalCollected,
+    },
+  });
+
+  const columnHeaders = [
+    "Ratepayer Full Name",
+    "Telephone Number",
+    "Property Account Number",
+    "Amount Paid (GHS)",
+    "Payment Channel",
+    "Payment Reference",
+    "Official GCR Receipt Number",
+    "Reconciliation Status",
+    "Account Classification",
+    "Date & Time Reconciled",
+  ];
+
+  const dataRows = records.map((r) => [
+    formatCsvCell(r.userName),
+    formatCsvCell(r.phoneNumber, { preserveTextAsFormula: true }),
+    formatCsvCell(r.accountNumber, { preserveTextAsFormula: true }),
+    formatCsvCell(r.amountPaid),
+    formatCsvCell(r.paymentMethod),
+    formatCsvCell(r.reference, { preserveTextAsFormula: true }),
+    formatCsvCell(r.receiptNumber, { preserveTextAsFormula: true }),
+    formatCsvCell(r.status),
+    formatCsvCell(r.isTestUser ? "TEST ACCOUNT" : "OFFICIAL RATEPAYER"),
+    formatCsvCell(r.paidAt),
+  ]);
+
+  const csvContent = [
+    ...headerBanner,
+    columnHeaders.map((h) => `"${h}"`).join(","),
+    ...dataRows.map((row) => row.join(",")),
+  ].join("\r\n");
+
+  const dateStr = new Date().toISOString().split("T")[0];
+  downloadCsvFile(`KKMA_Paid_Ratepayers_${filterType}_${dateStr}.csv`, csvContent);
 }

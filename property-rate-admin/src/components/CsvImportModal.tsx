@@ -2,7 +2,8 @@
 
 import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, UploadCloud, FileText, AlertTriangle, CheckCircle2, Loader2, Eye, EyeOff } from "lucide-react";
+import { X, UploadCloud, FileText, AlertTriangle, CheckCircle2, Eye, EyeOff } from "lucide-react";
+import { AppleSpinner } from "./ui/AppleSpinner";
 import { importCadastreCsvBatch } from "@/app/actions";
 
 interface CsvImportModalProps {
@@ -355,7 +356,7 @@ export function CsvImportModal({ isOpen, onClose, onSuccess }: CsvImportModalPro
               >
                 {isProcessing ? (
                   <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <AppleSpinner size="xs" className="text-white" />
                     <span>Ingesting Parcels...</span>
                   </>
                 ) : (

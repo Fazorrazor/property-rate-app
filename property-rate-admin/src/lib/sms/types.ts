@@ -8,9 +8,9 @@ export const FILTER_SMS_TEMPLATES: Record<string, string> = {
   UNPAID:
     "*{{municipality}} PROPERTY RATE BILL*\n\nDear {{ownerName}},\n\nYour {{billYear}} property rate bill for Property ID {{accountNumber}} (GPS: {{propertyGpsAddress}}) is ready:\n\n• Current Fee: GH₵ {{currentFee}}\n• Outstanding Arrears: GH₵ {{arrears}}\n• Total Due: GH₵ {{totalAmountDue}}\n• Due Date: {{dueDate}}\n\nView Bill:\n{{link_assessment}}\n\nPay Online:\n{{link_checkout}}\n\nFor assistance, contact Assembly Revenue Office on 0243756235.\nThank you.",
   PAID:
-    "*{{municipality}} PAYMENT CONFIRMATION*\n\nDear {{ownerName}},\n\nThank you! Your property rate account {{accountNumber}} (GPS: {{propertyGpsAddress}}) has been fully settled with a zero balance (GH₵ 0.00) for {{billYear}}.\n\nView Official Receipt & Clearance:\n{{link_assessment}}\n\nThank you for supporting community development.\nAssembly Revenue Office: 0243756235.",
+    "*{{municipality}} PAYMENT CONFIRMATION*\n\nDear {{ownerName}},\n\nThank you! Your property rate account {{accountNumber}} (GPS: {{propertyGpsAddress}}) has been fully settled with a zero balance (GH₵ 0.00) for {{billYear}}.\n\nAn official receipt will be issued to you. If not received, kindly visit the Assembly Revenue Office for your physical copy or call 0243756235 for assistance.\n\nThank you for supporting community development.",
   OVERPAID:
-    "*{{municipality}} ACCOUNT STATEMENT*\n\nDear {{ownerName}},\n\nOur records indicate your property rate account {{accountNumber}} (GPS: {{propertyGpsAddress}}) has an account credit of GH₵ {{totalAmountDue}}. This will offset your upcoming bills.\n\nView Statement:\n{{link_assessment}}\n\nFor questions, contact Assembly Revenue Office on 0243756235.\nThank you.",
+    "*{{municipality}} ACCOUNT STATEMENT*\n\nDear {{ownerName}},\n\nOur records indicate your property rate account {{accountNumber}} (GPS: {{propertyGpsAddress}}) has an account credit of GH₵ {{totalAmountDue}}. This will offset your upcoming bills.\n\nAn official statement will be issued to you. If not received, kindly visit the Assembly Revenue Office or call 0243756235 for assistance.\n\nThank you.",
   ALL:
     "*{{municipality}} PROPERTY RATE NOTICE*\n\nDear {{ownerName}},\n\nHere are your property rate bill details:\n• Property ID: {{accountNumber}}\n• Location: {{propertyGpsAddress}}\n• Total Amount Due: GH₵ {{totalAmountDue}}\n\nView Bill:\n{{link_assessment}}\n\nPay Online:\n{{link_checkout}}\n\nFor assistance, contact Assembly Revenue Office on 0243756235.\nThank you.",
 };
@@ -18,7 +18,7 @@ export const FILTER_SMS_TEMPLATES: Record<string, string> = {
 export const DEFAULT_SMS_NOTICE_TEMPLATE = FILTER_SMS_TEMPLATES.UNPAID;
 
 export const DEFAULT_RECEIPT_NOTICE_TEMPLATE =
-  "Payment Confirmed: GH₵ {{amount}} received for Property {{accountNumber}}.\n\nOfficial GCR Receipt #{{receiptNumber}} issued.\n\nView official receipt & scanned copy:\n{{receiptLink}}\n\nDisregard if already received. Keep receipt for verification.\nAssembly Revenue Office: 0243756235.";
+  "Payment Confirmed: GH₵ {{amount}} received for Property {{accountNumber}}.\n\nOfficial GCR Receipt #{{receiptNumber}} issued.\n\nAn official receipt will be issued to you. If not received, kindly visit the Assembly Revenue Office for your physical copy or call 0243756235 for assistance.\n\nKeep this SMS as proof of payment.";
 
 export const DEFAULT_SAVED_TEMPLATES = [
   {

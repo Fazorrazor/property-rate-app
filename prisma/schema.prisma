@@ -104,6 +104,31 @@ model Transaction {
   feePayment         FeePayment?
 }
 
+model PaidUserRecord {
+  id            String   @id @default(uuid())
+  userId        String?
+  userName      String
+  phoneNumber   String
+  accountNumber String
+  propertyId    String?
+  amountPaid    Float
+  arrearsPaid   Float    @default(0.0)
+  currentPaid   Float    @default(0.0)
+  paymentMethod String   @default("Paystack MoMo")
+  reference     String
+  receiptNumber String?
+  status        String   @default("SUCCESS")
+  isTestUser    Boolean  @default(false)
+  paidAt        DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([accountNumber])
+  @@index([phoneNumber])
+  @@index([isTestUser])
+  @@index([paidAt])
+}
+
 model AdminUser {
   id           String   @id @default(uuid())
   username     String   @unique

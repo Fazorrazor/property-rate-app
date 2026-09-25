@@ -9,7 +9,6 @@ import {
   ShieldCheck,
   Eye,
   EyeOff,
-  Loader2,
   X,
   Search,
   ChevronLeft,
@@ -26,6 +25,7 @@ import {
   FileText,
 } from "lucide-react";
 import { exportSmsRolloutCsv, exportCadastreCsv } from "@/lib/csv-export";
+import { AppleSpinner } from "@/components/ui/AppleSpinner";
 import {
   AdminProperty,
   SmsRolloutLogItem,
@@ -376,19 +376,36 @@ export function SmsRolloutSimulator({
       .catch(() => { });
   }, []);
 
-  const billingTokens = [
-    { tag: "{{municipality}}", label: "Municipality" },
-    { tag: "{{billYear}}", label: "Bill Year" },
-    { tag: "{{accountNumber}}", label: "Valuation ID / Account No." },
-    { tag: "{{propertyAccounts}}", label: "Multi-Property Accounts List" },
-    { tag: "{{ownerName}}", label: "Ratepayer Name" },
-    { tag: "{{totalAmountDue}}", label: "Total Due" },
-    { tag: "{{arrears}}", label: "Arrears" },
-    { tag: "{{currentFee}}", label: "Current Fee" },
-    { tag: "{{paymentLink}}", label: "Payment Link" },
-    { tag: "{{dueDate}}", label: "Due Date" },
-    { tag: "{{propertyGpsAddress}}", label: "Property GPS / Digital Address" },
-  ];
+  const billingTokens = useMemo(() => {
+    const baseTokens = [
+      { tag: "{{municipality}}", label: "Municipality" },
+      { tag: "{{billYear}}", label: "Bill Year" },
+      { tag: "{{accountNumber}}", label: "Valuation ID / Account No." },
+      { tag: "{{propertyAccounts}}", label: "Multi-Property Accounts List" },
+      { tag: "{{ownerName}}", label: "Ratepayer Name" },
+      { tag: "{{propertyGpsAddress}}", label: "Property GPS / Digital Address" },
+    ];
+
+    if (targetStatus === "PAID") {
+      return baseTokens;
+    }
+
+    if (targetStatus === "OVERPAID") {
+      return [
+        ...baseTokens,
+        { tag: "{{totalAmountDue}}", label: "Credit Balance Amount" },
+      ];
+    }
+
+    return [
+      ...baseTokens,
+      { tag: "{{totalAmountDue}}", label: "Total Due" },
+      { tag: "{{arrears}}", label: "Arrears" },
+      { tag: "{{currentFee}}", label: "Current Fee" },
+      { tag: "{{paymentLink}}", label: "Payment Link" },
+      { tag: "{{dueDate}}", label: "Due Date" },
+    ];
+  }, [targetStatus]);
 
   const receiptTokens = [
     { tag: "{{receiptNumber}}", label: "GCR Receipt No." },
@@ -397,7 +414,6 @@ export function SmsRolloutSimulator({
     { tag: "{{ownerName}}", label: "Ratepayer Name" },
     { tag: "{{paymentMethod}}", label: "Payment Channel" },
     { tag: "{{datePaid}}", label: "Payment Date" },
-    { tag: "{{receiptLink}}", label: "Receipt Link" },
   ];
 
   const dynamicTokens = activeTemplateType === "BILLING" ? billingTokens : receiptTokens;
@@ -624,7 +640,9 @@ export function SmsRolloutSimulator({
       const g = groupsMap.get(groupKey)!;
       g.properties.push(prop);
       g.totalAmountDue += Number(prop.totalAmountDue || 0);
-      g.totalArrears += Number(prop.arrears || 0);
+      const isCleared = prop.status === "PAID" || Number(prop.totalAmountDue || 0) <= 0 || Number(prop.amountPaidLastYear || 0) >= Number(prop.arrears || 0);
+      const remainingArrears = isCleared ? 0 : Math.max(0, Number(prop.arrears || 0) - Number(prop.amountPaidLastYear || 0));
+      g.totalArrears += remainingArrears;
     }
 
     return Array.from(groupsMap.values()).map((g) => ({
@@ -1968,13 +1986,28 @@ export function SmsRolloutSimulator({
 
             {/* Modal Footer */}
             <div className="px-5 py-3 border-t flex items-center justify-between shrink-0 bg-[#F8F9FA] border-[#E5E5EA]">
-              <button
-                type="button"
-                onClick={() => setShowTemplateModal(false)}
-                className="border border-[#E5E5EA] bg-white text-[#1C1C1E] hover:bg-[#F2F2F7] font-medium h-8 px-3.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors"
-              >
-                Cancel
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowTemplateModal(false)}
+                  className="border border-[#E5E5EA] bg-white text-[#1C1C1E] hover:bg-[#F2F2F7] font-medium h-8 px-3.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (activeTemplateType === "RECEIPT") {
+                      setReceiptTemplate(DEFAULT_RECEIPT_NOTICE_TEMPLATE);
+                    } else {
+                      setMessageTemplate(FILTER_SMS_TEMPLATES[targetStatus] || FILTER_SMS_TEMPLATES.UNPAID);
+                    }
+                  }}
+                  className="text-xs text-[#6C6C70] hover:text-[#007AFF] hover:underline font-medium cursor-pointer"
+                >
+                  Reset to Standard Default
+                </button>
+              </div>
               <button
                 type="button"
                 onClick={async () => {
@@ -2013,7 +2046,7 @@ export function SmsRolloutSimulator({
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-[#6C6C70] font-medium">Gateway Balance (Arkesel):</span>
                       {isFetchingBalance ? (
-                        <span className="text-[#007AFF] flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" /> Fetching...</span>
+                        <span className="text-[#007AFF] flex items-center gap-1.5"><AppleSpinner size="xs" /> Fetching...</span>
                       ) : gatewayBalance ? (
                         <span className="font-semibold text-[#34C759]">
                           {gatewayBalance.smsBalance} SMS ({gatewayBalance.mainBalance})
@@ -2073,7 +2106,7 @@ export function SmsRolloutSimulator({
                         disabled={isButtonDisabled}
                         className="bg-[#007AFF] hover:bg-[#007AFF]/90 text-white font-semibold shadow-xs h-8 px-4 rounded-lg text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
-                        {isAuthorizing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Lock className="w-3.5 h-3.5" />}
+                        {isAuthorizing ? <AppleSpinner size="xs" /> : <Lock className="w-3.5 h-3.5" />}
                         <span>Dispatch SMS</span>
                       </button>
                     </div>

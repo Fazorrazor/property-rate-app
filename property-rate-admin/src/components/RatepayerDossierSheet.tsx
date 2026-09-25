@@ -9,7 +9,6 @@ import {
   Building2,
   Receipt,
   MessageSquare,
-  Loader2,
   Camera,
   Eye,
   ExternalLink,
@@ -18,7 +17,10 @@ import {
   Send,
   Download,
   FileImage,
+  Clock,
+  ArrowRight,
 } from "lucide-react";
+import { AppleSpinner } from "@/components/ui/AppleSpinner";
 import { exportRatepayerDossierCsv } from "@/lib/csv-export";
 import {
   RatepayerHistoryDossier,
@@ -345,8 +347,8 @@ export function RatepayerDossierSheet({
                     )}
 
                     {isLoading && (
-                      <span className="flex items-center ml-1.5">
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-[#007AFF]" />
+                      <span className="flex items-center ml-1.5 text-[#007AFF]">
+                        <AppleSpinner size="xs" />
                       </span>
                     )}
                   </div>
@@ -684,95 +686,170 @@ export function RatepayerDossierSheet({
                     </div>
                   )}
 
-                  {/* TAB 2: PAYMENTS LEDGER */}
+                  {/* TAB 2: PAYMENTS LEDGER & STORYTELLING AUDIT */}
                   {activeTab === "PAYMENTS" && (
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                       {receipts.length === 0 ? (
                         <p className="text-[#6C6C70] py-8 text-center italic">No payment transactions recorded on this account.</p>
                       ) : (
-                        receipts.map((r) => (
-                          <div
-                            key={r.id}
-                            className="p-3.5 bg-white border border-[#E5E5EA] rounded-xl shadow-xs space-y-2.5"
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="space-y-0.5 min-w-0">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <Receipt className="w-3.5 h-3.5 text-[#007AFF] shrink-0" />
-                                  <span className="font-semibold text-[#1C1C1E]">{r.receiptNumber}</span>
-                                  <span className="text-[#34C759] font-medium">&bull; Reconciled</span>
-                                  {r.scannedImageUrl ? (
-                                    <span className="text-[#34C759] text-[11px] font-medium flex items-center gap-1">
-                                      <CheckCircle2 className="w-3 h-3 text-[#34C759]" />
-                                      <span>Scanned GCR Attached</span>
+                        receipts.map((r) => {
+                          const narrative = r.narrative;
+                          return (
+                            <div
+                              key={r.id}
+                              className="p-4 bg-white border border-[#E5E5EA] rounded-xl shadow-xs space-y-3.5"
+                            >
+                              {/* Header: Receipt No, Status, Method, Date & Time, Amount */}
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="space-y-1 min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap text-xs">
+                                    <Receipt className="w-4 h-4 text-[#007AFF] shrink-0" />
+                                    <span className="font-bold text-[#1C1C1E] text-sm">{r.receiptNumber}</span>
+                                    <span className="text-[#34C759] font-medium">&bull; Reconciled</span>
+                                    {r.scannedImageUrl ? (
+                                      <span className="text-[#34C759] text-[11px] font-medium flex items-center gap-1">
+                                        <CheckCircle2 className="w-3 h-3 text-[#34C759]" />
+                                        <span>Scanned GCR Attached</span>
+                                      </span>
+                                    ) : (
+                                      <span className="text-[#8E8E93] text-[11px] italic">
+                                        &bull; No Physical Scan
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-2 text-[11px] text-[#6C6C70] flex-wrap">
+                                    <span className="font-medium text-[#1C1C1E]">{r.paymentMethod}</span>
+                                    <span>&bull;</span>
+                                    <span className="flex items-center gap-1">
+                                      <Clock className="w-3 h-3 text-[#8E8E93]" />
+                                      <span>{r.formattedDate ? `${r.formattedDate}, ${r.formattedTime}` : r.datePaid}</span>
                                     </span>
-                                  ) : (
-                                    <span className="text-[#8E8E93] text-[11px] italic">
-                                      &bull; No Physical Scan
+                                    {r.transactionReference && (
+                                      <>
+                                        <span>&bull;</span>
+                                        <span className="font-mono text-[#8E8E93]">Ref: {r.transactionReference}</span>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="text-right shrink-0">
+                                  <span className="font-bold text-[#34C759] text-base whitespace-nowrap tabular-nums">{r.amountFormatted}</span>
+                                  <p className="text-[#6C6C70] text-[10px] mt-0.5 whitespace-nowrap font-medium">{r.settlementType} Assessment</p>
+                                </div>
+                              </div>
+
+                              {/* Storytelling Narrative Card (What Was Paid, What Updated, Next Steps) */}
+                              <div className="bg-[#F8F9FA] border border-[#E5E5EA] rounded-lg p-3 space-y-2.5 text-xs">
+                                {/* 1. What was paid for */}
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 pb-2 border-b border-[#E5E5EA]">
+                                  <div className="space-y-0.5">
+                                    <span className="text-[10px] uppercase font-semibold text-[#8E8E93] tracking-wide block">
+                                      Target Assessment Account
+                                    </span>
+                                    <div className="flex items-center gap-2 text-xs font-semibold text-[#1C1C1E]">
+                                      <span>{narrative?.targetAccount || r.propertyAccountNumber || "General Assessment"}</span>
+                                      {narrative?.targetDigitalAddress && narrative.targetDigitalAddress !== "—" && (
+                                        <span className="text-[#6C6C70] font-normal text-[11px]">
+                                          ({narrative.targetDigitalAddress})
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-3 text-[11px] text-[#6C6C70] shrink-0">
+                                    <span>Arrears: <strong className="text-[#1C1C1E]">{narrative?.arrearsPaidFormatted || "GH₵ 0.00"}</strong></span>
+                                    <span>&bull;</span>
+                                    <span>Current Rate: <strong className="text-[#1C1C1E]">{narrative?.currentFeePaidFormatted || r.amountFormatted}</strong></span>
+                                  </div>
+                                </div>
+
+                                {/* 2. What got updated & compliance status */}
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 pb-2 border-b border-[#E5E5EA]">
+                                  <div className="space-y-0.5">
+                                    <span className="text-[10px] uppercase font-semibold text-[#8E8E93] tracking-wide block">
+                                      Ledger Balance Transition
+                                    </span>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[#8E8E93] line-through text-[11px]">
+                                        Prior Due
+                                      </span>
+                                      <ArrowRight className="w-3 h-3 text-[#8E8E93]" />
+                                      <span className="font-semibold text-[#1C1C1E] tabular-nums">
+                                        Remaining: {narrative?.remainingTotalDueFormatted || "GH₵ 0.00"}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <div className="text-right shrink-0">
+                                    <span className={`font-semibold text-[11px] ${narrative?.isFullySettled ? "text-[#34C759]" : "text-[#FF9500]"}`}>
+                                      {narrative?.isFullySettled ? "● Fully Settled (Zero Debt)" : "● Partial Payment Recorded"}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* 3. What needs to be updated next (Municipal Story) */}
+                                <div className="space-y-0.5 pt-0.5">
+                                  <span className="text-[10px] uppercase font-semibold text-[#8E8E93] tracking-wide block">
+                                    Municipal Ledger Action
+                                  </span>
+                                  <p className="text-[11px] text-[#6C6C70] leading-relaxed">
+                                    {narrative?.actionRequiredText || (narrative?.isFullySettled
+                                      ? "Account fully settled & cleared. Zero debt remaining. Exempt from collection notices."
+                                      : "Account has remaining balance due for municipal settlement.")}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Action Bar: View/Attach Stamped Leaf & Dispatch SMS */}
+                              <div className="pt-2 border-t border-[#E5E5EA] flex items-center justify-between gap-2 text-xs flex-wrap">
+                                <div className="flex items-center gap-3">
+                                  {r.scannedImageUrl && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setPreviewingImage({ url: r.scannedImageUrl!, receiptNumber: r.receiptNumber })}
+                                      className="text-[#007AFF] hover:underline font-medium flex items-center gap-1 cursor-pointer"
+                                    >
+                                      <Eye className="w-3.5 h-3.5" />
+                                      <span>Inspect Scanned Leaf</span>
+                                    </button>
+                                  )}
+
+                                  <label className="text-[#007AFF] hover:underline font-medium flex items-center gap-1 cursor-pointer">
+                                    <Camera className="w-3.5 h-3.5" />
+                                    <span>{r.scannedImageUrl ? "Replace Scan" : "Attach Scanned GCR Leaf"}</span>
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      capture="environment"
+                                      className="hidden"
+                                      onChange={(e) => handleFileSelected(r.id, r.receiptNumber, e)}
+                                    />
+                                  </label>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  {smsStatus[r.id] && (
+                                    <span className="text-[11px] text-[#34C759] font-medium">
+                                      {smsStatus[r.id]}
                                     </span>
                                   )}
-                                </div>
-                                <p className="text-[#6C6C70] text-[11px]">
-                                  {r.paymentMethod} &bull; {r.datePaid}
-                                </p>
-                              </div>
-
-                              <div className="text-right shrink-0">
-                                <span className="font-semibold text-[#34C759] text-sm whitespace-nowrap tabular-nums">{r.amountFormatted}</span>
-                                <p className="text-[#6C6C70] text-[10px] mt-0.5 whitespace-nowrap">{r.settlementType} Assessment</p>
-                              </div>
-                            </div>
-
-                            {/* Action Bar: View/Attach Stamped Leaf & Dispatch SMS */}
-                            <div className="pt-2 border-t border-[#E5E5EA] flex items-center justify-between gap-2 text-xs flex-wrap">
-                              <div className="flex items-center gap-3">
-                                {r.scannedImageUrl && (
                                   <button
                                     type="button"
-                                    onClick={() => setPreviewingImage({ url: r.scannedImageUrl!, receiptNumber: r.receiptNumber })}
-                                    className="text-[#007AFF] hover:underline font-medium flex items-center gap-1 cursor-pointer"
+                                    disabled={sendingSmsReceiptId === r.id}
+                                    onClick={() => handleSendReceiptSms(r.id)}
+                                    className="text-[#34C759] hover:underline font-medium flex items-center gap-1 cursor-pointer disabled:opacity-50"
                                   >
-                                    <Eye className="w-3.5 h-3.5" />
-                                    <span>Inspect Scanned Leaf</span>
+                                    {sendingSmsReceiptId === r.id ? (
+                                      <AppleSpinner size="xs" />
+                                    ) : (
+                                      <Send className="w-3 h-3" />
+                                    )}
+                                    <span>{sendingSmsReceiptId === r.id ? "Dispatching..." : "Dispatch Receipt SMS (KKMA)"}</span>
                                   </button>
-                                )}
-
-                                <label className="text-[#007AFF] hover:underline font-medium flex items-center gap-1 cursor-pointer">
-                                  <Camera className="w-3.5 h-3.5" />
-                                  <span>{r.scannedImageUrl ? "Replace Scan" : "Attach Scanned GCR Leaf"}</span>
-                                  <input
-                                    type="file"
-                                    accept="image/*"
-                                    capture="environment"
-                                    className="hidden"
-                                    onChange={(e) => handleFileSelected(r.id, r.receiptNumber, e)}
-                                  />
-                                </label>
-                              </div>
-
-                              <div className="flex items-center gap-2">
-                                {smsStatus[r.id] && (
-                                  <span className="text-[11px] text-[#34C759] font-medium">
-                                    {smsStatus[r.id]}
-                                  </span>
-                                )}
-                                <button
-                                  type="button"
-                                  disabled={sendingSmsReceiptId === r.id}
-                                  onClick={() => handleSendReceiptSms(r.id)}
-                                  className="text-[#34C759] hover:underline font-medium flex items-center gap-1 cursor-pointer disabled:opacity-50"
-                                >
-                                  {sendingSmsReceiptId === r.id ? (
-                                    <Loader2 className="w-3 h-3 animate-spin" />
-                                  ) : (
-                                    <Send className="w-3 h-3" />
-                                  )}
-                                  <span>{sendingSmsReceiptId === r.id ? "Dispatching..." : "Dispatch Receipt SMS"}</span>
-                                </button>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        ))
+                          );
+                        })
                       )}
                     </div>
                   )}
@@ -910,7 +987,7 @@ export function RatepayerDossierSheet({
                   >
                     {isBillUploading ? (
                       <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <AppleSpinner size="xs" />
                         <span>Uploading Bill Scan...</span>
                       </>
                     ) : (
@@ -977,7 +1054,7 @@ export function RatepayerDossierSheet({
                   >
                     {isUploading ? (
                       <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <AppleSpinner size="xs" />
                         <span>Uploading to Storage...</span>
                       </>
                     ) : (

@@ -6,7 +6,7 @@ export class ArkeselProvider implements ISMSProvider {
 
   constructor() {
     this.apiKey = process.env.ARKESEL_API_KEY || '';
-    this.senderId = process.env.ARKESEL_SENDER_ID || 'Arnold';
+    this.senderId = process.env.ARKESEL_SENDER_ID || 'KKMA';
   }
 
   /**
@@ -115,6 +115,25 @@ export class ArkeselProvider implements ISMSProvider {
   async sendSMS(to: string, message: string): Promise<SMSResponse> {
     try {
       const formattedPhone = this.formatPhoneNumber(to);
+
+      if (!this.apiKey || this.apiKey === 'YOUR_ARKESEL_API_KEY') {
+        try {
+          const { supabase } = await import('@/lib/supabase');
+          const { data } = await supabase.from('SystemSetting').select('key, value').in('key', ['sms_arkesel_api_key', 'sms_arkesel_sender_id']);
+          if (data && data.length > 0) {
+            for (const s of data) {
+              if (s.key === 'sms_arkesel_api_key' && s.value) this.apiKey = s.value;
+              if (s.key === 'sms_arkesel_sender_id' && s.value) this.senderId = s.value;
+            }
+          }
+        } catch {
+          // ignore fallback error
+        }
+      }
+
+      if (!this.senderId || this.senderId.toUpperCase() === 'ARNOLD') {
+        this.senderId = 'KKMA';
+      }
 
       if (!this.apiKey || this.apiKey === 'YOUR_ARKESEL_API_KEY') {
         console.warn(`[SMS Mock - Arkesel] To: ${formattedPhone} | Message: ${message}`);

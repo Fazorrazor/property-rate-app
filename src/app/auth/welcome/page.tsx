@@ -2,7 +2,7 @@
 
 import { useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { AppleSpinner } from "@/components/ui/AppleSpinner";
 
 function WelcomeRedirect() {
   const router = useRouter();
@@ -19,7 +19,7 @@ function WelcomeRedirect() {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3 text-on-surface-muted">
-      <Loader2 className="w-8 h-8 animate-spin text-[#4B1426]" />
+      <AppleSpinner size="lg" className="text-[#4B1426]" />
       <p className="text-sm font-medium">Redirecting to municipal portal...</p>
     </div>
   );
@@ -29,7 +29,7 @@ export default function WelcomePage() {
   return (
     <Suspense fallback={
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3 text-on-surface-muted">
-        <Loader2 className="w-8 h-8 animate-spin text-[#4B1426]" />
+        <AppleSpinner size="lg" className="text-[#4B1426]" />
         <p className="text-sm font-medium">Redirecting to municipal portal...</p>
       </div>
     }>

@@ -51,7 +51,6 @@ function preparePropertyWritePayload(data: any) {
   const { users, receipts, bills, owner, ...cleanData } = data;
   const row: any = {
     ...cleanData,
-    updatedAt: new Date().toISOString(),
   };
 
   if (cleanData.billImageUrl !== undefined) {
@@ -74,9 +73,21 @@ function preparePropertyWritePayload(data: any) {
     row.amount_paid = cleanData.amountPaidLastYear;
     delete row.amountPaidLastYear;
   }
+  if (cleanData.totalAmountDue !== undefined) {
+    row.outstanding_amt = cleanData.totalAmountDue;
+    delete row.totalAmountDue;
+  }
+  if (cleanData.outstanding_amt !== undefined) {
+    row.outstanding_amt = cleanData.outstanding_amt;
+  }
 
-  delete row.totalAmountDue;
+  // Remove columns that do not exist on the PostgreSQL Property table
   delete row.status;
+  delete row.updatedAt;
+  delete row.createdAt;
+  delete row.ownerNameDirect;
+  delete row.ownerPhoneDirect;
+  delete row.settlementDeadline;
 
   return { row, users, receipts, bills, owner };
 }

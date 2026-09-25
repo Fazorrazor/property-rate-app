@@ -7,7 +7,6 @@ import {
   Key,
   CheckCircle2,
   AlertTriangle,
-  Loader2,
   Save,
   RefreshCw,
   Eye,
@@ -24,6 +23,7 @@ import {
   testArkeselGatewayConnection,
   SmsSettingsData,
 } from "@/app/actions";
+import { AppleSpinner } from "./ui/AppleSpinner";
 import { SettingsSkeleton } from "@/components/Skeletons";
 
 interface SettingsTabProps {
@@ -40,7 +40,7 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
   const [dispatchMode, setDispatchMode] = useState<"TEST" | "LIVE">("TEST");
   const [apiKey, setApiKey] = useState("YUlJRXNnTUdJaUdndHRNd2Zubms");
   const [showApiKey, setShowApiKey] = useState(false);
-  const [senderId, setSenderId] = useState("Arnold");
+  const [senderId, setSenderId] = useState("KKMA");
   const [provider, setProvider] = useState<"arkesel" | "twilio">("arkesel");
 
   // Diagnostics result
@@ -440,7 +440,7 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
                   className="apple-btn-secondary w-full sm:w-auto h-9 px-4 disabled:opacity-50"
                 >
                   {isTesting ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-[#007AFF]" />
+                    <AppleSpinner size="xs" className="text-[#007AFF]" />
                   ) : (
                     <RefreshCw className="w-3.5 h-3.5 text-[#6C6C70]" />
                   )}
@@ -453,7 +453,7 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
                   className="apple-btn-primary w-full sm:w-auto h-9 px-5 disabled:opacity-50"
                 >
                   {isSaving ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+                    <AppleSpinner size="xs" className="text-white" />
                   ) : (
                     <Save className="w-3.5 h-3.5 text-white" />
                   )}

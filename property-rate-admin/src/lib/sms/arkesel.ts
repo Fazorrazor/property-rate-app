@@ -11,7 +11,7 @@ export class ArkeselProvider implements ISMSProvider {
   private senderId: string;
   constructor() {
     this.apiKey = process.env.ARKESEL_API_KEY || '';
-    this.senderId = process.env.ARKESEL_SENDER_ID || 'Arnold';
+    this.senderId = process.env.ARKESEL_SENDER_ID || 'KKMA';
   }
   public setApiKey(key: string): void {
     this.apiKey = key;
@@ -150,7 +150,7 @@ export class ArkeselProvider implements ISMSProvider {
       customTemplate,
       municipality = 'Kpone-Katamanso (KKMA)',
       billYear = new Date().getFullYear(),
-      supportPhone = '0256039385/0538702445',
+      supportPhone = '0243756235',
       ussdCode =
       process.env.NEXT_PUBLIC_USSD_CODE ||
       process.env.USSD_SHORT_CODE ||

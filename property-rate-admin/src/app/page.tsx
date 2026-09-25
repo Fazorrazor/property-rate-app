@@ -13,7 +13,6 @@ import {
   CheckCircle2,
   FileText,
   Info,
-  Loader2,
   Users,
   Building2,
   Receipt,
@@ -57,12 +56,15 @@ import {
   AdminAuditLogItem,
   getTreasuryReceipts,
   AdminTreasuryReceipt,
+  getPaidUsersList,
+  AdminPaidUserRecord,
 } from "./actions";
 import {
   exportCadastreCsv,
   exportRatepayersCsv,
   exportTreasuryCsv,
   exportAuditLogsCsv,
+  exportPaidUsersCsv,
 } from "@/lib/csv-export";
 import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "framer-motion";
@@ -70,6 +72,8 @@ import { RatepayerDossierSheet } from "@/components/RatepayerDossierSheet";
 import { SettingsTab } from "@/components/SettingsTab";
 import { SupabaseTablePagination } from "@/components/SupabaseTablePagination";
 import { SmsRolloutSkeleton } from "@/components/Skeletons";
+import { RequiredFieldsFilterPopover } from "@/components/RequiredFieldsFilterPopover";
+import { AppleSpinner } from "@/components/ui/AppleSpinner";
 
 const PropertyModal = dynamic(
   () => import("@/components/PropertyModal").then((m) => m.PropertyModal),
@@ -89,11 +93,12 @@ const SmsRolloutSimulator = dynamic(
   }
 );
 
-type NavTab = "REGISTRY" | "RATEPAYERS" | "SMS_CENTER" | "TREASURY" | "AUDIT_LOGS" | "SETTINGS";
+type NavTab = "REGISTRY" | "RATEPAYERS" | "PAID_USERS" | "SMS_CENTER" | "TREASURY" | "AUDIT_LOGS" | "SETTINGS";
 
 const NAV_TABS: { key: NavTab; label: string; shortLabel: string; icon: any }[] = [
   { key: "REGISTRY", label: "Properties", shortLabel: "Properties", icon: Building2 },
   { key: "RATEPAYERS", label: "Property Owners", shortLabel: "Owners", icon: Users },
+  { key: "PAID_USERS", label: "Paid Ratepayers", shortLabel: "Paid Users", icon: CreditCard },
   { key: "SMS_CENTER", label: "Send SMS Bills", shortLabel: "SMS Bills", icon: MessageSquare },
   { key: "TREASURY", label: "Payments & Receipts", shortLabel: "Payments", icon: Landmark },
   { key: "AUDIT_LOGS", label: "Activity Log", shortLabel: "Activity", icon: ShieldCheck },
@@ -130,6 +135,18 @@ export default function AdminDashboardPage() {
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
   const [activeTab, setActiveTab] = useState<NavTab>("REGISTRY");
   const [currentPage, setCurrentPage] = useState(1);
+
+  // Paid Ratepayers Directory States
+  const [paidUsers, setPaidUsers] = useState<AdminPaidUserRecord[]>([]);
+  const [paidUsersTotal, setPaidUsersTotal] = useState(0);
+  const [paidUsersTotalAmount, setPaidUsersTotalAmount] = useState(0);
+  const [currentPaidUsersPage, setCurrentPaidUsersPage] = useState(1);
+  const [paidUsersLimit, setPaidUsersLimit] = useState(50);
+  const [isLoadingPaidUsers, setIsLoadingPaidUsers] = useState(false);
+  const [paidUsersSearchQuery, setPaidUsersSearchQuery] = useState("");
+  const deferredPaidUsersSearchQuery = useDeferredValue(paidUsersSearchQuery);
+  const [paidUsersSubTab, setPaidUsersSubTab] = useState<"ALL" | "LIVE" | "TEST">("LIVE");
+  const [copiedReference, setCopiedReference] = useState<string | null>(null);
 
   // High-Security SMS Authorization Modal States (Targeted & Selective)
   const [showSmsAuthModal, setShowSmsAuthModal] = useState(false);
@@ -203,7 +220,7 @@ export default function AdminDashboardPage() {
       const params = new URLSearchParams(window.location.search);
       const urlTab = params.get("tab") as NavTab | null;
       const savedTab = localStorage.getItem("admin_active_tab") as NavTab | null;
-      const validTabs: NavTab[] = ["REGISTRY", "RATEPAYERS", "SMS_CENTER", "TREASURY", "AUDIT_LOGS", "SETTINGS"];
+      const validTabs: NavTab[] = ["REGISTRY", "RATEPAYERS", "PAID_USERS", "SMS_CENTER", "TREASURY", "AUDIT_LOGS", "SETTINGS"];
 
       if (urlTab && validTabs.includes(urlTab)) {
         setActiveTab(urlTab);
@@ -242,6 +259,8 @@ export default function AdminDashboardPage() {
   const [municipalityFilter, setMunicipalityFilter] = useState("Kpone-Katamanso (KKMA)");
   const [classificationFilter, setClassificationFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "PAID" | "UNPAID" | "DEFAULTER">("ALL");
+  const [propertyRequiredFields, setPropertyRequiredFields] = useState<string[]>([]);
+  const [ratepayerRequiredFields, setRatepayerRequiredFields] = useState<string[]>([]);
   const [treasuryReceipts, setTreasuryReceipts] = useState<AdminTreasuryReceipt[]>([]);
   const [treasuryReceiptsTotal, setTreasuryReceiptsTotal] = useState(0);
   const [isLoadingTreasury, setIsLoadingTreasury] = useState(false);
@@ -319,7 +338,8 @@ export default function AdminDashboardPage() {
     classification = classificationFilter,
     status = statusFilter,
     isInitial = false,
-    limit = propertyLimit
+    limit = propertyLimit,
+    requiredFields = propertyRequiredFields
   ) => {
     if (isInitial) {
       setIsInitialLoading(true);
@@ -335,7 +355,8 @@ export default function AdminDashboardPage() {
         muni,
         query,
         classification,
-        status as any
+        status as any,
+        requiredFields
       );
       // Discard stale responses if user changed query in the meantime
       if (activePropertyQueryRef.current !== query) {
@@ -435,8 +456,15 @@ export default function AdminDashboardPage() {
 
   // Initial load once on mount
   useEffect(() => {
-    loadData(1, "", "ALL", "ALL", "ALL", true);
+    loadData(1, "", "ALL", "ALL", "ALL", true, propertyLimit, propertyRequiredFields);
   }, []);
+
+  // Reload properties when required fields change
+  useEffect(() => {
+    if (!isInitialLoading) {
+      loadData(1, searchQuery, municipalityFilter, classificationFilter, statusFilter, false, propertyLimit, propertyRequiredFields);
+    }
+  }, [propertyRequiredFields]);
 
   // Debounced background server search for Properties without unmounting whole page
   useEffect(() => {
@@ -510,6 +538,34 @@ export default function AdminDashboardPage() {
     }
   }, [treasurySearchQuery, treasuryMethodFilter, activeTab]);
 
+  // Dedicated query for Paid Ratepayers Directory
+  useEffect(() => {
+    if (isInitialLoading) return;
+    if (activeTab === "PAID_USERS") {
+      setIsLoadingPaidUsers(true);
+      const timer = setTimeout(async () => {
+        try {
+          const res = await getPaidUsersList(
+            deferredPaidUsersSearchQuery,
+            paidUsersSubTab,
+            currentPaidUsersPage,
+            paidUsersLimit
+          );
+          if (res) {
+            setPaidUsers(res.records);
+            setPaidUsersTotal(res.total);
+            setPaidUsersTotalAmount(res.totalAmount);
+          }
+        } catch (err) {
+          console.error("Error loading paid users:", err);
+        } finally {
+          setIsLoadingPaidUsers(false);
+        }
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [activeTab, deferredPaidUsersSearchQuery, paidUsersSubTab, currentPaidUsersPage, paidUsersLimit, isInitialLoading]);
+
   // Debounced background server search for Audit Trail
   useEffect(() => {
     if (isInitialLoading) return;
@@ -541,10 +597,10 @@ export default function AdminDashboardPage() {
   };
 
   // Dedicated pagination loader for Ratepayers
-  const loadRatepayers = async (query = "", page = 1, limit = ratepayerLimit) => {
+  const loadRatepayers = async (query = "", page = 1, limit = ratepayerLimit, requiredFields = ratepayerRequiredFields) => {
     setIsLoadingRatepayers(true);
     try {
-      const res = await getRatepayersList(query, page, limit);
+      const res = await getRatepayersList(query, page, limit, requiredFields);
       if (res) {
         setRatepayers(res.ratepayers);
         setRatepayersTotal(res.total);
@@ -558,19 +614,19 @@ export default function AdminDashboardPage() {
   };
 
   const handleRatepayerPageChange = (newPage: number) => {
-    loadRatepayers(deferredRatepayerSearchQuery, newPage, ratepayerLimit);
+    loadRatepayers(deferredRatepayerSearchQuery, newPage, ratepayerLimit, ratepayerRequiredFields);
   };
 
   const handleRatepayerPageSizeChange = (newLimit: number) => {
     setRatepayerLimit(newLimit);
-    loadRatepayers(deferredRatepayerSearchQuery, 1, newLimit);
+    loadRatepayers(deferredRatepayerSearchQuery, 1, newLimit, ratepayerRequiredFields);
   };
 
   useEffect(() => {
     if (activeTab === "RATEPAYERS") {
-      loadRatepayers(deferredRatepayerSearchQuery, 1, ratepayerLimit);
+      loadRatepayers(deferredRatepayerSearchQuery, 1, ratepayerLimit, ratepayerRequiredFields);
     }
-  }, [activeTab, deferredRatepayerSearchQuery]);
+  }, [activeTab, deferredRatepayerSearchQuery, ratepayerRequiredFields]);
 
 
   // Lock background scroll when modal or drawer is active
@@ -1128,7 +1184,7 @@ export default function AdminDashboardPage() {
                 >
                   {isLoggingOut ? (
                     <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin text-[#007AFF]" />
+                      <AppleSpinner size="xs" className="text-[#007AFF]" />
                       <span>Signing out...</span>
                     </>
                   ) : (
@@ -1247,7 +1303,7 @@ export default function AdminDashboardPage() {
               }`}
             >
               {isLoggingOut ? (
-                <Loader2 className="w-4 h-4 animate-spin text-[#007AFF] shrink-0" />
+                <AppleSpinner size="sm" className="shrink-0 text-[#007AFF]" />
               ) : (
                 <LogOut className="w-4 h-4 shrink-0 text-[#6C6C70] group-hover:text-[#FF3B30]" />
               )}
@@ -1320,7 +1376,7 @@ export default function AdminDashboardPage() {
                     </span>
                   ) : (
                     <>
-                      <Loader2 className="w-3 h-3 animate-spin text-[#007AFF]" />
+                      <AppleSpinner size="xs" className="text-[#007AFF]" />
                       <span>SMS Rollout in Progress...</span>
                     </>
                   )}
@@ -1482,7 +1538,7 @@ export default function AdminDashboardPage() {
                   {/* Search */}
                   <div className="relative flex items-center w-full lg:flex-1 lg:max-w-md">
                     {isSearchingProperties ? (
-                      <Loader2 className="w-4 h-4 text-[#007AFF] animate-spin absolute left-3 pointer-events-none" />
+                      <AppleSpinner size="sm" className="text-[#007AFF] absolute left-3 pointer-events-none" />
                     ) : (
                       <Search className="w-4 h-4 text-[#8E8E93] absolute left-3 pointer-events-none" />
                     )}
@@ -1553,6 +1609,14 @@ export default function AdminDashboardPage() {
                       <option value="DEFAULTER">Past Due Arrears (&gt; GH₵ 0)</option>
                       <option value="PAID">Paid in Full</option>
                     </select>
+
+                    <RequiredFieldsFilterPopover
+                      requiredFields={propertyRequiredFields}
+                      onChange={(fields) => {
+                        setPropertyRequiredFields(fields);
+                        setCurrentPropertyPage(1);
+                      }}
+                    />
 
                     <button
                       type="button"
@@ -1969,20 +2033,27 @@ export default function AdminDashboardPage() {
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-2.5 shrink-0">
-                  <button
-                    type="button"
-                    onClick={handleExportRatepayersCsv}
-                    className="apple-btn-secondary h-8 px-3 rounded-lg font-medium text-xs flex items-center gap-1.5 cursor-pointer shrink-0 text-[#007AFF] border-[#007AFF]/20 hover:bg-[#007AFF]/5 transition-colors"
-                    title="Export Professional Excel/CSV with Linked Accounts Hierarchy"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    <span>Export Ratepayers CSV</span>
-                  </button>
-                  <span className="text-xs text-[#8E8E93] font-sans tabular-nums">
-                    {ratepayers.length} of {ratepayersTotal} Ratepayers
-                  </span>
-                </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <RequiredFieldsFilterPopover
+                      requiredFields={ratepayerRequiredFields}
+                      onChange={(fields) => {
+                        setRatepayerRequiredFields(fields);
+                        setCurrentRatepayerPage(1);
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleExportRatepayersCsv}
+                      className="apple-btn-secondary h-8 px-3 rounded-lg font-medium text-xs flex items-center gap-1.5 cursor-pointer shrink-0 text-[#007AFF] border-[#007AFF]/20 hover:bg-[#007AFF]/5 transition-colors"
+                      title="Export Professional Excel/CSV with Linked Accounts Hierarchy"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Export Ratepayers CSV</span>
+                    </button>
+                    <span className="text-xs text-[#8E8E93] font-sans tabular-nums">
+                      {ratepayers.length} of {ratepayersTotal} Ratepayers
+                    </span>
+                  </div>
               </div>
 
               {/* Ratepayers Directory Table */}
@@ -2116,6 +2187,328 @@ export default function AdminDashboardPage() {
                 onPageSizeChange={handleRatepayerPageSizeChange}
                 isLoading={isLoadingRatepayers}
                 entityLabel="ratepayers"
+              />
+            </section>
+          )}
+
+          {/* TAB: PAID RATEPAYERS DIRECTORY & COLLECTIONS LEDGER */}
+          {activeTab === "PAID_USERS" && (
+            <section className="bg-white flex-1 min-h-0 flex flex-col overflow-hidden w-full border-0 rounded-none shadow-none">
+              {/* Header & Metrics */}
+              <div className="px-4 lg:px-6 py-3.5 border-b border-[#E5E5EA] bg-white flex flex-col gap-3 shrink-0">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <h2 className="text-base font-semibold text-[#1C1C1E] tracking-tight">Paid Ratepayers Directory</h2>
+                    <p className="text-xs text-[#6C6C70] mt-0.5">
+                      Official ledger of ratepayers who have completed property rate payments.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <span className="text-[11px] text-[#6C6C70] block">Total Collected:</span>
+                      <span className="text-xs font-semibold text-[#34C759]">
+                        GH₵ {paidUsersTotalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => exportPaidUsersCsv(paidUsers, paidUsersSubTab, currentAdmin?.name || "System Administrator")}
+                      disabled={paidUsers.length === 0}
+                      className="apple-btn-secondary h-8 px-2.5 text-xs font-medium flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
+                      title="Export Paid Ratepayers to CSV"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Export CSV</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Sub-Tabs: Clean typographic navigation without any pill elements */}
+                <div className="flex items-center gap-6 border-b border-[#E5E5EA] -mb-1 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => { setPaidUsersSubTab("LIVE"); setCurrentPaidUsersPage(1); }}
+                    className={`pb-2.5 text-xs font-semibold tracking-tight transition-colors border-b-2 cursor-pointer flex items-center gap-1.5 ${
+                      paidUsersSubTab === "LIVE"
+                        ? "border-[#007AFF] text-[#007AFF]"
+                        : "border-transparent text-[#6C6C70] hover:text-[#1C1C1E]"
+                    }`}
+                  >
+                    <span>Official Ratepayers</span>
+                    {paidUsersSubTab === "LIVE" && <span className="text-[11px] font-mono text-[#007AFF]">({paidUsersTotal})</span>}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => { setPaidUsersSubTab("TEST"); setCurrentPaidUsersPage(1); }}
+                    className={`pb-2.5 text-xs font-semibold tracking-tight transition-colors border-b-2 cursor-pointer flex items-center gap-1.5 ${
+                      paidUsersSubTab === "TEST"
+                        ? "border-[#007AFF] text-[#007AFF]"
+                        : "border-transparent text-[#6C6C70] hover:text-[#1C1C1E]"
+                    }`}
+                  >
+                    <span>Sandbox Test Accounts</span>
+                    {paidUsersSubTab === "TEST" && <span className="text-[11px] font-mono text-[#007AFF]">({paidUsersTotal})</span>}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => { setPaidUsersSubTab("ALL"); setCurrentPaidUsersPage(1); }}
+                    className={`pb-2.5 text-xs font-semibold tracking-tight transition-colors border-b-2 cursor-pointer flex items-center gap-1.5 ${
+                      paidUsersSubTab === "ALL"
+                        ? "border-[#007AFF] text-[#007AFF]"
+                        : "border-transparent text-[#6C6C70] hover:text-[#1C1C1E]"
+                    }`}
+                  >
+                    <span>All Records</span>
+                    {paidUsersSubTab === "ALL" && <span className="text-[11px] font-mono text-[#007AFF]">({paidUsersTotal})</span>}
+                  </button>
+                </div>
+
+                {/* Search Bar */}
+                <div className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 pt-2">
+                  <div className="relative flex items-center w-full lg:flex-1 lg:max-w-md">
+                    {isLoadingPaidUsers ? (
+                      <AppleSpinner size="sm" className="text-[#007AFF] absolute left-3 pointer-events-none" />
+                    ) : (
+                      <Search className="w-4 h-4 text-[#8E8E93] absolute left-3 pointer-events-none" />
+                    )}
+                    <input
+                      type="text"
+                      inputMode="search"
+                      name="paid_users_search_filter"
+                      autoComplete="off"
+                      placeholder="Search Ratepayer Name, Phone, Account No, Reference, Receipt..."
+                      value={paidUsersSearchQuery}
+                      onChange={(e) => setPaidUsersSearchQuery(e.target.value)}
+                      aria-label="Search paid ratepayers"
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") setPaidUsersSearchQuery("");
+                      }}
+                      className="w-full h-8 pl-9 pr-8 rounded-lg border border-[#E5E5EA] bg-[#F2F2F7] text-xs text-[#1C1C1E] placeholder:text-[#8E8E93] focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] focus:bg-white focus:outline-none transition-colors"
+                    />
+                    {paidUsersSearchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setPaidUsersSearchQuery("")}
+                        className="absolute right-2 text-[#8E8E93] hover:text-[#1C1C1E] p-1 cursor-pointer"
+                        title="Clear search"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-[#6C6C70]">
+                      Showing <span className="font-semibold text-[#1C1C1E]">{paidUsers.length}</span> of <span className="font-semibold text-[#1C1C1E]">{paidUsersTotal}</span> payments
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Table Container */}
+              <div className="flex-1 overflow-auto bg-white min-h-0">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead className="sticky top-0 z-10 bg-[#F8F9FA] border-b border-[#E5E5EA]">
+                    <tr>
+                      <th className="px-4 lg:px-6 py-3 font-semibold text-[#6C6C70]">Ratepayer</th>
+                      <th className="px-4 lg:px-6 py-3 font-semibold text-[#6C6C70]">Property Account</th>
+                      <th className="px-4 lg:px-6 py-3 font-semibold text-[#6C6C70] text-right">Amount Paid</th>
+                      <th className="px-4 lg:px-6 py-3 font-semibold text-[#6C6C70]">Channel</th>
+                      <th className="px-4 lg:px-6 py-3 font-semibold text-[#6C6C70]">Payment Reference &amp; Receipt</th>
+                      <th className="px-4 lg:px-6 py-3 font-semibold text-[#6C6C70]">Date &amp; Time</th>
+                      <th className="px-4 lg:px-6 py-3 font-semibold text-[#6C6C70] text-center">Status</th>
+                      <th className="px-4 lg:px-6 py-3 font-semibold text-[#6C6C70] text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#E5E5EA]">
+                    {isLoadingPaidUsers && paidUsers.length === 0 ? (
+                      Array.from({ length: 6 }).map((_, i) => (
+                        <tr key={i} className="animate-pulse">
+                          <td className="px-4 lg:px-6 py-3.5">
+                            <div className="h-3.5 w-32 bg-[#E5E5EA] rounded" />
+                          </td>
+                          <td className="px-4 lg:px-6 py-3.5">
+                            <div className="h-3.5 w-24 bg-[#E5E5EA] rounded" />
+                          </td>
+                          <td className="px-4 lg:px-6 py-3.5 text-right">
+                            <div className="h-3.5 w-16 bg-[#E5E5EA] rounded ml-auto" />
+                          </td>
+                          <td className="px-4 lg:px-6 py-3.5">
+                            <div className="h-3.5 w-20 bg-[#E5E5EA] rounded" />
+                          </td>
+                          <td className="px-4 lg:px-6 py-3.5">
+                            <div className="h-3.5 w-36 bg-[#E5E5EA] rounded" />
+                          </td>
+                          <td className="px-4 lg:px-6 py-3.5">
+                            <div className="h-3.5 w-28 bg-[#E5E5EA] rounded" />
+                          </td>
+                          <td className="px-4 lg:px-6 py-3.5 text-center">
+                            <div className="h-3 w-16 bg-[#E5E5EA] rounded mx-auto" />
+                          </td>
+                          <td className="px-4 lg:px-6 py-3.5 text-right">
+                            <div className="h-3 w-14 bg-[#E5E5EA] rounded ml-auto" />
+                          </td>
+                        </tr>
+                      ))
+                    ) : paidUsers.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="px-6 py-16 text-center text-[#6C6C70]">
+                          <div className="flex flex-col items-center justify-center space-y-2">
+                            <CreditCard className="w-8 h-8 text-[#8E8E93]" />
+                            <p className="font-semibold text-sm text-[#1C1C1E]">No payment records found</p>
+                            <p className="text-xs text-[#6C6C70]">
+                              {paidUsersSubTab === "LIVE"
+                                ? "No official ratepayer payments recorded yet in this scope."
+                                : paidUsersSubTab === "TEST"
+                                ? "No sandbox test payments recorded yet."
+                                : "No payment records match your search query."}
+                            </p>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      paidUsers.map((rec) => (
+                        <tr
+                          key={rec.id}
+                          className="hover:bg-[#F8F9FA] transition-colors group cursor-default"
+                        >
+                          <td className="px-4 lg:px-6 py-3.5">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-7 h-7 rounded-lg bg-[#007AFF]/10 text-[#007AFF] flex items-center justify-center font-bold text-xs shrink-0">
+                                {(rec.userName || "R").charAt(0).toUpperCase()}
+                              </div>
+                              <div className="min-w-0">
+                                <span className="font-semibold text-[#1C1C1E] block truncate">
+                                  {rec.userName}
+                                </span>
+                                <span className="text-[11px] text-[#6C6C70] font-mono block">
+                                  {rec.phoneNumber}
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+
+                          <td className="px-4 lg:px-6 py-3.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const propMatch = propertiesList.find((p) => p.accountNumber === rec.accountNumber) || data?.properties.find((p) => p.accountNumber === rec.accountNumber);
+                                if (rec.userId) {
+                                  handleOpenRatepayerDossier(rec.userId);
+                                } else if (propMatch) {
+                                  setSelectedAccount(propMatch);
+                                } else {
+                                  handleOpenRatepayerDossier(`usr_${rec.phoneNumber}`);
+                                }
+                              }}
+                              className="font-mono font-medium text-[#007AFF] hover:underline cursor-pointer text-left"
+                              title="View property dossier"
+                            >
+                              {rec.accountNumber}
+                            </button>
+                            {rec.isTestUser && (
+                              <span className="block text-[10px] text-[#FF9500] font-mono font-medium">Sandbox Test</span>
+                            )}
+                          </td>
+
+                          <td className="px-4 lg:px-6 py-3.5 text-right">
+                            <span className="font-mono font-semibold text-[#1C1C1E] block">
+                              {rec.amountPaidFormatted}
+                            </span>
+                            {(rec.arrearsPaid > 0 || rec.currentPaid > 0) && (
+                              <span className="text-[10px] text-[#6C6C70] font-mono block">
+                                {rec.arrearsPaid > 0 ? `Arr: GH₵ ${rec.arrearsPaid.toFixed(2)}` : ""}
+                                {rec.arrearsPaid > 0 && rec.currentPaid > 0 ? " | " : ""}
+                                {rec.currentPaid > 0 ? `Cur: GH₵ ${rec.currentPaid.toFixed(2)}` : ""}
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="px-4 lg:px-6 py-3.5">
+                            <span className="text-[#1C1C1E] font-medium block">
+                              {rec.paymentMethod}
+                            </span>
+                          </td>
+
+                          <td className="px-4 lg:px-6 py-3.5">
+                            <div className="space-y-0.5">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-mono text-[11px] text-[#1C1C1E] select-all truncate max-w-[180px]" title={rec.reference}>
+                                  {rec.reference}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(rec.reference);
+                                    setCopiedReference(rec.reference);
+                                    setTimeout(() => setCopiedReference(null), 2000);
+                                  }}
+                                  className="text-[#8E8E93] hover:text-[#007AFF] p-0.5 cursor-pointer text-[10px]"
+                                  title="Copy payment reference"
+                                >
+                                  {copiedReference === rec.reference ? (
+                                    <span className="text-[#34C759] font-medium">Copied!</span>
+                                  ) : (
+                                    <span className="underline">Copy</span>
+                                  )}
+                                </button>
+                              </div>
+                              {rec.receiptNumber && (
+                                <span className="text-[11px] font-mono text-[#6C6C70] block">
+                                  Receipt: {rec.receiptNumber}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+
+                          <td className="px-4 lg:px-6 py-3.5 text-[#6C6C70] text-[11px] whitespace-nowrap">
+                            {rec.paidAt}
+                          </td>
+
+                          <td className="px-4 lg:px-6 py-3.5 text-center">
+                            <span className="text-xs font-semibold text-[#34C759]">
+                              &bull; {rec.status}
+                            </span>
+                          </td>
+
+                          <td className="px-4 lg:px-6 py-3.5 text-right">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const propMatch = propertiesList.find((p) => p.accountNumber === rec.accountNumber) || data?.properties.find((p) => p.accountNumber === rec.accountNumber);
+                                if (rec.userId) {
+                                  handleOpenRatepayerDossier(rec.userId);
+                                } else if (propMatch) {
+                                  setSelectedAccount(propMatch);
+                                } else {
+                                  handleOpenRatepayerDossier(`usr_${rec.phoneNumber}`);
+                                }
+                              }}
+                              className="text-[#007AFF] hover:underline font-medium text-xs cursor-pointer inline-flex items-center gap-1"
+                            >
+                              <span>Dossier</span>
+                              <ChevronRight className="w-3 h-3" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination Bar */}
+              <SupabaseTablePagination
+                currentPage={currentPaidUsersPage}
+                totalPages={Math.max(1, Math.ceil(paidUsersTotal / paidUsersLimit))}
+                totalRecords={paidUsersTotal}
+                pageSize={paidUsersLimit}
+                pageSizeOptions={[25, 50, 100]}
+                onPageChange={(p) => setCurrentPaidUsersPage(p)}
+                onPageSizeChange={(sz) => { setPaidUsersLimit(sz); setCurrentPaidUsersPage(1); }}
+                isLoading={isLoadingPaidUsers}
+                entityLabel="payments"
               />
             </section>
           )}
@@ -3025,7 +3418,7 @@ export default function AdminDashboardPage() {
                     disabled={isProcessing}
                     className="apple-btn-primary h-11 sm:h-9 px-4 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 flex-1 sm:flex-none bg-[#007AFF] text-white hover:bg-[#0062CC]"
                   >
-                    {isProcessing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                    {isProcessing ? <AppleSpinner size="xs" /> : <RefreshCw className="w-3.5 h-3.5" />}
                     <span>Confirm &amp; Send Bills</span>
                   </button>
                 </div>
@@ -3160,7 +3553,7 @@ export default function AdminDashboardPage() {
                   disabled={isProcessing}
                   className="apple-btn-primary h-11 sm:h-9 px-4 rounded-lg font-medium flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 flex-1 sm:flex-none bg-[#007AFF] text-white hover:bg-[#0062CC]"
                 >
-                  {isProcessing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                  {isProcessing ? <AppleSpinner size="xs" /> : null}
                   <span>Issue &amp; Reconcile GCR</span>
                 </button>
               </div>
@@ -3387,7 +3780,7 @@ export default function AdminDashboardPage() {
                 >
                   {isProcessing ? (
                     <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <AppleSpinner size="xs" />
                       <span>Verifying &amp; Sending...</span>
                     </>
                   ) : (

@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { AppleSpinner } from "./ui/AppleSpinner";
 
 export interface SupabaseTablePaginationProps {
   currentPage: number;
@@ -107,7 +108,7 @@ export function SupabaseTablePagination({
         </button>
 
         {isLoading && (
-          <Loader2 className="w-3.5 h-3.5 text-[#007AFF] animate-spin ml-1" />
+          <AppleSpinner size="xs" className="text-[#007AFF] ml-1" />
         )}
       </div>
 

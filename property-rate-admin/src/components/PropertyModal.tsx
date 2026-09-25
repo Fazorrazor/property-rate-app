@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Loader2, Save, ShieldCheck, Eye, EyeOff } from 'lucide-react';
+import { X, Save, ShieldCheck, Eye, EyeOff } from 'lucide-react';
+import { AppleSpinner } from './ui/AppleSpinner';
 import { AdminProperty, saveProperty } from '@/app/actions';
 
 interface PropertyModalProps {
@@ -368,7 +369,7 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
                 disabled={isLoading}
                 className="apple-btn-primary h-10 sm:h-9 px-4 flex-1 sm:flex-none disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                {isLoading ? <AppleSpinner size="sm" className="text-white" /> : <Save className="w-4 h-4" />}
                 <span>{property ? 'Save Changes' : 'Register Property'}</span>
               </button>
             </div>

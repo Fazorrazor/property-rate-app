@@ -1059,6 +1059,28 @@ export async function getCheckoutData(
       deterministicUser = await resolvePropertyUser(cleanPropertyId, user);
     }
 
+    if (deterministicUser && !user) {
+      try {
+        const cookieStore = await cookies();
+        const existingToken = cookieStore.get('auth_session')?.value;
+        if (!existingToken) {
+          const sessionToken = `ses_${Math.random().toString(36).substring(2, 12)}_${Date.now()}`;
+          await prisma.session.create({
+            data: { token: sessionToken, userId: deterministicUser.id },
+          }).catch(() => {});
+          cookieStore.set('auth_session', sessionToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 60 * 60 * 24 * 365,
+            path: '/',
+          });
+        }
+      } catch {
+        // Non-blocking
+      }
+    }
+
     const resolvedUserPhone = deterministicUser?.phoneNumber || targetProp?.owner?.mobileNumber || targetProp?.owner?.tel || '';
     const resolvedUserName = deterministicUser?.name || targetProp?.owner?.name || user?.name || ownerName || '';
 
@@ -1335,6 +1357,27 @@ export async function chargeMobileMoneyAction(params: {
       const lookupAcc = params.accountNumberOverride || (params.propertyId !== 'ALL' ? params.propertyId : null);
       if (lookupAcc) {
         user = (await resolvePropertyUser(lookupAcc, null)) as any;
+        if (user) {
+          try {
+            const cookieStore = await cookies();
+            const existingToken = cookieStore.get('auth_session')?.value;
+            if (!existingToken) {
+              const sessionToken = `ses_${Math.random().toString(36).substring(2, 12)}_${Date.now()}`;
+              await prisma.session.create({
+                data: { token: sessionToken, userId: user.id },
+              }).catch(() => {});
+              cookieStore.set('auth_session', sessionToken, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'lax',
+                maxAge: 60 * 60 * 24 * 365,
+                path: '/',
+              });
+            }
+          } catch {
+            // Non-blocking
+          }
+        }
       }
     }
     if (!user) return { success: false, error: 'User session or property record not found' };
@@ -2013,6 +2056,7 @@ export async function verifyPaymentTransaction(reference: string) {
           success: true,
           status: 'SUCCESS',
           amount: transaction.amount,
+          reference: transaction.reference,
           receipt: {
             receiptNumber: transaction.receipt.receiptNumber,
             receiptId: transaction.receipt.id
@@ -2033,6 +2077,7 @@ export async function verifyPaymentTransaction(reference: string) {
       success: true,
       status: response.status,
       amount: response.amount,
+      reference,
       receipt: transaction?.receipt ? {
         receiptNumber: transaction.receipt.receiptNumber,
         receiptId: transaction.receipt.id

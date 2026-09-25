@@ -9,12 +9,12 @@ import {
   CreditCard,
   LogOut,
   ChevronRight,
-  Loader2,
   Lock,
   Headphones,
   Clock,
   Link2,
 } from "lucide-react";
+import { AppleSpinner } from "@/components/ui/AppleSpinner";
 import { HeinzLoader } from "@/components/ui/HeinzLoader";
 import { ProfileSkeleton } from "@/components/ui/Skeletons";
 import { getDashboardData, logoutUser, DashboardData } from "@/app/actions";
@@ -236,7 +236,10 @@ export default function ProfilePage() {
         className="btn-3d-danger w-full h-11 rounded-xl text-white font-medium text-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
       >
         {isLoggingOut ? (
-          <span className="animate-pulse">Logging Out...</span>
+          <>
+            <AppleSpinner size="xs" />
+            <span>Logging Out...</span>
+          </>
         ) : (
           <>
             <LogOut className="w-3.5 h-3.5" />

@@ -71,7 +71,13 @@ For every UI format, update, addition, or component created in both the Citizen 
 - **Anti-Over-Abstraction / YAGNI ("You Aren't Gonna Need It")**: Under no circumstances spin up brand-new helper functions, wrappers, utility classes, or speculative layers to solve simple 2-line inline fixes. Solve problems directly and idiomatically at the site of failure.
 - **Eliminate Hallucinated Boilerplate**: Avoid verbose, multi-tiered boilerplate patterns where a simple, native TypeScript or React expression (e.g. `useMemo`, native array operations, standard hooks) suffices.
 - **Contextual Economy & Surgical Precision**: Maintain architectural continuity across sessions. Do not patch bugs by blindly piling new functions or layers on top of old ones. Always simplify, prune, and consolidate existing logic instead of accumulating dead code.
-- **Dead Code Purging**: Proactively remove orphaned variables, unused functions, obsolete state parameters, and redundant wrapper abstractions on every modification.
+## MANDATORY UI/UX & ZERO-LATENCY INTERFACE STANDARDS
+All user and administrator interfaces must strictly adhere to these 4 foundational operational laws:
+
+1. **Optimistic UI Updates**: The application assumes a network request will succeed and immediately renders the expected state (or an immediate loading indicator) so the user experiences zero perceived delay. Form triggers lock instantaneously (`disabled`) to block duplicate clicks.
+2. **Perceived Performance / Zero-Latency UX**: Techniques designed to make an application feel faster to the user by manipulating timing, instant visual feedback, and smooth transitions, even if the underlying network latency remains the same.
+3. **Immediate Feedback Loop**: A core usability principle stating that an interactive system must always acknowledge user input instantly (typically within <100ms) to prevent double-clicks or confusion about whether an action registered.
+4. **Global Component Standardization**: Enforcing a single design system element (specifically the unified authentic Apple activity indicator `AppleSpinner`) across all application platforms (User App vs. Admin Portal) to eliminate disparate, ad-hoc, or generic loader icons and maintain 100% visual consistency.
 
 ## ADVANCED SOFTWARE ARCHITECTURE & MASTER DESIGN PATTERNS
 All implementations across both the Citizen App and the Admin Portal must adhere to these 7 architectural pillars:

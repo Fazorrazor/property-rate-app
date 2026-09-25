@@ -17,7 +17,7 @@ let activeSmsConfig = {
         | 'arkesel'
         | 'twilio',
     arkeselApiKey: process.env.ARKESEL_API_KEY || '',
-    arkeselSenderId: process.env.ARKESEL_SENDER_ID || 'Arnold',
+    arkeselSenderId: process.env.ARKESEL_SENDER_ID || 'KKMA',
     messageTemplate: DEFAULT_SMS_NOTICE_TEMPLATE,
     receiptTemplate: DEFAULT_RECEIPT_NOTICE_TEMPLATE,
 };
@@ -69,15 +69,37 @@ export async function syncActiveSmsConfig() {
 export interface AdminPropertyReceipt {
     id: string;
     receiptNumber: string;
+    transactionReference?: string | null;
     amount: number;
     amountFormatted: string;
     settlementType: string;
     paymentMethod: string;
     status: string;
     datePaid: string;
+    exactTimestamp?: string | null;
+    formattedDate?: string;
+    formattedTime?: string;
     scannedImageUrl?: string | null;
     propertyAccountNumber?: string;
+    propertyDigitalAddress?: string | null;
+    propertyId?: string;
     userId?: string;
+    payerPhoneNumber?: string | null;
+    narrative?: {
+        targetAccount: string;
+        targetDigitalAddress?: string;
+        arrearsPaid: number;
+        arrearsPaidFormatted: string;
+        currentFeePaid: number;
+        currentFeePaidFormatted: string;
+        totalAmountPaid: number;
+        totalAmountPaidFormatted: string;
+        remainingTotalDue: number;
+        remainingTotalDueFormatted: string;
+        propertyStatusAfter: string;
+        isFullySettled: boolean;
+        actionRequiredText: string;
+    };
 }
 
 export interface AdminProperty {
@@ -361,7 +383,8 @@ export async function getAdminOverview(
     municipality = "ALL",
     searchQuery = "",
     classification = "ALL",
-    status = "ALL"
+    status = "ALL",
+    requiredFields: string[] = []
 ): Promise<AdminDashboardData | null> {
     try {
         await verifyAdminSession();
@@ -386,6 +409,10 @@ export async function getAdminOverview(
 
         if (searchQuery && searchQuery.trim()) {
             tableWhereClause.search = searchQuery.trim();
+        }
+
+        if (requiredFields && Array.isArray(requiredFields) && requiredFields.length > 0) {
+            tableWhereClause.requiredFields = requiredFields;
         }
 
         let totalFilteredProps = 0;
@@ -486,19 +513,25 @@ export async function getAdminOverview(
 
             const muni = p.municipality || 'Kpone-Katamanso (KKMA)';
 
-            const receiptsList: AdminPropertyReceipt[] = (p.receipts || []).map((r: any) => ({
-                id: r.id,
-                receiptNumber: r.receiptNumber,
-                amount: r.amount,
-                amountFormatted: `GH₵ ${r.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-                settlementType: r.settlementType || 'TOTAL',
-                paymentMethod: r.paymentMethod || 'Mobile Money',
-                status: r.status || 'PAID',
-                datePaid: new Date(r.datePaid || Date.now()).toLocaleDateString('en-GB', {
-                    day: '2-digit', month: 'short', year: 'numeric',
-                    hour: '2-digit', minute: '2-digit'
-                }),
-            }));
+            const receiptsList: AdminPropertyReceipt[] = (p.receipts || []).map((r: any) => {
+                const d = new Date(r.datePaid || Date.now());
+                const formattedDate = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+                const formattedTime = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) + ' UTC';
+                return {
+                    id: r.id,
+                    receiptNumber: r.receiptNumber,
+                    amount: r.amount,
+                    amountFormatted: `GH₵ ${r.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                    settlementType: r.settlementType || 'TOTAL',
+                    paymentMethod: r.paymentMethod || 'Mobile Money',
+                    status: r.status || 'PAID',
+                    datePaid: `${formattedDate}, ${formattedTime}`,
+                    exactTimestamp: d.toISOString(),
+                    formattedDate,
+                    formattedTime,
+                    propertyAccountNumber: p.accountNumber,
+                };
+            });
 
             return {
                 id: p.id,
@@ -566,7 +599,7 @@ export async function getAdminOverview(
     }
 }
 
-export async function getRatepayersList(query = '', page = 1, limit = 50): Promise<{
+export async function getRatepayersList(query = '', page = 1, limit = 50, requiredFields: string[] = []): Promise<{
     ratepayers: AdminRatepayerSummary[];
     total: number;
 } | null> {
@@ -584,11 +617,31 @@ export async function getRatepayersList(query = '', page = 1, limit = 50): Promi
                 properties: true,
             },
             orderBy: { createdAt: 'desc' },
-            take: limit,
+            take: limit * 2, // Fetch buffer to allow client-level field filtering
             skip: (page - 1) * limit,
         });
 
-        const total = await prisma.user.count({ where: whereClause });
+        const filteredUsers = (requiredFields && requiredFields.length > 0)
+            ? users.filter((u: any) => {
+                const props = u.properties || [];
+                return requiredFields.every((field) => {
+                    const f = field.trim();
+                    if (f === 'telephone') return Boolean(u.phoneNumber && u.phoneNumber.trim() && u.phoneNumber !== '0');
+                    if (f === 'name') return Boolean(u.name && u.name.trim() && !u.name.toLowerCase().includes('no name'));
+                    if (f === 'ownerDigitalAddress') return props.some((p: any) => p.ownerDigitalAddress && p.ownerDigitalAddress !== 'N/A');
+                    if (f === 'account_no') return props.some((p: any) => p.accountNumber && p.accountNumber.trim());
+                    if (f === 'arrears') return props.some((p: any) => Number(p.arrears || 0) > 0);
+                    if (f === 'current_bill') return props.some((p: any) => Number(p.currentFee || 0) > 0);
+                    if (f === 'outstanding_amt') return props.some((p: any) => Number(p.totalAmountDue || 0) > 0);
+                    if (f === 'rateableValue') return props.some((p: any) => Number(p.rateableValue || 0) > 0);
+                    if (f === 'amount_paid') return props.some((p: any) => Number(p.amountPaidLastYear || (p as any).amount_paid || 0) > 0);
+                    return true;
+                });
+            })
+            : users;
+
+        const paginatedUsers = filteredUsers.slice(0, limit);
+        const total = (requiredFields && requiredFields.length > 0) ? filteredUsers.length : await prisma.user.count({ where: whereClause });
 
         const list: AdminRatepayerSummary[] = users.map((u: any) => {
             const props = u.properties || [];
@@ -658,47 +711,148 @@ export async function getRatepayerHistory(userId: string): Promise<RatepayerHist
 
         if (!user) return null;
 
-        const auditLogs = await prisma.auditLog.findMany({
-            where: { entityId: user.id },
-            orderBy: { createdAt: 'desc' },
-            take: 20,
-        });
-
         const accNos = (user.properties || []).map((p: any) => p.accountNumber).filter(Boolean);
+
+        const [auditLogs, feePayments, transactions, propBillImagesRes] = await Promise.all([
+            prisma.auditLog.findMany({
+                where: {
+                    OR: [
+                        { entityId: user.id },
+                        { details: { contains: user.phoneNumber } },
+                        ...(accNos.length > 0 ? accNos.map((acc: string) => ({ details: { contains: acc } })) : []),
+                    ],
+                },
+                orderBy: { createdAt: 'desc' },
+                take: 30,
+            }).catch(() => []),
+            (prisma as any).feePayment.findMany({
+                where: {
+                    OR: [
+                        { userId: user.id },
+                        ...(accNos.length > 0 ? [{ accountNo: { in: accNos } }] : []),
+                    ],
+                },
+                orderBy: { datePaid: 'desc' },
+            }).catch(() => []),
+            (prisma as any).transaction.findMany({
+                where: { userId: user.id },
+                orderBy: { createdAt: 'desc' },
+            }).catch(() => []),
+            accNos.length > 0
+                ? supabase
+                      .from('Property')
+                      .select('account_no, bill_image_url')
+                      .in('account_no', accNos)
+                : Promise.resolve({ data: [] as any }),
+        ]);
+
         const billImageMap = new Map<string, string | null>();
-        if (accNos.length > 0) {
-            const { data: propBillImages } = await supabase
-                .from('Property')
-                .select('account_no, bill_image_url')
-                .in('account_no', accNos);
-            if (propBillImages) {
-                for (const row of propBillImages) {
-                    billImageMap.set(row.account_no, row.bill_image_url || null);
-                }
+        if (propBillImagesRes?.data) {
+            for (const row of propBillImagesRes.data) {
+                billImageMap.set(row.account_no, row.bill_image_url || null);
             }
         }
+
+        const mapReceiptWithNarrative = (r: any, targetPropAccount?: string): AdminPropertyReceipt => {
+            const fp = (feePayments || []).find(
+                (f: any) => f.gcrNr === r.receiptNumber || (r.transactionId && f.transactionId === r.transactionId)
+            );
+            const txn = (transactions || []).find(
+                (t: any) =>
+                    (r.transactionId && t.id === r.transactionId) ||
+                    (fp?.transactionId && (t.id === fp.transactionId || t.reference === fp.transactionId))
+            );
+
+            const matchedProp = (user.properties || []).find(
+                (p: any) =>
+                    (r.propertyId && p.id === r.propertyId) ||
+                    (targetPropAccount && p.accountNumber === targetPropAccount) ||
+                    (fp?.accountNo && p.accountNumber === fp.accountNo) ||
+                    (fp?.propertyId && p.id === fp.propertyId)
+            );
+
+            const targetAccount = fp?.accountNo || matchedProp?.accountNumber || targetPropAccount || 'General Assessment';
+            const targetDigitalAddress = matchedProp?.ownerDigitalAddress || '—';
+            const totalAmount = Number(r.amount || fp?.amtPaid || 0);
+            const arrearsPaid =
+                fp?.arrearsPd !== undefined
+                    ? Number(fp.arrearsPd)
+                    : r.settlementType === 'ARREARS'
+                    ? totalAmount
+                    : r.settlementType === 'CURRENT_FEE'
+                    ? 0
+                    : Math.min(totalAmount, matchedProp?.arrears || 0);
+            const currentFeePaid =
+                fp?.curAmtPd !== undefined
+                    ? Number(fp.curAmtPd)
+                    : r.settlementType === 'CURRENT_FEE'
+                    ? totalAmount
+                    : Math.max(0, totalAmount - arrearsPaid);
+
+            const remainingTotalDue = Number(matchedProp?.totalAmountDue || 0);
+            const isFullySettled = remainingTotalDue <= 0;
+
+            const datePaidObj = new Date(r.datePaid || fp?.datePaid || Date.now());
+            const formattedDate = datePaidObj.toLocaleDateString('en-GB', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric',
+            });
+            const formattedTime =
+                datePaidObj.toLocaleTimeString('en-GB', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false,
+                }) + ' UTC';
+
+            return {
+                id: r.id,
+                receiptNumber: r.receiptNumber,
+                transactionReference: txn?.reference || null,
+                amount: totalAmount,
+                amountFormatted: `GH₵ ${totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                settlementType: r.settlementType || 'TOTAL',
+                paymentMethod: fp?.pmtMode || r.paymentMethod || (txn ? 'Paystack MoMo' : 'Mobile Money'),
+                status: r.status || 'PAID',
+                datePaid: `${formattedDate}, ${formattedTime}`,
+                exactTimestamp: datePaidObj.toISOString(),
+                formattedDate,
+                formattedTime,
+                scannedImageUrl: r.scannedImageUrl || null,
+                propertyAccountNumber: targetAccount,
+                propertyDigitalAddress: targetDigitalAddress,
+                propertyId: matchedProp?.id || r.propertyId,
+                userId: user.id,
+                payerPhoneNumber: r.paymentPhoneNumber || txn?.paymentPhoneNumber || user.phoneNumber,
+                narrative: {
+                    targetAccount,
+                    targetDigitalAddress,
+                    arrearsPaid,
+                    arrearsPaidFormatted: `GH₵ ${arrearsPaid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                    currentFeePaid,
+                    currentFeePaidFormatted: `GH₵ ${currentFeePaid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                    totalAmountPaid: totalAmount,
+                    totalAmountPaidFormatted: `GH₵ ${totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                    remainingTotalDue,
+                    remainingTotalDueFormatted: `GH₵ ${remainingTotalDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                    propertyStatusAfter: isFullySettled ? 'FULLY_SETTLED' : 'PARTIALLY_PAID',
+                    isFullySettled,
+                    actionRequiredText: isFullySettled
+                        ? 'Account fully settled & cleared. Zero debt remaining. Exempt from collection notices.'
+                        : `Outstanding balance of GH₵ ${remainingTotalDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} remains due for municipal settlement.`,
+                },
+            };
+        };
 
         const properties: AdminProperty[] = (user.properties || []).map((p: any) => {
             const isDefaulter = p.status !== 'PAID' && p.arrears > 0;
             const billDateObj = new Date(p.billDate || Date.now());
             const deadlineObj = new Date(p.settlementDeadline || Date.now());
 
-            const receiptsList: AdminPropertyReceipt[] = (p.receipts || []).map((r: any) => ({
-                id: r.id,
-                receiptNumber: r.receiptNumber,
-                amount: r.amount,
-                amountFormatted: `GH₵ ${r.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-                settlementType: r.settlementType || 'TOTAL',
-                paymentMethod: r.paymentMethod || 'Mobile Money',
-                status: r.status || 'PAID',
-                datePaid: new Date(r.datePaid || Date.now()).toLocaleDateString('en-GB', {
-                    day: '2-digit', month: 'short', year: 'numeric',
-                    hour: '2-digit', minute: '2-digit'
-                }),
-                scannedImageUrl: r.scannedImageUrl || null,
-                propertyAccountNumber: p.accountNumber,
-                userId: user.id,
-            }));
+            const receiptsList: AdminPropertyReceipt[] = (p.receipts || []).map((r: any) =>
+                mapReceiptWithNarrative(r, p.accountNumber)
+            );
 
             return {
                 id: p.id,
@@ -743,54 +897,49 @@ export async function getRatepayerHistory(userId: string): Promise<RatepayerHist
             };
         });
 
-        const allReceipts: AdminPropertyReceipt[] = (user.receipts || []).map((r: any) => ({
-            id: r.id,
-            receiptNumber: r.receiptNumber,
-            amount: r.amount,
-            amountFormatted: `GH₵ ${r.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-            settlementType: r.settlementType || 'TOTAL',
-            paymentMethod: r.paymentMethod || 'Mobile Money',
-            status: r.status || 'PAID',
-            datePaid: new Date(r.datePaid || Date.now()).toLocaleDateString('en-GB', {
-                day: '2-digit', month: 'short', year: 'numeric',
-                hour: '2-digit', minute: '2-digit'
-            }),
-            scannedImageUrl: r.scannedImageUrl || null,
-            userId: user.id,
-        }));
+        const allReceipts: AdminPropertyReceipt[] = (user.receipts || []).map((r: any) =>
+            mapReceiptWithNarrative(r)
+        );
 
-        const notifications = (user.notifications || []).map((n: any) => ({
-            id: n.id,
-            title: n.title || 'Notice',
-            message: n.message,
-            type: n.type || 'SYSTEM',
-            deliveryMethod: n.deliveryMethod || 'IN_APP',
-            deliveryStatus: n.deliveryStatus || 'DELIVERED',
-            createdAtFormatted: new Date(n.createdAt || Date.now()).toLocaleDateString('en-GB', {
-                day: '2-digit', month: 'short', year: 'numeric',
-                hour: '2-digit', minute: '2-digit'
-            }),
-        }));
+        const notifications = (user.notifications || []).map((n: any) => {
+            const d = new Date(n.createdAt || Date.now());
+            const dFormatted = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+            const tFormatted = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) + ' UTC';
+            return {
+                id: n.id,
+                title: n.title || 'Notice',
+                message: n.message,
+                type: n.type || 'SYSTEM',
+                deliveryMethod: n.deliveryMethod || 'IN_APP',
+                deliveryStatus: n.deliveryStatus || 'DELIVERED',
+                createdAtFormatted: `${dFormatted}, ${tFormatted}`,
+            };
+        });
 
-        const formattedAuditLogs = auditLogs.map((a: any) => ({
-            id: a.id,
-            action: a.action,
-            details: a.details,
-            createdAtFormatted: new Date(a.createdAt || Date.now()).toLocaleDateString('en-GB', {
-                day: '2-digit', month: 'short', year: 'numeric',
-                hour: '2-digit', minute: '2-digit'
-            }),
-        }));
+        const formattedAuditLogs = (auditLogs || []).map((a: any) => {
+            const d = new Date(a.createdAt || Date.now());
+            const dFormatted = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+            const tFormatted = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) + ' UTC';
+            return {
+                id: a.id,
+                action: a.action,
+                details: a.details,
+                createdAtFormatted: `${dFormatted}, ${tFormatted}`,
+                exactTimestamp: d.toISOString(),
+            };
+        });
 
-        // Fix 2: Type reduce callbacks explicitly in getRatepayerHistory
         const totalValuation = properties.reduce((acc: number, curr: AdminProperty) => acc + curr.rateableValue, 0);
-        const totalArrears = properties.reduce((acc: number, curr: AdminProperty) => acc + curr.arrears, 0);
+        const totalArrears = properties.reduce((acc: number, curr: AdminProperty) => {
+            const isCleared = curr.status === 'PAID' || curr.totalAmountDue <= 0 || (curr.amountPaidLastYear || 0) >= curr.arrears;
+            return acc + (isCleared ? 0 : Math.max(0, curr.arrears - (curr.amountPaidLastYear || 0)));
+        }, 0);
         const totalCurrentFee = properties.reduce((acc: number, curr: AdminProperty) => acc + curr.currentFee, 0);
         const totalOutstandingDue = properties.reduce((acc: number, curr: AdminProperty) => acc + curr.totalAmountDue, 0);
         const totalPaid = allReceipts.reduce((acc: number, curr: AdminPropertyReceipt) => acc + curr.amount, 0);
 
-        const hasDefaulter = properties.some((p) => p.isDefaulter);
-        const isSettled = properties.length > 0 && properties.every((p) => p.status === 'PAID');
+        const hasDefaulter = properties.some((p) => p.isDefaulter && p.totalAmountDue > 0);
+        const isSettled = properties.length > 0 && properties.every((p) => p.totalAmountDue <= 0 || p.status === 'PAID');
 
         const status: 'SETTLED' | 'OUTSTANDING' | 'DEFAULTER' = hasDefaulter
             ? 'DEFAULTER'
@@ -2792,5 +2941,96 @@ export async function getTreasuryReceipts(
     } catch (err) {
         console.error('Failed to get treasury receipts:', err);
         return { receipts: [], total: 0 };
+    }
+}
+
+export interface AdminPaidUserRecord {
+    id: string;
+    userId: string | null;
+    userName: string;
+    phoneNumber: string;
+    accountNumber: string;
+    propertyId: string | null;
+    amountPaid: number;
+    amountPaidFormatted: string;
+    arrearsPaid: number;
+    currentPaid: number;
+    paymentMethod: string;
+    reference: string;
+    receiptNumber: string;
+    status: string;
+    isTestUser: boolean;
+    paidAt: string;
+}
+
+export async function getPaidUsersList(
+    searchQuery = "",
+    filterType: "ALL" | "LIVE" | "TEST" = "ALL",
+    page = 1,
+    limit = 50
+): Promise<{ records: AdminPaidUserRecord[]; total: number; totalAmount: number } | null> {
+    try {
+        await verifyAdminSession();
+
+        let query = supabase
+            .from('PaidUserRecord')
+            .select('id, userId, userName, phoneNumber, accountNumber, propertyId, amountPaid, arrearsPaid, currentPaid, paymentMethod, reference, receiptNumber, status, isTestUser, paidAt', { count: 'exact' });
+
+        if (filterType === 'LIVE') {
+            query = query.eq('isTestUser', false);
+        } else if (filterType === 'TEST') {
+            query = query.eq('isTestUser', true);
+        }
+
+        if (searchQuery && searchQuery.trim()) {
+            const q = searchQuery.trim();
+            query = query.or(`userName.ilike.%${q}%,phoneNumber.ilike.%${q}%,accountNumber.ilike.%${q}%,reference.ilike.%${q}%,receiptNumber.ilike.%${q}%`);
+        }
+
+        query = query.order('paidAt', { ascending: false });
+
+        const skip = (page - 1) * limit;
+        query = query.range(skip, skip + limit - 1);
+
+        const { data, count, error } = await query;
+        if (error || !data) return { records: [], total: 0, totalAmount: 0 };
+
+        // Fetch sum of amountPaid for the filter scope
+        let sumQuery = supabase
+            .from('PaidUserRecord')
+            .select('amountPaid');
+        if (filterType === 'LIVE') sumQuery = sumQuery.eq('isTestUser', false);
+        else if (filterType === 'TEST') sumQuery = sumQuery.eq('isTestUser', true);
+        const { data: sumData } = await sumQuery;
+        const totalAmount = (sumData || []).reduce((acc: number, item: any) => acc + (Number(item.amountPaid) || 0), 0);
+
+        const records: AdminPaidUserRecord[] = data.map((r: any) => {
+            const amt = Number(r.amountPaid || 0);
+            return {
+                id: r.id,
+                userId: r.userId,
+                userName: r.userName || 'Municipal Ratepayer',
+                phoneNumber: r.phoneNumber || 'N/A',
+                accountNumber: r.accountNumber || 'N/A',
+                propertyId: r.propertyId,
+                amountPaid: amt,
+                amountPaidFormatted: `GH₵ ${amt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                arrearsPaid: Number(r.arrearsPaid || 0),
+                currentPaid: Number(r.currentPaid || 0),
+                paymentMethod: r.paymentMethod || 'Paystack MoMo',
+                reference: r.reference || 'N/A',
+                receiptNumber: r.receiptNumber || 'N/A',
+                status: r.status || 'SUCCESS',
+                isTestUser: Boolean(r.isTestUser),
+                paidAt: new Date(r.paidAt || Date.now()).toLocaleDateString('en-GB', {
+                    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                }),
+            };
+        });
+
+        return { records, total: count || 0, totalAmount };
+    } catch (err) {
+        console.error('Failed to get paid users list:', err);
+        return { records: [], total: 0, totalAmount: 0 };
     }
 }

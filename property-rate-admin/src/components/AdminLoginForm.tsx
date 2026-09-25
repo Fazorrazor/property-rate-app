@@ -2,7 +2,8 @@
 
 import React, { useState } from 'react';
 import { adminLogin } from '../app/actions';
-import { Lock, User, Eye, EyeOff, Loader2, ShieldAlert, Info } from 'lucide-react';
+import { Lock, User, Eye, EyeOff, ShieldAlert, Info } from 'lucide-react';
+import { AppleSpinner } from './ui/AppleSpinner';
 
 export default function AdminLoginForm() {
   const [username, setUsername] = useState('');
@@ -217,7 +218,7 @@ export default function AdminLoginForm() {
         >
           {isPending ? (
             <>
-              <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+              <AppleSpinner size="xs" className="text-white" />
               <span>Signing in...</span>
             </>
           ) : (

@@ -46,7 +46,6 @@ function preparePropertyWritePayload(data: any) {
   const { users, receipts, bills, owner, ...cleanData } = data;
   const row: any = {
     ...cleanData,
-    updatedAt: new Date().toISOString(),
   };
 
   if (cleanData.accountNumber !== undefined) {
@@ -65,9 +64,25 @@ function preparePropertyWritePayload(data: any) {
     row.amount_paid = cleanData.amountPaidLastYear;
     delete row.amountPaidLastYear;
   }
+  if (cleanData.totalAmountDue !== undefined) {
+    row.outstanding_amt = cleanData.totalAmountDue;
+    delete row.totalAmountDue;
+  }
+  if (cleanData.outstanding_amt !== undefined) {
+    row.outstanding_amt = cleanData.outstanding_amt;
+  }
+  if (cleanData.billImageUrl !== undefined) {
+    row.bill_image_url = cleanData.billImageUrl;
+    delete row.billImageUrl;
+  }
 
-  delete row.totalAmountDue;
+  // Remove columns that do not exist on the PostgreSQL Property table
   delete row.status;
+  delete row.updatedAt;
+  delete row.createdAt;
+  delete row.ownerNameDirect;
+  delete row.ownerPhoneDirect;
+  delete row.settlementDeadline;
 
   return { row, users, receipts, bills, owner };
 }
@@ -196,6 +211,13 @@ export const ratepayerDb = {
       let query = supabase.from('Property').select('*');
 
       if (args?.where) {
+        if (args.where.id) {
+          if (typeof args.where.id === 'object' && Array.isArray(args.where.id.in)) {
+            query = query.in('id', args.where.id.in);
+          } else {
+            query = query.eq('id', args.where.id);
+          }
+        }
         if (args.where.accountNumber) query = query.eq('account_no', args.where.accountNumber);
         if (args.where.ownerDigitalAddress) query = query.eq('ownerDigitalAddress', args.where.ownerDigitalAddress);
         if (args.where.telephone) query = query.eq('telephone', args.where.telephone);
@@ -278,6 +300,29 @@ export const ratepayerDb = {
       }
 
       const data: any[] = rawData.map(mapPropertyRow);
+
+      for (const prop of data) {
+        prop.users = [];
+      }
+
+      if (args?.include?.users) {
+        const propIds = data.map((p: any) => p.id);
+        const { data: links } = await supabase.from('_PropertyToUser').select('A, B').in('A', propIds);
+        const userIds = Array.from(new Set((links || []).map((l: any) => l.B)));
+        if (userIds.length > 0) {
+          const { data: users } = await supabase.from('User').select('*').in('id', userIds);
+          const usersById = (users || []).reduce((acc: any, u: any) => {
+            acc[u.id] = u;
+            return acc;
+          }, {});
+          for (const link of (links || [])) {
+            const prop = data.find((p: any) => p.id === link.A);
+            if (prop && usersById[link.B]) {
+              prop.users.push(usersById[link.B]);
+            }
+          }
+        }
+      }
 
       if (args?.include?.receipts) {
         const propIds = data.map((p: any) => p.id);
@@ -462,12 +507,21 @@ export const ratepayerDb = {
   },
 
   transaction: {
-    async findUnique(args: { where: { reference?: string; id?: string } }) {
+    async findUnique(args: { where: { reference?: string; id?: string }; include?: any }) {
       let query = supabase.from('Transaction').select('*');
       if (args.where.reference) query = query.eq('reference', args.where.reference);
       if (args.where.id) query = query.eq('id', args.where.id);
       const { data, error } = await query.maybeSingle();
       if (error || !data) return null;
+
+      if (args.include?.receipt) {
+        const { data: receipt } = await supabase.from('Receipt').select('*').eq('transactionId', data.id).maybeSingle();
+        data.receipt = receipt || null;
+      }
+      if (args.include?.user && data.userId) {
+        data.user = await ratepayerDb.user.findUnique({ where: { id: data.userId } });
+      }
+
       return data;
     },
 
@@ -520,6 +574,17 @@ export const ratepayerDb = {
       if (args.where.id) query = query.eq('id', args.where.id);
       if (args.where.gcrNo) query = query.eq('gcrNo', args.where.gcrNo);
       const { data, error } = await query.select().single();
+      if (error) throw new Error(error.message);
+      return data;
+    },
+
+    async create(args: { data: any }) {
+      const row = {
+        ...args.data,
+        id: args.data.id || `gcr_${Math.random().toString(36).substring(2, 12)}`,
+        createdAt: new Date().toISOString(),
+      };
+      const { data, error } = await supabase.from('TGCRNr').insert([row]).select().single();
       if (error) throw new Error(error.message);
       return data;
     },

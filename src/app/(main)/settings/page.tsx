@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Link2, Building2, AlertTriangle, Plus, ChevronLeft, Loader2, Info } from "lucide-react";
+import { Link2, Building2, AlertTriangle, Plus, ChevronLeft, Info } from "lucide-react";
 import { getDashboardData, linkPropertyAccount, DashboardData } from "@/app/actions";
 import { motion, AnimatePresence } from "framer-motion";
 import { HeinzLoader } from "@/components/ui/HeinzLoader";
+import { AppleSpinner } from "@/components/ui/AppleSpinner";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -161,7 +162,7 @@ export default function SettingsPage() {
             >
               {isLinking ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <AppleSpinner size="sm" className="text-white" />
                   <span>Verifying...</span>
                 </>
               ) : (

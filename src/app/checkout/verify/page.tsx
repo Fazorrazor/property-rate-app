@@ -32,11 +32,17 @@ function VerifyCheckoutContent() {
         
         if (!isMounted) return;
 
-        if (res.success && res.status === 'SUCCESS' && res.receipt) {
-          setReceiptData(res.receipt);
-          setStatus("SUCCESS");
+        if (res.success && res.status === 'SUCCESS') {
+          if (res.receipt) {
+            setReceiptData(res.receipt);
+            setStatus("SUCCESS");
+          } else if (attempts < 6) {
+            setTimeout(() => checkVerification(attempts + 1), 1500);
+          } else {
+            setStatus("SUCCESS");
+          }
         } else if (res.success && res.status === 'PENDING') {
-          if (attempts < 5) {
+          if (attempts < 6) {
             setTimeout(() => checkVerification(attempts + 1), 2000);
           } else {
             setStatus("FAILED");

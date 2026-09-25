@@ -114,6 +114,7 @@ function CheckoutContent() {
   const [receiptResult, setReceiptResult] = useState<{
     receiptNumber: string;
     receiptId: string;
+    reference?: string;
     amountFormatted: string;
     paymentMethod: string;
     timestamp: string;
@@ -312,15 +313,36 @@ function CheckoutContent() {
           
           if (res.success) {
             if (res.status === "SUCCESS") {
-              clearInterval(intervalId);
-              setReceiptResult({
-                receiptNumber: res.receipt?.receiptNumber || "PENDING-GENERATION",
-                receiptId: res.receipt?.receiptId || "PENDING",
-                amountFormatted: checkoutData?.totalAmountFormatted || activeTotalAmountFormatted,
-                paymentMethod: `${network} Mobile Money`,
-                timestamp: new Date().toLocaleString(),
-              });
-              setStep("CONFIRMATION");
+              if (res.receipt?.receiptNumber) {
+                clearInterval(intervalId);
+                setReceiptResult({
+                  receiptNumber: res.receipt.receiptNumber,
+                  receiptId: res.receipt.receiptId || "PENDING",
+                  reference: res.reference || activeReference || undefined,
+                  amountFormatted: checkoutData?.totalAmountFormatted || activeTotalAmountFormatted,
+                  paymentMethod: `${network} Mobile Money`,
+                  timestamp: new Date().toLocaleString(),
+                });
+                setStep("CONFIRMATION");
+              } else {
+                // Payment confirmed by gateway; poll a few more seconds to allow webhook to finalize receipt record
+                setPollingAttempts((prev) => {
+                  if (prev > 15) {
+                    clearInterval(intervalId);
+                    setReceiptResult({
+                      receiptNumber: "OFFICIAL-RECEIPT-ISSUED",
+                      receiptId: "PENDING",
+                      reference: res.reference || activeReference || undefined,
+                      amountFormatted: checkoutData?.totalAmountFormatted || activeTotalAmountFormatted,
+                      paymentMethod: `${network} Mobile Money`,
+                      timestamp: new Date().toLocaleString(),
+                    });
+                    setStep("CONFIRMATION");
+                    return prev;
+                  }
+                  return prev + 1;
+                });
+              }
             } else if (res.status === "FAILED" || res.status === "ABANDONED") {
               clearInterval(intervalId);
               setStep("FAILED");
@@ -566,13 +588,19 @@ function CheckoutContent() {
           </div>
           <div className="bg-surface rounded-xl border border-border-light/70 overflow-hidden divide-y divide-border-light/60 w-full text-xs">
             <div className="flex items-center justify-between px-4 py-3">
-              <span className="text-on-surface-muted">Payment Reference</span>
-              <span className="font-mono font-semibold text-foreground">
-                {receiptResult?.receiptNumber || checkoutData.title}
+              <span className="text-on-surface-muted shrink-0">Official Receipt</span>
+              <span className="font-mono font-semibold text-foreground text-right">
+                {receiptResult?.receiptNumber || "GCR-PROCESSED"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between px-4 py-3 gap-3">
+              <span className="text-on-surface-muted shrink-0">Reference</span>
+              <span className="font-mono font-medium text-foreground text-[11px] text-right break-all select-all">
+                {receiptResult?.reference || activeReference || checkoutData.title}
               </span>
             </div>
             <div className="flex items-center justify-between px-4 py-3">
-              <span className="text-on-surface-muted">Settlement Status</span>
+              <span className="text-on-surface-muted shrink-0">Settlement Status</span>
               <span className="text-[#188038] font-medium">&bull; Reconciled</span>
             </div>
           </div>
@@ -1003,7 +1031,7 @@ function CheckoutContent() {
             >
               {isSubmitting ? (
                 <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <AppleSpinner size="sm" className="text-white" />
                   <span>Authorizing...</span>
                 </div>
               ) : (

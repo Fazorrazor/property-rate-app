@@ -1,19 +1,19 @@
 "use client";
 
+import { AppleSpinner } from "./AppleSpinner";
+
 interface HeinzLoaderProps {
   size?: "small" | "large";
+  className?: string;
 }
 
-export function HeinzLoader({ size = "large" }: HeinzLoaderProps) {
-  const isSmall = size === "small";
+export function HeinzLoader({ size = "large", className = "" }: HeinzLoaderProps) {
+  const mappedSize = size === "small" ? "sm" : "md";
   
   return (
-    <div
-      className={`border-t-transparent rounded-full animate-spin border-[#612D53] ${
-        isSmall ? "w-5 h-5 border-2" : "w-8 h-8 border-[3px]"
-      }`}
-      role="status"
-      aria-label="Loading"
+    <AppleSpinner
+      size={mappedSize}
+      className={`text-[#612D53] ${className}`}
     />
   );
 }

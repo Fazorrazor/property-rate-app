@@ -7,6 +7,7 @@ import { OTPInput } from "@/components/ui/OTPInput";
 import { AuthTransitionContext } from "../layout";
 import { motion, AnimatePresence } from "framer-motion";
 import { verifyOtpAndLogin, resendOtp } from "@/app/actions";
+import { AppleSpinner } from "@/components/ui/AppleSpinner";
 
 const STYLES = {
   pageContainer: "space-y-8",
@@ -18,7 +19,6 @@ const STYLES = {
   otpInputWrapper: "w-full space-y-6",
   otpInputPadding: "w-full py-2",
   verifyingState: "flex items-center justify-center gap-2 pt-2 text-sm font-bold text-[#4B1426] animate-pulse",
-  spinner: "w-4 h-4 border-2 border-[#4B1426] border-t-transparent rounded-full animate-spin",
   resendRow: "flex items-center justify-between text-sm font-medium pt-1 px-1",
   resendTextNeutral: "text-on-surface-muted",
   resendButton: "inline-flex items-center gap-1.5 font-bold text-[#4B1426] hover:underline cursor-pointer",
@@ -88,6 +88,12 @@ export default function VerifyPage() {
       if (res.success) {
         setIsVerifying(false);
         setIsSuccess(true);
+        if (res.user?.id) {
+          try {
+            localStorage.setItem("ratepayer_user_id", res.user.id);
+            localStorage.setItem("ratepayer_phone", res.user.phoneNumber);
+          } catch {}
+        }
         
         setTimeout(() => {
           triggerDashboardExit();
@@ -158,7 +164,7 @@ export default function VerifyPage() {
 
               {isVerifying ? (
                 <div className={STYLES.verifyingState}>
-                  <div className={STYLES.spinner} />
+                  <AppleSpinner size="sm" className="text-[#4B1426]" />
                   <span>Verifying code...</span>
                 </div>
               ) : (
