@@ -47,4 +47,6 @@ export interface IPaymentProvider {
   initializeTransaction(params: InitializationParams): Promise<InitializationResponse>;
   chargeMobileMoney(params: ChargeParams): Promise<ChargeResponse>;
   verifyTransaction(reference: string): Promise<VerificationResponse>;
+  submitOtp(reference: string, otp: string): Promise<ChargeResponse>;
+  resendOtp(reference: string): Promise<ChargeResponse>;
 }

@@ -1443,6 +1443,62 @@ export async function chargeMobileMoneyAction(params: {
   }
 }
 
+export async function submitPaymentOtpAction(reference: string, otp: string) {
+  try {
+    if (!reference || !otp) {
+      return { success: false, error: 'Payment reference and OTP are required.' };
+    }
+
+    const gateway = new PaymentGateway('PAYSTACK');
+    const response = await gateway.getProvider().submitOtp(reference, otp);
+
+    if (!response.success) {
+      return { 
+        success: false, 
+        error: response.error || 'Invalid OTP code. Please try again.' 
+      };
+    }
+
+    return {
+      success: true,
+      status: response.status,
+      reference: response.reference,
+      displayText: response.displayText,
+    };
+  } catch (error: any) {
+    console.error('Error submitting payment OTP:', error);
+    return { success: false, error: error?.message || 'Failed to submit verification code.' };
+  }
+}
+
+export async function resendPaymentOtpAction(reference: string) {
+  try {
+    if (!reference) {
+      return { success: false, error: 'Payment reference is required.' };
+    }
+
+    const gateway = new PaymentGateway('PAYSTACK');
+    const response = await gateway.getProvider().resendOtp(reference);
+
+    if (!response.success) {
+      return { 
+        success: false, 
+        error: response.error || 'Failed to resend verification code.' 
+      };
+    }
+
+    return {
+      success: true,
+      status: response.status,
+      reference: response.reference,
+      displayText: response.displayText,
+    };
+  } catch (error: any) {
+    console.error('Error resending payment OTP:', error);
+    return { success: false, error: error?.message || 'Failed to resend verification code.' };
+  }
+}
+
 export async function processPayment(data: {
   propertyId?: string;
   settlementType?: SettlementType;

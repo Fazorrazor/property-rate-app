@@ -144,4 +144,69 @@ export class PaystackProvider implements IPaymentProvider {
       };
     }
   }
+
+  async submitOtp(reference: string, otp: string): Promise<ChargeResponse> {
+    try {
+      const { status, data } = await this.fetchPaystack('/charge/submit_otp', {
+        method: 'POST',
+        body: JSON.stringify({
+          reference,
+          otp: otp.trim(),
+        }),
+      });
+
+      if (status !== 200 || !data.status) {
+        let errorMessage = data.message || 'Failed to submit OTP';
+        if (data.data?.message) {
+          errorMessage = data.data.message;
+        } else if (data.data?.display_text) {
+          errorMessage = data.data.display_text;
+        }
+        return {
+          success: false,
+          error: errorMessage,
+        };
+      }
+
+      return {
+        success: true,
+        status: data.data.status,
+        reference: data.data.reference,
+        displayText: data.data.display_text,
+      };
+    } catch (error: any) {
+      console.error('Paystack submit OTP error:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async resendOtp(reference: string): Promise<ChargeResponse> {
+    try {
+      const { status, data } = await this.fetchPaystack('/charge/resend_otp', {
+        method: 'POST',
+        body: JSON.stringify({ reference }),
+      });
+
+      if (status !== 200 || !data.status) {
+        let errorMessage = data.message || 'Failed to resend OTP';
+        if (data.data?.message) {
+          errorMessage = data.data.message;
+        }
+        return {
+          success: false,
+          error: errorMessage,
+        };
+      }
+
+      return {
+        success: true,
+        status: data.data.status,
+        reference: data.data.reference,
+        displayText: data.data.display_text,
+      };
+    } catch (error: any) {
+      console.error('Paystack resend OTP error:', error);
+      return { success: false, error: error.message };
+    }
+  }
 }

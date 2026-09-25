@@ -9,8 +9,10 @@ import {
   ReceiptText as ReceiptIcon,
   AlertTriangle,
   X,
+  ShieldCheck,
 } from "lucide-react";
 import { HeinzLoader } from "@/components/ui/HeinzLoader";
+import { AppleSpinner } from "@/components/ui/AppleSpinner";
 import { CheckoutSkeleton } from "@/components/ui/Skeletons";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -18,6 +20,8 @@ import {
   chargeMobileMoneyAction,
   verifyPaymentTransaction,
   verifySubscriberAction,
+  submitPaymentOtpAction,
+  resendPaymentOtpAction,
 } from "@/app/actions";
 import { identifyNetworkCarrier } from "@/lib/utils/network-detector";
 import {
@@ -26,7 +30,7 @@ import {
   AirtelTigoLogo,
 } from "@/components/icons/PaymentLogos";
 
-type Step = "CHANNELS" | "DETAILS" | "PROCESSING" | "CONFIRMATION" | "FAILED";
+type Step = "CHANNELS" | "DETAILS" | "OTP" | "PROCESSING" | "CONFIRMATION" | "FAILED";
 type Channel = "MOMO";
 type MoMoNetwork = "MTN" | "TELECEL" | "AIRTELTIGO";
 type SettlementType = "TOTAL" | "ARREARS" | "CURRENT_FEE" | "PARTIAL";
@@ -118,6 +122,13 @@ function CheckoutContent() {
   const [pollingAttempts, setPollingAttempts] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
+  
+  // OTP Verification states
+  const [otpCode, setOtpCode] = useState("");
+  const [isSubmittingOtp, setIsSubmittingOtp] = useState(false);
+  const [otpError, setOtpError] = useState<string | null>(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
+
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
   const [selectedPropertyIds, setSelectedPropertyIds] = useState<string[]>([]);
 
@@ -335,8 +346,21 @@ function CheckoutContent() {
     };
   }, [step, activeReference, checkoutData, network, activeTotalAmountFormatted]);
 
+  // Countdown timer for SMS OTP resend cooldown
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
+
   const handleBack = () => {
-    if (step === "DETAILS") {
+    if (step === "OTP") {
+      setStep("DETAILS");
+      setOtpCode("");
+      setOtpError(null);
+    } else if (step === "DETAILS") {
       setStep("CHANNELS");
     } else if (step === "CHANNELS") {
       if (typeof window !== "undefined" && window.history.length > 1) {
@@ -394,8 +418,15 @@ function CheckoutContent() {
 
       if (res.success && res.reference) {
         setActiveReference(res.reference);
-        setStep("PROCESSING");
-        setPollingAttempts(0);
+        if (res.status === "send_otp") {
+          setOtpCode("");
+          setOtpError(null);
+          setResendCooldown(30);
+          setStep("OTP");
+        } else {
+          setStep("PROCESSING");
+          setPollingAttempts(0);
+        }
       } else {
         showToast(res.error || "Payment initialization failed.", "error");
       }
@@ -404,6 +435,46 @@ function CheckoutContent() {
       showToast("An unexpected error occurred initiating payment.", "error");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleOtpSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const clean = otpCode.trim();
+    if (clean.length < 4 || isSubmittingOtp || !activeReference) return;
+
+    setIsSubmittingOtp(true);
+    setOtpError(null);
+
+    try {
+      const res = await submitPaymentOtpAction(activeReference, clean);
+      if (res.success) {
+        // Transition to PROCESSING to let polling confirm receipt generation
+        setStep("PROCESSING");
+        setPollingAttempts(0);
+      } else {
+        setOtpError(res.error || "Invalid verification code. Please check your SMS and try again.");
+      }
+    } catch (err: any) {
+      setOtpError(err?.message || "Failed to submit verification code. Please try again.");
+    } finally {
+      setIsSubmittingOtp(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (resendCooldown > 0 || !activeReference) return;
+    setResendCooldown(30);
+    setOtpError(null);
+    try {
+      const res = await resendPaymentOtpAction(activeReference);
+      if (res.success) {
+        showToast("A new verification code has been sent to your phone.", "info");
+      } else {
+        showToast(res.error || "Failed to resend verification code.", "error");
+      }
+    } catch {
+      showToast("Failed to resend verification code. Please try again.", "error");
     }
   };
 
@@ -518,7 +589,7 @@ function CheckoutContent() {
   }
 
   return (
-    <main className={`min-h-screen ${step === "DETAILS" ? "h-dvh max-h-screen overflow-hidden" : ""} bg-background text-foreground flex flex-col max-w-md mx-auto w-full font-sans`}>
+    <main className={`min-h-screen ${(step === "DETAILS" || step === "OTP") ? "h-dvh max-h-screen overflow-hidden" : ""} bg-background text-foreground flex flex-col max-w-md mx-auto w-full font-sans`}>
       {/* GLOBAL APPLE FLAT NAVIGATION BAR */}
       {step !== "PROCESSING" && (
         <header className="sticky top-0 z-30 bg-background/95 backdrop-blur-md border-b border-border-light/60 h-11 flex items-center justify-between px-4">
@@ -938,6 +1009,109 @@ function CheckoutContent() {
               ) : (
                 <span>Pay {activeTotalAmountFormatted}</span>
               )}
+            </button>
+          </div>
+        </motion.div>
+      )}
+
+      {/* OTP VERIFICATION STATE */}
+      {step === "OTP" && (
+        <motion.div
+          key="step-otp"
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -6 }}
+          transition={{ duration: 0.2 }}
+          className="flex-1 flex flex-col justify-between p-4 max-w-md mx-auto w-full h-full"
+        >
+          <div className="flex-1 flex flex-col justify-center space-y-6 text-center max-w-xs mx-auto w-full">
+            <div className="mx-auto flex items-center justify-center w-12 h-12 rounded-full bg-surface-variant/40 text-foreground">
+              <ShieldCheck className="w-6 h-6 text-[#007AFF]" />
+            </div>
+
+            <div className="space-y-1.5">
+              <h2 className="text-base font-semibold text-foreground tracking-tight">
+                Enter Verification Code
+              </h2>
+              <p className="text-xs text-on-surface-muted leading-relaxed">
+                Paystack sent a one-time authorization code via SMS to{" "}
+                <span className="font-semibold text-foreground">{phoneNumber}</span> ({network}).
+              </p>
+            </div>
+
+            <form onSubmit={handleOtpSubmit} className="space-y-4 w-full">
+              <div>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  autoFocus
+                  value={otpCode}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, "").slice(0, 6);
+                    setOtpCode(val);
+                    if (otpError) setOtpError(null);
+                  }}
+                  placeholder="······"
+                  className="w-full h-14 bg-surface-variant/40 border border-border focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] rounded-xl text-center font-mono text-2xl font-bold tracking-[0.4em] text-foreground placeholder:tracking-[0.4em] placeholder:text-on-surface-muted/30 outline-none transition-all"
+                />
+                {otpError && (
+                  <p className="text-[11px] text-[#C5221F] mt-2 font-medium">
+                    {otpError}
+                  </p>
+                )}
+              </div>
+
+              <button
+                type="submit"
+                disabled={otpCode.length < 4 || isSubmittingOtp}
+                className={`w-full h-11 rounded-xl text-xs font-semibold text-white flex items-center justify-center transition-all ${
+                  otpCode.length < 4 || isSubmittingOtp
+                    ? "bg-[#007AFF]/40 cursor-not-allowed text-white/70"
+                    : "bg-[#007AFF] hover:bg-[#0062CC] active:bg-[#0051A8] cursor-pointer"
+                }`}
+              >
+                {isSubmittingOtp ? (
+                  <div className="flex items-center gap-2">
+                    <AppleSpinner size="sm" />
+                    <span>Verifying Code...</span>
+                  </div>
+                ) : (
+                  <span>Authorize Payment</span>
+                )}
+              </button>
+            </form>
+
+            <div className="pt-2">
+              {resendCooldown > 0 ? (
+                <span className="text-xs text-on-surface-muted">
+                  Resend SMS code in {resendCooldown}s
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleResendOtp}
+                  className="text-xs text-[#007AFF] hover:underline font-medium cursor-pointer"
+                >
+                  Didn't receive SMS? Resend code
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="pt-4 text-center">
+            <button
+              type="button"
+              onClick={() => {
+                setStep("DETAILS");
+                setOtpCode("");
+                setOtpError(null);
+              }}
+              className="text-xs text-on-surface-muted hover:text-foreground cursor-pointer transition-colors"
+            >
+              Cancel and change number
             </button>
           </div>
         </motion.div>
