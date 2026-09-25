@@ -683,8 +683,8 @@ export function SmsRolloutSimulator({
       publicAppUrl = "https://property-rate-app.vercel.app";
     }
 
-    const assessmentLink = `${publicAppUrl}/auth/access?token=demo_ast_${encodeURIComponent(primaryAcc)}`;
-    const checkoutLink = `${publicAppUrl}/auth/access?token=demo_ckt_${encodeURIComponent(primaryAcc)}`;
+    const assessmentLink = `${publicAppUrl}/b/demo_ast_${encodeURIComponent(primaryAcc)}`;
+    const checkoutLink = `${publicAppUrl}/p/demo_ckt_${encodeURIComponent(primaryAcc)}`;
 
     const gpsAddresses = isMulti
       ? Array.from(new Set(groupProps.map((p) => p.ownerDigitalAddress?.trim()).filter(Boolean))).join(", ")

@@ -1690,7 +1690,7 @@ async function processSmsJobInline(
                             token: tokenAssess,
                             accountNumber: primaryAcc,
                             phoneNumber: phone,
-                            destination: 'dashboard',
+                            destination: 'bill',
                             expiresAt,
                         }
                     });
@@ -1705,8 +1705,8 @@ async function processSmsJobInline(
                         }
                     });
 
-                    const assessmentLink = `${publicAppUrl}/auth/access?token=${tokenAssess}`;
-                    const checkoutLink = `${publicAppUrl}/auth/access?token=${tokenCheckout}`;
+                    const assessmentLink = `${publicAppUrl}/b/${tokenAssess}`;
+                    const checkoutLink = `${publicAppUrl}/p/${tokenCheckout}`;
 
                     const currentFee = groupProps.reduce((s: number, p: any) => s + (p.currentFee || 0), 0);
                     const gpsAddress =

@@ -31,9 +31,9 @@ function AccessTokenProcessor() {
         if (!isMounted) return;
 
         if (res.success) {
-          if (res.destination === "dashboard") {
+          if (res.destination === "dashboard" || res.destination === "bill") {
             const param = res.accountNumber ? `?accountNumber=${encodeURIComponent(res.accountNumber)}` : "";
-            router.replace(`/dashboard${param}`);
+            router.replace(`/bill${param}`);
           } else {
             if (res.isMulti) {
               const param = res.accountNumber
