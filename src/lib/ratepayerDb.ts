@@ -36,6 +36,9 @@ export function mapPropertyRow(p: any) {
     arrears,
     totalAmountDue,
     status,
+    billImageUrl: p.bill_image_url || p.billImageUrl || null,
+    houseNo: p.houseNo || p.house_no || null,
+    plotNo: p.plotNo || p.plot_no || null,
   };
 }
 

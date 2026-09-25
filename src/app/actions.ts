@@ -2099,3 +2099,153 @@ export async function getPublicReceiptVerification(receiptNumber: string): Promi
   }
 }
 
+// ----------------------------------------------------
+// DEDICATED CITIZEN BILL VIEWING PORTAL
+// ----------------------------------------------------
+
+export interface PropertyBillViewData {
+  id: string;
+  accountNumber: string;
+  ownerName: string;
+  ownerPhone?: string | null;
+  ownerDigitalAddress: string;
+  houseNo?: string | null;
+  plotNo?: string | null;
+  propertyClassification: string;
+  billYear: number;
+  billDateFormatted: string;
+  dueDateFormatted: string;
+  isOverdue: boolean;
+  rateableValueFormatted: string;
+  rateImposedFormatted: string;
+  currentFeeFormatted: string;
+  currentFee: number;
+  arrearsFormatted: string;
+  arrears: number;
+  effectiveArrearsFormatted: string;
+  effectiveArrears: number;
+  isArrearsCleared: boolean;
+  amountPaidFormatted: string;
+  amountPaid: number;
+  totalGrossBillFormatted: string;
+  totalGrossBill: number;
+  totalAmountDueFormatted: string;
+  totalAmountDue: number;
+  status: 'PAID' | 'PARTIALLY_PAID' | 'UNPAID';
+  billImageUrl?: string | null;
+  portfolioProperties?: Array<{
+    id: string;
+    accountNumber: string;
+    ownerDigitalAddress: string;
+    totalAmountDue: number;
+    totalAmountDueFormatted: string;
+    status: string;
+  }>;
+}
+
+export async function getPropertyBillData(accountNumberOrId?: string): Promise<PropertyBillViewData | null> {
+  try {
+    const user = await getAuthenticatedSession();
+    let targetProp: any = null;
+
+    const cleanInput = accountNumberOrId?.trim();
+
+    if (cleanInput && cleanInput !== 'ALL') {
+      targetProp = await prisma.property.findUnique({
+        where: cleanInput.startsWith('prop_') ? { id: cleanInput } : { accountNumber: cleanInput },
+        include: { owner: true, users: true },
+      });
+      if (!targetProp && user?.properties) {
+        targetProp = user.properties.find((p: any) => p.accountNumber === cleanInput || p.id === cleanInput);
+      }
+    }
+
+    if (!targetProp && user?.properties && user.properties.length > 0) {
+      targetProp = user.properties[0];
+    }
+
+    if (!targetProp && user?.phoneNumber) {
+      const cleanDigits = user.phoneNumber.replace(/\D/g, '');
+      const userProps = await ratepayerDb.property.findMany({
+        where: { telephone: cleanDigits },
+      });
+      if (userProps && userProps.length > 0) {
+        targetProp = userProps[0];
+      }
+    }
+
+    if (!targetProp) {
+      return null;
+    }
+
+    const billDateObj = targetProp.billDate ? new Date(targetProp.billDate) : new Date();
+    const deadlineObj = targetProp.settlementDeadline
+      ? new Date(targetProp.settlementDeadline)
+      : new Date(targetProp.billYear || 2025, 11, 31);
+
+    const arrears = Number(targetProp.arrears || 0);
+    const currentFee = Number(targetProp.currentFee || 0);
+    const amountPaid = Number(targetProp.amountPaidLastYear || (targetProp as any).amount_paid || 0);
+    const totalAmountDue = Number(
+      targetProp.totalAmountDue !== undefined ? targetProp.totalAmountDue : Math.max(0, (arrears + currentFee) - amountPaid)
+    );
+    const totalGrossBill = arrears + currentFee;
+    const isArrearsCleared = arrears > 0 && amountPaid >= arrears;
+    const effectiveArrears = Math.max(0, arrears - amountPaid);
+    const isPaid = totalAmountDue <= 0;
+
+    const billYear = targetProp.billYear || 2025;
+    const ownerName = targetProp.owner?.name || targetProp.users?.[0]?.name || targetProp.name || user?.name || 'Ratepayer';
+    const ownerPhone = targetProp.owner?.mobileNumber || targetProp.owner?.tel || targetProp.telephone || user?.phoneNumber || null;
+
+    let portfolioProps: any[] = [];
+    if (user?.properties && user.properties.length > 1) {
+      portfolioProps = user.properties.map((p: any) => ({
+        id: p.id,
+        accountNumber: p.accountNumber,
+        ownerDigitalAddress: p.ownerDigitalAddress || 'KKMA',
+        totalAmountDue: p.totalAmountDue,
+        totalAmountDueFormatted: `GH₵ ${Number(p.totalAmountDue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        status: p.status,
+      }));
+    }
+
+    return {
+      id: targetProp.id,
+      accountNumber: targetProp.accountNumber,
+      ownerName,
+      ownerPhone,
+      ownerDigitalAddress: targetProp.ownerDigitalAddress || 'KKMA',
+      houseNo: targetProp.houseNo || null,
+      plotNo: targetProp.plotNo || null,
+      propertyClassification: targetProp.propertyClassification || 'RESIDENTIAL',
+      billYear,
+      billDateFormatted: billDateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+      dueDateFormatted: deadlineObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+      isOverdue: !isPaid && deadlineObj < new Date(),
+      rateableValueFormatted: `GH₵ ${Number(targetProp.rateableValue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      rateImposedFormatted: `${(targetProp.rateImposed || 0.00025) * 100}%`,
+      currentFee,
+      currentFeeFormatted: `GH₵ ${currentFee.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      arrears,
+      arrearsFormatted: `GH₵ ${arrears.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      effectiveArrears,
+      effectiveArrearsFormatted: `GH₵ ${effectiveArrears.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      isArrearsCleared,
+      amountPaid,
+      amountPaidFormatted: `GH₵ ${amountPaid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      totalGrossBill,
+      totalGrossBillFormatted: `GH₵ ${totalGrossBill.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      totalAmountDue,
+      totalAmountDueFormatted: `GH₵ ${totalAmountDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      status: (isPaid ? 'PAID' : (targetProp.status || 'UNPAID')) as 'PAID' | 'PARTIALLY_PAID' | 'UNPAID',
+      billImageUrl: targetProp.billImageUrl || (targetProp as any).bill_image_url || null,
+      portfolioProperties: portfolioProps.length > 0 ? portfolioProps : undefined,
+    };
+  } catch (error) {
+    console.error('Error fetching property bill data:', error);
+    return null;
+  }
+}
+
+

@@ -1,7 +1,7 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
-import { Home, Building2, ReceiptText, Settings } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { FileText, CreditCard, ReceiptText } from "lucide-react";
 import { motion } from "framer-motion";
 
 interface NavItem {
@@ -11,14 +11,25 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { name: "Assessment", path: "/dashboard", icon: Home },
-  { name: "Pay Portal", path: "/checkout", icon: ReceiptText },
-  { name: "Receipts", path: "/receipts", icon: Building2 },
+  { name: "Digital Bill", path: "/bill", icon: FileText },
+  { name: "Pay Portal", path: "/checkout", icon: CreditCard },
+  { name: "Receipts", path: "/receipts", icon: ReceiptText },
 ];
 
 export function BottomNavBar() {
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const rawAccount = searchParams.get("accountNumber") || searchParams.get("propertyId") || "";
+
+  const handleNavigate = (basePath: string) => {
+    if (rawAccount) {
+      const paramName = basePath === "/checkout" ? "propertyId" : "accountNumber";
+      router.push(`${basePath}?${paramName}=${encodeURIComponent(rawAccount)}`);
+    } else {
+      router.push(basePath);
+    }
+  };
 
   return (
     <>
@@ -41,7 +52,7 @@ export function BottomNavBar() {
               <button
                 key={item.name}
                 type="button"
-                onClick={() => router.push(item.path)}
+                onClick={() => handleNavigate(item.path)}
                 className={`flex-1 h-11 flex flex-col items-center justify-center gap-0.5 transition-colors cursor-pointer ${
                   isActive
                     ? "text-primary"
