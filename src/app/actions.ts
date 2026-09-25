@@ -1046,11 +1046,10 @@ export async function getCheckoutData(
     const minPartialAmount = Number((actualBill * 0.40).toFixed(2));
     const maxPartialAmount = actualBill;
     const subtotal = totalAmount;
-    // Pass a 2% fee to the customer so that the treasury receives exactly the subtotal
-    // Round UP to the nearest whole Cedi to avoid decimal payments
-    const rawTotal = subtotal / 0.98;
-    const totalPayable = Math.ceil(rawTotal);
-    const processingFee = Number((totalPayable - subtotal).toFixed(2));
+    // For balances less than 11 GHS, no processing fee is needed
+    const isFeeWaived = subtotal < 11;
+    const totalPayable = isFeeWaived ? subtotal : Math.ceil(subtotal / 0.98);
+    const processingFee = isFeeWaived ? 0 : Number((totalPayable - subtotal).toFixed(2));
 
     // Deterministically resolve user for this property/account (no arbitrary findFirst)
     let deterministicUser: any = null;

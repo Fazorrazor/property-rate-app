@@ -160,8 +160,9 @@ function CheckoutContent() {
     ? (isMultiPropertyMode ? selectedPropertiesSum : baseBillAmount)
     : (parseFloat(customSubtotal) || baseBillAmount);
 
-  const activeTotalAmount = Math.ceil(activeSubtotal / 0.98);
-  const activeProcessingFee = Number((activeTotalAmount - activeSubtotal).toFixed(2));
+  const isFeeWaived = activeSubtotal < 11;
+  const activeTotalAmount = isFeeWaived ? activeSubtotal : Math.ceil(activeSubtotal / 0.98);
+  const activeProcessingFee = isFeeWaived ? 0 : Number((activeTotalAmount - activeSubtotal).toFixed(2));
 
   const activeSubtotalFormatted = `GH₵ ${activeSubtotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const activeProcessingFeeFormatted = `GH₵ ${activeProcessingFee.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -899,8 +900,12 @@ function CheckoutContent() {
                   <span className="text-foreground tabular-nums">{activeSubtotalFormatted}</span>
                 </div>
                 <div className="flex justify-between items-center py-2.5 text-xs">
-                  <span className="text-on-surface-muted">Processing Fee (2%)</span>
-                  <span className="text-foreground tabular-nums">{activeProcessingFeeFormatted}</span>
+                  <span className="text-on-surface-muted">
+                    {activeProcessingFee > 0 ? "Processing Fee (2%)" : "Processing Fee"}
+                  </span>
+                  <span className={activeProcessingFee > 0 ? "text-foreground tabular-nums" : "text-[#188038] font-medium"}>
+                    {activeProcessingFee > 0 ? activeProcessingFeeFormatted : "GH₵ 0.00 (Waived)"}
+                  </span>
                 </div>
                 <div className="flex justify-between items-center py-3 text-sm font-semibold text-foreground">
                   <span>Total</span>
