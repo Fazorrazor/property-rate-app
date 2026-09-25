@@ -17,13 +17,17 @@ import {
   getCheckoutData,
   chargeMobileMoneyAction,
   verifyPaymentTransaction,
-  initializePayment,
   verifySubscriberAction,
 } from "@/app/actions";
 import { identifyNetworkCarrier } from "@/lib/utils/network-detector";
+import {
+  MtnMomoLogo,
+  TelecelLogo,
+  AirtelTigoLogo,
+} from "@/components/icons/PaymentLogos";
 
 type Step = "CHANNELS" | "DETAILS" | "PROCESSING" | "CONFIRMATION" | "FAILED";
-type Channel = "MOMO" | "CARD";
+type Channel = "MOMO";
 type MoMoNetwork = "MTN" | "TELECEL" | "AIRTELTIGO";
 type SettlementType = "TOTAL" | "ARREARS" | "CURRENT_FEE" | "PARTIAL";
 
@@ -92,16 +96,12 @@ function CheckoutContent() {
   const [tempAmount, setTempAmount] = useState<string>("");
   const [isEditingAmount, setIsEditingAmount] = useState(false);
   const [step, setStep] = useState<Step>("CHANNELS");
-  const [channel, setChannel] = useState<Channel>("MOMO");
+  const channel: Channel = "MOMO";
   const [network, setNetwork] = useState<MoMoNetwork>("MTN");
   
   // Input states
   const [phoneNumber, setPhoneNumber] = useState("");
   const [payerName, setPayerName] = useState("");
-  const [cardholderName, setCardholderName] = useState("");
-  const [cardNumber, setCardNumber] = useState("");
-  const [cardExpiry, setCardExpiry] = useState("");
-  const [cardCvc, setCardCvc] = useState("");
   const [isVerifyingSubscriber, setIsVerifyingSubscriber] = useState(false);
   const [isHubtelVerified, setIsHubtelVerified] = useState(false);
 
@@ -240,7 +240,6 @@ function CheckoutContent() {
 
           if (resolvedName) {
             setPayerName(resolvedName);
-            setCardholderName(resolvedName);
           }
 
           if (data.isHubtelVerified) {
@@ -273,7 +272,6 @@ function CheckoutContent() {
         const res = await verifySubscriberAction(phoneNumber);
         if (res.success && res.subscriberName) {
           setPayerName(res.subscriberName);
-          setCardholderName(res.subscriberName);
           setIsHubtelVerified(true);
           if (res.network) {
             setNetwork(res.network);
@@ -344,7 +342,7 @@ function CheckoutContent() {
         router.back();
       } else {
         const acc = rawAccountNumber || (propertyId !== "ALL" ? propertyId : "");
-        router.push(acc ? `/dashboard?accountNumber=${encodeURIComponent(acc)}` : "/dashboard");
+        router.push(acc ? `/bill?accountNumber=${encodeURIComponent(acc)}` : "/bill");
       }
     }
   };
@@ -408,84 +406,14 @@ function CheckoutContent() {
     }
   };
 
-  const handleCardNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value.replace(/\D/g, "").slice(0, 19);
-    const formatted = raw.replace(/(\d{4})(?=\d)/g, "$1 ");
-    setCardNumber(formatted);
-  };
-
-  const handleExpiryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value.replace(/\D/g, "").slice(0, 4);
-    if (raw.length >= 3) {
-      setCardExpiry(`${raw.slice(0, 2)}/${raw.slice(2)}`);
-    } else {
-      setCardExpiry(raw);
-    }
-  };
-
-  const handleCvcChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value.replace(/\D/g, "").slice(0, 4);
-    setCardCvc(raw);
-  };
-
   const handleCompletePayment = async () => {
     if (!checkoutData || isSubmitting) return;
 
-    if (channel === "MOMO") {
-      if (!phoneNumber.trim()) {
-        showToast("Please enter your Mobile Money phone number.", "error");
-        return;
-      }
-      await executePayment(activeTotalAmount, activeSubtotal, activeProcessingFee);
-    } else if (channel === "CARD") {
-      if (!cardholderName.trim()) {
-        showToast("Please enter the cardholder name.", "error");
-        return;
-      }
-      const cleanCard = cardNumber.replace(/\s/g, "");
-      if (cleanCard.length < 15) {
-        showToast("Please enter a valid card number (15–16 digits).", "error");
-        return;
-      }
-      if (cardExpiry.length < 5 || !cardExpiry.includes("/")) {
-        showToast("Please enter a valid card expiry date (MM/YY).", "error");
-        return;
-      }
-      if (cardCvc.length < 3) {
-        showToast("Please enter a valid 3 or 4-digit CVC.", "error");
-        return;
-      }
-
-      setIsSubmitting(true);
-      try {
-        const res = await initializePayment({
-          propertyId: propertyId || "ALL",
-          settlementType: paymentMode === "PARTIAL" ? "PARTIAL" : selectedSettlementType,
-          amount: activeTotalAmount,
-          channel: "CARD",
-          callbackUrl: `${window.location.origin}/checkout/verify`,
-          metadata: {
-            cardholderName: cardholderName.trim(),
-            cardLast4: cleanCard.slice(-4),
-            oneTimePayment: true,
-            isSubscription: false,
-            subtotal: activeSubtotal,
-            processingFee: activeProcessingFee,
-          },
-        });
-
-        if (res.success && res.authorizationUrl) {
-          window.location.href = res.authorizationUrl;
-        } else {
-          showToast(res.error || "Card payment initialization failed.", "error");
-        }
-      } catch (err) {
-        console.error("Card payment error:", err);
-        showToast("An unexpected error occurred authorizing card.", "error");
-      } finally {
-        setIsSubmitting(false);
-      }
+    if (!phoneNumber.trim()) {
+      showToast("Please enter your Mobile Money phone number.", "error");
+      return;
     }
+    await executePayment(activeTotalAmount, activeSubtotal, activeProcessingFee);
   };
 
   const handleCancelPayment = () => {
@@ -522,7 +450,7 @@ function CheckoutContent() {
             {accToView && (
               <button
                 type="button"
-                onClick={() => router.push(`/dashboard?accountNumber=${encodeURIComponent(accToView)}`)}
+                onClick={() => router.push(`/bill?accountNumber=${encodeURIComponent(accToView)}`)}
                 className="w-full h-11 rounded-xl bg-[#007AFF] hover:bg-[#0062CC] text-white font-semibold text-xs transition-colors cursor-pointer"
               >
                 View Property Bill &amp; Receipts
@@ -868,188 +796,97 @@ function CheckoutContent() {
           className="flex-1 flex flex-col"
         >
           <div className="flex-1 px-4 py-3 space-y-4">
-            {/* Integrated Payment Mode Segmented Control */}
+            {/* Mobile Network Carrier Cards with Official Logos */}
             <div className="space-y-1.5">
               <p className="text-[11px] font-medium text-on-surface-muted uppercase tracking-wider px-3">
-                Payment Method
+                Mobile Money Network
               </p>
-              <div className="bg-[#E5E5EA] p-1 rounded-lg flex items-center">
-                <button
-                  type="button"
-                  onClick={() => setChannel("MOMO")}
-                  className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
-                    channel === "MOMO"
-                      ? "bg-surface text-foreground shadow-xs"
-                      : "text-on-surface-muted hover:text-foreground"
-                  }`}
-                >
-                  Mobile Money
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setChannel("CARD")}
-                  className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer ${
-                    channel === "CARD"
-                      ? "bg-surface text-foreground shadow-xs"
-                      : "text-on-surface-muted hover:text-foreground"
-                  }`}
-                >
-                  Credit / Debit Card
-                </button>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { id: "MTN" as const, name: "MTN MoMo", Logo: MtnMomoLogo },
+                  { id: "TELECEL" as const, name: "Telecel Cash", Logo: TelecelLogo },
+                  { id: "AIRTELTIGO" as const, name: "AT Money", Logo: AirtelTigoLogo },
+                ].map(({ id, name, Logo }) => {
+                  const isSelected = network === id;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setNetwork(id)}
+                      className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all cursor-pointer text-center ${
+                        isSelected
+                          ? "border-[#007AFF] bg-[#007AFF]/5 text-foreground shadow-xs ring-1 ring-[#007AFF]"
+                          : "border-border-light/70 bg-surface text-on-surface-muted hover:border-border-medium hover:bg-surface-subtle/40"
+                      }`}
+                    >
+                      <Logo className="w-9 h-9 shrink-0 mb-1.5" />
+                      <span className={`text-[11px] leading-tight ${isSelected ? "font-semibold text-foreground" : "font-medium"}`}>
+                        {name}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
-            {/* Dynamic Inset Form for Mobile Money */}
-            {channel === "MOMO" && (
-              <div className="space-y-1.5">
-                <p className="text-[11px] font-medium text-on-surface-muted uppercase tracking-wider px-3">
-                  Account Details
-                </p>
-                <div className="bg-surface rounded-xl border border-border-light/70 overflow-hidden divide-y divide-border-light/60">
-                  {/* Carrier / Network Selector */}
-                  <div className="px-4 py-2.5 flex items-center justify-between text-xs">
-                    <span className="text-on-surface-muted font-normal">Network</span>
-                    <div className="flex items-center gap-1.5">
-                      {(["MTN", "TELECEL", "AIRTELTIGO"] as const).map((net) => (
-                        <button
-                          key={net}
-                          type="button"
-                          onClick={() => setNetwork(net)}
-                          className={`px-2.5 py-1 text-xs rounded-md transition-all cursor-pointer ${
-                            network === net
-                              ? "bg-[#007AFF] text-white font-semibold shadow-xs"
-                              : "bg-surface-subtle text-on-surface-muted hover:text-foreground hover:bg-[#E5E5EA]"
-                          }`}
-                        >
-                          {net === "MTN" ? "MTN" : net === "TELECEL" ? "Telecel" : "AT"}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+            {/* Inset Form for Mobile Money Account */}
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-medium text-on-surface-muted uppercase tracking-wider px-3">
+                Account Details
+              </p>
+              <div className="bg-surface rounded-xl border border-border-light/70 overflow-hidden divide-y divide-border-light/60">
+                {/* Mobile Phone Number */}
+                <div className="px-4 py-2.5 space-y-1">
+                  <label htmlFor="momo-phone" className="text-[11px] font-medium text-on-surface-muted block">
+                    Mobile Number
+                  </label>
+                  <input
+                    id="momo-phone"
+                    type="tel"
+                    value={phoneNumber}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setPhoneNumber(val);
+                      const detected = identifyNetworkCarrier(val);
+                      if (detected) setNetwork(detected);
+                    }}
+                    placeholder="024 000 0000"
+                    className="w-full h-10 px-3 rounded-lg bg-surface-subtle border border-border-light/80 text-xs font-medium text-foreground focus:outline-none focus:border-[#007AFF] focus:bg-surface focus:ring-1 focus:ring-[#007AFF] transition-all placeholder:text-on-surface-muted/50"
+                  />
+                </div>
 
-                  {/* Mobile Phone Number */}
-                  <div className="px-4 py-2.5 space-y-1">
-                    <label htmlFor="momo-phone" className="text-[11px] font-medium text-on-surface-muted block">
-                      Mobile Number
+                {/* Account Name with Subtle Status */}
+                <div className="px-4 py-2.5 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label htmlFor="momo-name" className="text-[11px] font-medium text-on-surface-muted">
+                      Subscriber Name
                     </label>
-                    <input
-                      id="momo-phone"
-                      type="tel"
-                      value={phoneNumber}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setPhoneNumber(val);
-                        const detected = identifyNetworkCarrier(val);
-                        if (detected) setNetwork(detected);
-                      }}
-                      placeholder="024 000 0000"
-                      className="w-full h-10 px-3 rounded-lg bg-surface-subtle border border-border-light/80 text-xs font-medium text-foreground focus:outline-none focus:border-[#007AFF] focus:bg-surface focus:ring-1 focus:ring-[#007AFF] transition-all placeholder:text-on-surface-muted/50"
-                    />
+                    {isVerifyingSubscriber ? (
+                      <span className="text-[10px] text-on-surface-muted animate-pulse">Verifying...</span>
+                    ) : isHubtelVerified ? (
+                      <span className="text-[10px] text-[#188038] font-medium flex items-center gap-0.5">
+                        <Check className="w-3 h-3 text-[#188038]" />
+                        Verified
+                      </span>
+                    ) : null}
                   </div>
-
-                  {/* Account Name with Subtle Status */}
-                  <div className="px-4 py-2.5 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <label htmlFor="momo-name" className="text-[11px] font-medium text-on-surface-muted">
-                        Account Name
-                      </label>
-                      {isVerifyingSubscriber ? (
-                        <span className="text-[10px] text-on-surface-muted animate-pulse">Verifying...</span>
-                      ) : isHubtelVerified ? (
-                        <span className="text-[10px] text-[#188038] font-medium flex items-center gap-0.5">
-                          <Check className="w-3 h-3 text-[#188038]" />
-                          Verified
-                        </span>
-                      ) : null}
-                    </div>
-                    <input
-                      id="momo-name"
-                      type="text"
-                      value={payerName}
-                      onChange={(e) => {
-                        setPayerName(e.target.value);
-                        setIsHubtelVerified(false);
-                      }}
-                      placeholder="Kwame Mensah"
-                      className="w-full h-10 px-3 rounded-lg bg-surface-subtle border border-border-light/80 text-xs font-medium text-foreground focus:outline-none focus:border-[#007AFF] focus:bg-surface focus:ring-1 focus:ring-[#007AFF] transition-all placeholder:text-on-surface-muted/50"
-                    />
-                  </div>
+                  <input
+                    id="momo-name"
+                    type="text"
+                    value={payerName}
+                    onChange={(e) => {
+                      setPayerName(e.target.value);
+                      setIsHubtelVerified(false);
+                    }}
+                    placeholder="Kwame Mensah"
+                    className="w-full h-10 px-3 rounded-lg bg-surface-subtle border border-border-light/80 text-xs font-medium text-foreground focus:outline-none focus:border-[#007AFF] focus:bg-surface focus:ring-1 focus:ring-[#007AFF] transition-all placeholder:text-on-surface-muted/50"
+                  />
                 </div>
               </div>
-            )}
-
-            {/* Dynamic Inset Form for Card */}
-            {channel === "CARD" && (
-              <div className="space-y-1.5">
-                <p className="text-[11px] font-medium text-on-surface-muted uppercase tracking-wider px-3">
-                  Card Details
-                </p>
-                <div className="bg-surface rounded-xl border border-border-light/70 overflow-hidden divide-y divide-border-light/60">
-                  <div className="px-4 py-2.5 space-y-1">
-                    <label htmlFor="card-name" className="text-[11px] font-medium text-on-surface-muted block">
-                      Cardholder Name
-                    </label>
-                    <input
-                      id="card-name"
-                      type="text"
-                      value={cardholderName}
-                      onChange={(e) => setCardholderName(e.target.value)}
-                      placeholder="Name as printed on card"
-                      className="w-full h-10 px-3 rounded-lg bg-surface-subtle border border-border-light/80 text-xs font-medium text-foreground focus:outline-none focus:border-[#007AFF] focus:bg-surface focus:ring-1 focus:ring-[#007AFF] transition-all placeholder:text-on-surface-muted/50"
-                    />
-                  </div>
-
-                  <div className="px-4 py-2.5 space-y-1">
-                    <label htmlFor="card-number" className="text-[11px] font-medium text-on-surface-muted block">
-                      Card Number
-                    </label>
-                    <input
-                      id="card-number"
-                      type="text"
-                      value={cardNumber}
-                      onChange={handleCardNumberChange}
-                      placeholder="•••• •••• •••• ••••"
-                      className="w-full h-10 px-3 rounded-lg bg-surface-subtle border border-border-light/80 font-mono text-xs font-medium text-foreground focus:outline-none focus:border-[#007AFF] focus:bg-surface focus:ring-1 focus:ring-[#007AFF] tracking-wider transition-all placeholder:text-on-surface-muted/50"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 divide-x divide-border-light/60">
-                    <div className="px-4 py-2.5 space-y-1">
-                      <label htmlFor="card-expiry" className="text-[11px] font-medium text-on-surface-muted block">
-                        Expires
-                      </label>
-                      <input
-                        id="card-expiry"
-                        type="text"
-                        value={cardExpiry}
-                        onChange={handleExpiryChange}
-                        placeholder="MM/YY"
-                        maxLength={5}
-                        className="w-full h-10 px-3 rounded-lg bg-surface-subtle border border-border-light/80 font-mono text-xs font-medium text-foreground focus:outline-none focus:border-[#007AFF] focus:bg-surface focus:ring-1 focus:ring-[#007AFF] transition-all placeholder:text-on-surface-muted/50"
-                      />
-                    </div>
-
-                    <div className="px-4 py-2.5 space-y-1">
-                      <label htmlFor="card-cvc" className="text-[11px] font-medium text-on-surface-muted block">
-                        CVC
-                      </label>
-                      <input
-                        id="card-cvc"
-                        type="password"
-                        maxLength={4}
-                        value={cardCvc}
-                        onChange={handleCvcChange}
-                        placeholder="•••"
-                        className="w-full h-10 px-3 rounded-lg bg-surface-subtle border border-border-light/80 font-mono text-xs font-medium text-foreground focus:outline-none focus:border-[#007AFF] focus:bg-surface focus:ring-1 focus:ring-[#007AFF] transition-all placeholder:text-on-surface-muted/50"
-                      />
-                    </div>
-                  </div>
-                </div>
-                <p className="text-[11px] text-on-surface-muted px-3 pt-0.5">
-                  Supports Visa and Mastercard. One-time payment with no recurring billing.
-                </p>
-              </div>
-            )}
+              <p className="text-[11px] text-on-surface-muted px-3 pt-0.5">
+                A secure payment authorization prompt will be pushed directly to this handset.
+              </p>
+            </div>
 
             {/* Apple Wallet Style Financial Breakdown */}
             <div className="space-y-1.5">
