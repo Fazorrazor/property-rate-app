@@ -16,7 +16,6 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { getPropertyBillData, PropertyBillViewData } from "@/app/actions";
 import { HeinzLoader } from "@/components/ui/HeinzLoader";
-import { BottomNavBar } from "@/components/ui/BottomNavBar";
 
 function BillViewerContent() {
   const router = useRouter();
@@ -80,7 +79,6 @@ function BillViewerContent() {
             Go to Payment Portal
           </button>
         </div>
-        <BottomNavBar />
       </main>
     );
   }
@@ -88,14 +86,14 @@ function BillViewerContent() {
   const isPaid = billData.status === "PAID" || billData.totalAmountDue <= 0;
 
   return (
-    <main className="min-h-screen bg-background text-foreground flex flex-col max-w-md mx-auto w-full font-sans pb-28">
+    <main className="min-h-screen bg-background text-foreground flex flex-col max-w-md mx-auto w-full font-sans pb-8">
       {/* Top Municipal Navigation Bar */}
       <header className="sticky top-0 z-30 bg-background/95 backdrop-blur-md border-b border-border-light/60 h-11 flex items-center justify-between px-4">
         <div className="flex items-center gap-1.5">
           <span className="text-xs font-semibold text-foreground tracking-tight">
             KKMA
           </span>
-          <span className="text-[11px] text-on-surface-muted">&bull; Revenue Portal</span>
+          <span className="text-[11px] text-on-surface-muted">· Revenue Portal</span>
         </div>
         <span
           className={`text-xs font-semibold ${
@@ -107,10 +105,10 @@ function BillViewerContent() {
           }`}
         >
           {isPaid
-            ? "&bull; Settled in Full"
+            ? "Settled in Full"
             : billData.status === "PARTIALLY_PAID"
-            ? "&bull; Partially Settled"
-            : "&bull; Bill Due Dec 31"}
+            ? "Partially Settled"
+            : "Bill Due Dec 31"}
         </span>
       </header>
 
@@ -353,8 +351,6 @@ function BillViewerContent() {
           </motion.div>
         )}
       </AnimatePresence>
-
-      <BottomNavBar />
     </main>
   );
 }

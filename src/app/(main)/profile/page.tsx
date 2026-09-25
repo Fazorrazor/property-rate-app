@@ -146,25 +146,6 @@ export default function ProfilePage() {
           </div>
           <ChevronRight className="w-4 h-4 text-on-surface-muted" />
         </button>
-
-        <button
-          type="button"
-          onClick={() => router.push("/receipts")}
-          className="w-full p-3.5 flex items-center justify-between hover:bg-surface-subtle transition-colors cursor-pointer text-left"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-surface-subtle flex items-center justify-center text-[#4B1426]">
-              <CreditCard className="w-4 h-4" />
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-on-surface">Payment Receipts</p>
-              <p className="text-[11px] text-on-surface-muted">
-                {hasLinkedProperties ? "Official audit certificates & records" : "0 receipts"}
-              </p>
-            </div>
-          </div>
-          <ChevronRight className="w-4 h-4 text-on-surface-muted" />
-        </button>
       </section>
 
       {/* Settings & Account */}
