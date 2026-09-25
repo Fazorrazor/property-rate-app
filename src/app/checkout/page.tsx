@@ -32,7 +32,15 @@ interface CheckoutState {
   subtitle: string;
   accountNumber?: string;
   ownerName?: string;
+  arrears?: number;
   arrearsFormatted?: string;
+  effectiveArrears?: number;
+  effectiveArrearsFormatted?: string;
+  isArrearsCleared?: boolean;
+  amountPaid?: number;
+  amountPaidFormatted?: string;
+  totalGrossBill?: number;
+  totalGrossBillFormatted?: string;
   annualRateFormatted?: string;
   amountDueFormatted?: string;
   settlementType?: SettlementType;
@@ -78,6 +86,7 @@ function CheckoutContent() {
   const amountParamStr = searchParams.get("amount");
   const customAmount = amountParamStr ? parseFloat(amountParamStr) : undefined;
 
+  const [selectedSettlementType, setSelectedSettlementType] = useState<SettlementType>(settlementTypeParam);
   const [paymentMode, setPaymentMode] = useState<"FULL" | "PARTIAL">(customAmount ? "PARTIAL" : "FULL");
   const [customSubtotal, setCustomSubtotal] = useState<string>(customAmount ? String(customAmount) : "");
   const [tempAmount, setTempAmount] = useState<string>("");
@@ -129,12 +138,27 @@ function CheckoutContent() {
     ? (selectedPropertiesSum || checkoutData?.actualAmountDue || 0)
     : (checkoutData?.actualAmountDue ?? checkoutData?.subtotal ?? 0);
 
+  const hasUnclearedArrears = Boolean(
+    checkoutData &&
+    !checkoutData.isArrearsCleared &&
+    (checkoutData.effectiveArrears ? checkoutData.effectiveArrears > 0 : (checkoutData.arrears ? checkoutData.arrears > 0 : false))
+  );
+
+  const unclearedArrearsAmount = checkoutData?.effectiveArrears ?? checkoutData?.arrears ?? 0;
+
+  const baseBillAmount = useMemo(() => {
+    if (selectedSettlementType === "ARREARS" && unclearedArrearsAmount > 0) {
+      return unclearedArrearsAmount;
+    }
+    return actualBill;
+  }, [selectedSettlementType, unclearedArrearsAmount, actualBill]);
+
   const minPartialAmount = checkoutData?.minPartialAmount ?? Number((actualBill * 0.4).toFixed(2));
   const maxPartialAmount = checkoutData?.maxPartialAmount ?? actualBill;
 
   const activeSubtotal = paymentMode === "FULL" 
-    ? (isMultiPropertyMode ? selectedPropertiesSum : (checkoutData?.subtotal || 0))
-    : (parseFloat(customSubtotal) || checkoutData?.subtotal || 0);
+    ? (isMultiPropertyMode ? selectedPropertiesSum : baseBillAmount)
+    : (parseFloat(customSubtotal) || baseBillAmount);
 
   const activeTotalAmount = Math.ceil(activeSubtotal / 0.98);
   const activeProcessingFee = Number((activeTotalAmount - activeSubtotal).toFixed(2));
@@ -359,7 +383,7 @@ function CheckoutContent() {
     try {
       const res = await chargeMobileMoneyAction({
         propertyId: propertyId || "ALL",
-        settlementType: paymentMode === "PARTIAL" ? "PARTIAL" : settlementTypeParam,
+        settlementType: paymentMode === "PARTIAL" ? "PARTIAL" : selectedSettlementType,
         amount: totalAmount,
         subtotal: subtotal,
         processingFee: processingFee,
@@ -436,7 +460,7 @@ function CheckoutContent() {
       try {
         const res = await initializePayment({
           propertyId: propertyId || "ALL",
-          settlementType: paymentMode === "PARTIAL" ? "PARTIAL" : settlementTypeParam,
+          settlementType: paymentMode === "PARTIAL" ? "PARTIAL" : selectedSettlementType,
           amount: activeTotalAmount,
           channel: "CARD",
           callbackUrl: `${window.location.origin}/checkout/verify`,
@@ -603,7 +627,9 @@ function CheckoutContent() {
           <div className="flex-1 px-4 py-3 space-y-4">
             {/* Prominent Clean Initial Amount */}
             <div className="pt-3 pb-2 text-center">
-              <span className="text-xs text-on-surface-muted block mb-1">Total Assessment</span>
+              <span className="text-xs text-on-surface-muted block mb-1">
+                {selectedSettlementType === "ARREARS" ? "Arrears Settlement" : "Total Assessment"}
+              </span>
               <span className="text-3xl sm:text-4xl font-bold tracking-tight text-foreground block tabular-nums">
                 {activeSubtotalFormatted}
               </span>
@@ -620,6 +646,76 @@ function CheckoutContent() {
                 {paymentMode === "PARTIAL" ? "Edit Installment" : "Pay in Installments"}
               </button>
             </div>
+
+            {/* Settlement Target Selection (Apple Inset Radio Group - Zero Pill) */}
+            {hasUnclearedArrears && !isMultiPropertyMode && (
+              <div className="space-y-1.5">
+                <p className="text-[11px] font-medium text-on-surface-muted uppercase tracking-wider px-3">
+                  Settlement Option
+                </p>
+                <div className="bg-surface rounded-xl border border-border-light/70 overflow-hidden divide-y divide-border-light/60">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedSettlementType("TOTAL");
+                      if (paymentMode === "PARTIAL") handleResetToFull();
+                    }}
+                    className={`w-full flex items-center justify-between px-4 py-3.5 text-left transition-colors cursor-pointer ${
+                      selectedSettlementType === "TOTAL" ? "bg-surface-subtle" : "hover:bg-surface-subtle/50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${
+                          selectedSettlementType === "TOTAL"
+                            ? "border-[#007AFF] bg-[#007AFF]"
+                            : "border-on-surface-muted/40 bg-transparent"
+                        }`}
+                      >
+                        {selectedSettlementType === "TOTAL" && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                      </div>
+                      <div>
+                        <div className="text-xs font-semibold text-foreground">Total Assessment</div>
+                        <div className="text-[11px] text-on-surface-muted">Current rate plus carried arrears</div>
+                      </div>
+                    </div>
+                    <div className="text-xs font-bold text-foreground tabular-nums">
+                      {checkoutData.totalGrossBillFormatted || checkoutData.actualAmountDueFormatted}
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedSettlementType("ARREARS");
+                      if (paymentMode === "PARTIAL") handleResetToFull();
+                    }}
+                    className={`w-full flex items-center justify-between px-4 py-3.5 text-left transition-colors cursor-pointer ${
+                      selectedSettlementType === "ARREARS" ? "bg-surface-subtle" : "hover:bg-surface-subtle/50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${
+                          selectedSettlementType === "ARREARS"
+                            ? "border-[#007AFF] bg-[#007AFF]"
+                            : "border-on-surface-muted/40 bg-transparent"
+                        }`}
+                      >
+                        {selectedSettlementType === "ARREARS" && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                      </div>
+                      <div>
+                        <div className="text-xs font-semibold text-foreground">Carried Arrears Only</div>
+                        <div className="text-[11px] text-on-surface-muted">Settle prior year arrears debt only</div>
+                      </div>
+                    </div>
+                    <div className="text-xs font-bold text-foreground tabular-nums">
+                      {checkoutData.effectiveArrearsFormatted || checkoutData.arrearsFormatted}
+                    </div>
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Inset-Grouped Bill Metadata Rows */}
             <div className="space-y-1.5">
@@ -641,12 +737,31 @@ function CheckoutContent() {
                 </div>
                 <div className="flex items-center justify-between px-4 py-3 text-xs">
                   <span className="text-on-surface-muted">Prior Arrears</span>
-                  <span className="font-medium text-foreground">{checkoutData.arrearsFormatted || "GH₵ 0.00"}</span>
+                  <div className="text-right">
+                    {checkoutData.isArrearsCleared ? (
+                      <span className="font-mono text-xs">
+                        <span className="line-through text-on-surface-muted/60">{checkoutData.arrearsFormatted}</span>
+                        <span className="text-[#188038] font-medium ml-2">&bull; Cleared</span>
+                      </span>
+                    ) : (
+                      <span className="font-medium text-foreground tabular-nums">
+                        {checkoutData.effectiveArrearsFormatted || checkoutData.arrearsFormatted || "GH₵ 0.00"}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center justify-between px-4 py-3 text-xs">
                   <span className="text-on-surface-muted">Current Assessment</span>
-                  <span className="font-medium text-foreground">{checkoutData.annualRateFormatted || "GH₵ 0.00"}</span>
+                  <span className="font-medium text-foreground tabular-nums">{checkoutData.annualRateFormatted || "GH₵ 0.00"}</span>
                 </div>
+                {checkoutData.amountPaid && checkoutData.amountPaid > 0 ? (
+                  <div className="flex items-center justify-between px-4 py-3 text-xs bg-surface-subtle/30">
+                    <span className="text-on-surface-muted">Payments Credited</span>
+                    <span className="font-mono font-medium text-[#188038] tabular-nums">
+                      - {checkoutData.amountPaidFormatted}
+                    </span>
+                  </div>
+                ) : null}
                 <div className="flex items-center justify-between px-4 py-3 text-xs">
                   <span className="text-on-surface-muted">Due Date</span>
                   <span className="font-medium text-foreground">Dec 31, {checkoutData.fiscalYear}</span>

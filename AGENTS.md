@@ -10,6 +10,11 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 # UI Design Constraints & Global Rules
 
+## MANDATORY UI REFERENCE: UI_STANDARDS.MD
+- **All visual design, ergonomic layouts, typography, and interaction patterns across both Citizen App and Admin Portal MUST strictly adhere to [UI_STANDARDS.md](./UI_STANDARDS.md).**
+- Before designing, modifying, or creating any UI components, views, or layouts, the agent MUST read, reference, and enforce [UI_STANDARDS.md](./UI_STANDARDS.md).
+- Follow all 8 Apple Human Interface Guidelines (HIG) Design Principles: Purpose, Agency, Responsibility, Familiarity, Flexibility, Simplicity, Craft, and Delight.
+
 ## STRICT REQUIREMENT: ZERO PILL ELEMENTS
 - **Under NO circumstances use pills, capsule badges, background chips, or container bubbles around text, counts, icons, logos, or status indicators.**
 - All counts, status badges, and metadata must use clean, minimalistic typography directly over the background (e.g. `(4 unread)` as muted text, not a pill; `&bull; Paid` as pure colored text).

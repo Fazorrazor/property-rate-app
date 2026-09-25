@@ -1007,9 +1007,14 @@ export async function getCheckoutData(
       arrears = targetProp.arrears || 0;
       annualRate = targetProp.currentFee || 0;
 
+      const rawAmountPaid = Number(targetProp.amountPaidLastYear ?? (targetProp as any).amount_paid ?? 0);
+      const isCleared = arrears > 0 && rawAmountPaid >= arrears;
+      const unclearedArrears = Math.max(0, arrears - rawAmountPaid);
+
       if (settlementType === 'ARREARS') {
-        actualBill = targetProp.arrears;
-        totalAmount = targetProp.arrears;
+        const arrearsToSettle = unclearedArrears > 0 ? unclearedArrears : arrears;
+        actualBill = arrearsToSettle;
+        totalAmount = arrearsToSettle;
         title = `Arrears Clearance: ${targetProp.accountNumber}`;
         subtitle = `Carried arrears debt for ${targetProp.ownerDigitalAddress}`;
       } else if (settlementType === 'CURRENT_FEE') {
@@ -1030,6 +1035,13 @@ export async function getCheckoutData(
         subtitle = `Full outstanding rate assessment (${targetProp.propertyClassification})`;
       }
     }
+
+    const totalGrossBill = arrears + annualRate;
+    const amountPaid = targetProp
+      ? Number(targetProp.amountPaidLastYear ?? (targetProp as any).amount_paid ?? 0)
+      : (user?.properties || []).reduce((sum: number, p: any) => sum + Number(p.amountPaidLastYear ?? p.amount_paid ?? 0), 0);
+    const isArrearsCleared = arrears > 0 && amountPaid >= arrears;
+    const effectiveArrears = Math.max(0, arrears - amountPaid);
 
     const minPartialAmount = Number((actualBill * 0.40).toFixed(2));
     const maxPartialAmount = actualBill;
@@ -1076,6 +1088,13 @@ export async function getCheckoutData(
       ownerName,
       arrears,
       arrearsFormatted: `GH₵ ${arrears.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      effectiveArrears,
+      effectiveArrearsFormatted: `GH₵ ${effectiveArrears.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      isArrearsCleared,
+      amountPaid,
+      amountPaidFormatted: `GH₵ ${amountPaid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      totalGrossBill,
+      totalGrossBillFormatted: `GH₵ ${totalGrossBill.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       annualRate,
       annualRateFormatted: `GH₵ ${annualRate.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       settlementType,

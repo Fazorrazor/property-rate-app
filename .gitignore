@@ -55,3 +55,6 @@ scratch/
 docs/DB/
 *temp.md
 
+
+.vercel
+.env*
