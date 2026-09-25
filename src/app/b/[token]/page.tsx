@@ -11,9 +11,9 @@ export default async function BillShortLinkPage({ params }: Props) {
 
   const cleanToken = token.trim();
 
-  // If token is a direct property account number (e.g. KKMA-00049 or prop_...)
+  // If token is a direct property account number (e.g. KKDA03991001, KKMA-00049, prop_...)
   if (
-    cleanToken.toUpperCase().startsWith("KKMA-") ||
+    cleanToken.toUpperCase().startsWith("KK") ||
     cleanToken.toUpperCase().startsWith("ACC-") ||
     cleanToken.startsWith("prop_")
   ) {

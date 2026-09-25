@@ -59,12 +59,13 @@ export default function AuthLayout({
 
   const isVerifyPage = pathname === "/auth/verify";
   const isWelcomePage = pathname === "/auth/welcome";
+  const isAccessPage = pathname === "/auth/access";
   const showHeader = !isExitingToDashboard && !isVerifyPage;
-  const showBackButton = pathname !== "/auth/welcome";
+  const showBackButton = pathname !== "/auth/welcome" && !isAccessPage;
 
   return (
     <AuthTransitionContext.Provider value={{ isExitingToDashboard, triggerDashboardExit: () => setIsExitingToDashboard(true) }}>
-      <div className={`relative flex-1 min-h-screen text-on-surface flex flex-col justify-between max-w-md mx-auto w-full font-sans overflow-x-hidden ${isWelcomePage ? "bg-slate-950 text-white" : "bg-surface-subtle"}`}>
+      <div className={`relative flex-1 ${isAccessPage ? "h-dvh max-h-screen overflow-hidden" : "min-h-screen"} text-on-surface flex flex-col justify-between max-w-md mx-auto w-full font-sans overflow-x-hidden ${isWelcomePage ? "bg-slate-950 text-white" : "bg-surface-subtle"}`}>
         
         {/* 1. Rigid Fixed Header */}
         <AnimatePresence>

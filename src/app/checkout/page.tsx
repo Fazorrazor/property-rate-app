@@ -518,7 +518,7 @@ function CheckoutContent() {
   }
 
   return (
-    <main className="min-h-screen bg-background text-foreground flex flex-col max-w-md mx-auto w-full font-sans">
+    <main className={`min-h-screen ${step === "DETAILS" ? "h-dvh max-h-screen overflow-hidden" : ""} bg-background text-foreground flex flex-col max-w-md mx-auto w-full font-sans`}>
       {/* GLOBAL APPLE FLAT NAVIGATION BAR */}
       {step !== "PROCESSING" && (
         <header className="sticky top-0 z-30 bg-background/95 backdrop-blur-md border-b border-border-light/60 h-11 flex items-center justify-between px-4">
@@ -794,134 +794,137 @@ function CheckoutContent() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="flex-1 flex flex-col"
+          className="flex-1 flex flex-col h-full max-h-[calc(100dvh-44px)] overflow-hidden justify-between"
         >
-          <div className="flex-1 px-4 py-3 space-y-4">
-            {/* Mobile Network Carrier Cards with Official Logos */}
-            <div className="space-y-1.5">
-              <p className="text-[11px] font-medium text-on-surface-muted uppercase tracking-wider px-3">
-                Mobile Money Network
-              </p>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { id: "MTN" as const, name: "MTN MoMo", Logo: MtnMomoLogo },
-                  { id: "TELECEL" as const, name: "Telecel Cash", Logo: TelecelLogo },
-                  { id: "AIRTELTIGO" as const, name: "AT Money", Logo: AirtelTigoLogo },
-                ].map(({ id, name, Logo }) => {
-                  const isSelected = network === id;
-                  return (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() => setNetwork(id)}
-                      className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all cursor-pointer text-center ${
-                        isSelected
-                          ? "border-[#007AFF] bg-[#007AFF]/5 text-foreground shadow-xs ring-1 ring-[#007AFF]"
-                          : "border-border-light/70 bg-surface text-on-surface-muted hover:border-border-medium hover:bg-surface-subtle/40"
-                      }`}
-                    >
-                      <Logo className="w-9 h-9 shrink-0 mb-1.5" />
-                      <span className={`text-[11px] leading-tight ${isSelected ? "font-semibold text-foreground" : "font-medium"}`}>
-                        {name}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Inset Form for Mobile Money Account */}
-            <div className="space-y-1.5">
-              <p className="text-[11px] font-medium text-on-surface-muted uppercase tracking-wider px-3">
-                Account Details
-              </p>
-              <div className="bg-surface rounded-xl border border-border-light/70 overflow-hidden divide-y divide-border-light/60">
-                {/* Mobile Phone Number */}
-                <div className="px-4 py-2.5 space-y-1">
-                  <label htmlFor="momo-phone" className="text-[11px] font-medium text-on-surface-muted block">
-                    Mobile Number
-                  </label>
-                  <input
-                    id="momo-phone"
-                    type="tel"
-                    value={phoneNumber}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setPhoneNumber(val);
-                      const detected = identifyNetworkCarrier(val);
-                      if (detected) setNetwork(detected);
-                    }}
-                    placeholder="024 000 0000"
-                    className="w-full h-10 px-3 rounded-lg bg-surface-subtle border border-border-light/80 text-xs font-medium text-foreground focus:outline-none focus:border-[#007AFF] focus:bg-surface focus:ring-1 focus:ring-[#007AFF] transition-all placeholder:text-on-surface-muted/50"
-                  />
+          <div className="flex-1 px-4 py-2 space-y-2 overflow-hidden flex flex-col justify-between">
+            <div className="space-y-2">
+              {/* Mobile Network Carrier Cards with Official Logos */}
+              <div className="space-y-1">
+                <p className="text-[11px] font-medium text-on-surface-muted uppercase tracking-wider px-2">
+                  Mobile Money Network
+                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: "MTN" as const, name: "MTN MoMo", Logo: MtnMomoLogo },
+                    { id: "TELECEL" as const, name: "Telecel Cash", Logo: TelecelLogo },
+                    { id: "AIRTELTIGO" as const, name: "AT Money", Logo: AirtelTigoLogo },
+                  ].map(({ id, name, Logo }) => {
+                    const isSelected = network === id;
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => setNetwork(id)}
+                        className={`flex flex-col items-center justify-center p-2 rounded-xl border transition-all cursor-pointer text-center ${
+                          isSelected
+                            ? "border-[#007AFF] bg-[#007AFF]/5 text-foreground shadow-xs ring-1 ring-[#007AFF]"
+                            : "border-border-light/70 bg-surface text-on-surface-muted hover:border-border-medium hover:bg-surface-subtle/40"
+                        }`}
+                      >
+                        <Logo className="w-7 h-7 shrink-0 mb-1" />
+                        <span className={`text-[10.5px] leading-tight ${isSelected ? "font-semibold text-foreground" : "font-medium"}`}>
+                          {name}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
+              </div>
 
-                {/* Account Name with Subtle Status */}
-                <div className="px-4 py-2.5 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <label htmlFor="momo-name" className="text-[11px] font-medium text-on-surface-muted">
-                      Subscriber Name
+              {/* Inset Form for Mobile Money Account */}
+              <div className="space-y-1">
+                <p className="text-[11px] font-medium text-on-surface-muted uppercase tracking-wider px-2">
+                  Account Details
+                </p>
+                <div className="bg-surface rounded-xl border border-border-light/70 overflow-hidden divide-y divide-border-light/60">
+                  {/* Mobile Phone Number */}
+                  <div className="px-3.5 py-1.5 space-y-0.5">
+                    <label htmlFor="momo-phone" className="text-[10px] font-medium text-on-surface-muted block">
+                      Mobile Number
                     </label>
-                    {isVerifyingSubscriber ? (
-                      <span className="text-[10px] text-on-surface-muted animate-pulse">Verifying...</span>
-                    ) : isHubtelVerified ? (
-                      <span className="text-[10px] text-[#188038] font-medium flex items-center gap-0.5">
-                        <Check className="w-3 h-3 text-[#188038]" />
-                        Verified
-                      </span>
-                    ) : null}
+                    <input
+                      id="momo-phone"
+                      type="tel"
+                      value={phoneNumber}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setPhoneNumber(val);
+                        const detected = identifyNetworkCarrier(val);
+                        if (detected) setNetwork(detected);
+                      }}
+                      placeholder="024 000 0000"
+                      className="w-full h-9 px-3 rounded-lg bg-surface-subtle border border-border-light/80 text-xs font-medium text-foreground focus:outline-none focus:border-[#007AFF] focus:bg-surface focus:ring-1 focus:ring-[#007AFF] transition-all placeholder:text-on-surface-muted/50"
+                    />
                   </div>
-                  <input
-                    id="momo-name"
-                    type="text"
-                    value={payerName}
-                    onChange={(e) => {
-                      setPayerName(e.target.value);
-                      setIsHubtelVerified(false);
-                    }}
-                    placeholder="Kwame Mensah"
-                    className="w-full h-10 px-3 rounded-lg bg-surface-subtle border border-border-light/80 text-xs font-medium text-foreground focus:outline-none focus:border-[#007AFF] focus:bg-surface focus:ring-1 focus:ring-[#007AFF] transition-all placeholder:text-on-surface-muted/50"
-                  />
+
+                  {/* Account Name with Subtle Status */}
+                  <div className="px-3.5 py-1.5 space-y-0.5">
+                    <div className="flex items-center justify-between">
+                      <label htmlFor="momo-name" className="text-[10px] font-medium text-on-surface-muted">
+                        Subscriber Name
+                      </label>
+                      {isVerifyingSubscriber ? (
+                        <span className="text-[9px] text-on-surface-muted animate-pulse">Verifying...</span>
+                      ) : isHubtelVerified ? (
+                        <span className="text-[9px] text-[#188038] font-medium flex items-center gap-0.5">
+                          <Check className="w-2.5 h-2.5 text-[#188038]" />
+                          Verified
+                        </span>
+                      ) : null}
+                    </div>
+                    <input
+                      id="momo-name"
+                      type="text"
+                      value={payerName}
+                      onChange={(e) => {
+                        setPayerName(e.target.value);
+                        setIsHubtelVerified(false);
+                      }}
+                      placeholder="Kwame Mensah"
+                      className="w-full h-9 px-3 rounded-lg bg-surface-subtle border border-border-light/80 text-xs font-medium text-foreground focus:outline-none focus:border-[#007AFF] focus:bg-surface focus:ring-1 focus:ring-[#007AFF] transition-all placeholder:text-on-surface-muted/50"
+                    />
+                  </div>
                 </div>
               </div>
-              <p className="text-[11px] text-on-surface-muted px-3 pt-0.5">
-                A secure payment authorization prompt will be pushed directly to this handset.
-              </p>
+
+              {/* Apple Wallet Style Financial Breakdown */}
+              <div className="space-y-1">
+                <p className="text-[11px] font-medium text-on-surface-muted uppercase tracking-wider px-2">
+                  Payment Summary
+                </p>
+                <div className="bg-surface rounded-xl border border-border-light/70 overflow-hidden divide-y divide-border-light/60 px-3.5 py-0.5">
+                  <div className="flex justify-between items-center py-1.5 text-xs">
+                    <span className="text-on-surface-muted">Base Amount</span>
+                    <span className="text-foreground tabular-nums">{activeSubtotalFormatted}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-1.5 text-xs">
+                    <span className="text-on-surface-muted">
+                      {activeProcessingFee > 0 ? "Processing Fee (2%)" : "Processing Fee"}
+                    </span>
+                    <span className={activeProcessingFee > 0 ? "text-foreground tabular-nums" : "text-[#188038] font-medium"}>
+                      {activeProcessingFee > 0 ? activeProcessingFeeFormatted : "GH₵ 0.00 (Waived)"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center py-2 text-xs font-semibold text-foreground">
+                    <span>Total</span>
+                    <span className="tabular-nums">{activeTotalAmountFormatted}</span>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            {/* Apple Wallet Style Financial Breakdown */}
-            <div className="space-y-1.5">
-              <p className="text-[11px] font-medium text-on-surface-muted uppercase tracking-wider px-3">
-                Payment Summary
-              </p>
-              <div className="bg-surface rounded-xl border border-border-light/70 overflow-hidden divide-y divide-border-light/60 px-4 py-1">
-                <div className="flex justify-between items-center py-2.5 text-xs">
-                  <span className="text-on-surface-muted">Base Amount</span>
-                  <span className="text-foreground tabular-nums">{activeSubtotalFormatted}</span>
-                </div>
-                <div className="flex justify-between items-center py-2.5 text-xs">
-                  <span className="text-on-surface-muted">
-                    {activeProcessingFee > 0 ? "Processing Fee (2%)" : "Processing Fee"}
-                  </span>
-                  <span className={activeProcessingFee > 0 ? "text-foreground tabular-nums" : "text-[#188038] font-medium"}>
-                    {activeProcessingFee > 0 ? activeProcessingFeeFormatted : "GH₵ 0.00 (Waived)"}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center py-3 text-sm font-semibold text-foreground">
-                  <span>Total</span>
-                  <span className="tabular-nums">{activeTotalAmountFormatted}</span>
-                </div>
-              </div>
-            </div>
+            <p className="text-[10px] text-center text-on-surface-muted py-1">
+              Payment authorization prompt will be sent directly to your phone.
+            </p>
           </div>
 
           {/* Sticky Bottom Action: Pay [Total Amount] */}
-          <div className="sticky bottom-0 bg-background/95 backdrop-blur-md px-4 py-3 border-t border-border-light/40 mt-auto">
+          <div className="shrink-0 bg-background/95 backdrop-blur-md px-4 py-2.5 border-t border-border-light/40 mt-auto">
             <button
               type="button"
               disabled={isSubmitting}
               onClick={handleCompletePayment}
-              className={`w-full h-12 rounded-xl text-white font-semibold text-sm transition-colors flex items-center justify-center shadow-xs ${
+              className={`w-full h-11 rounded-xl text-white font-semibold text-sm transition-colors flex items-center justify-center shadow-xs ${
                 isSubmitting
                   ? "bg-[#007AFF]/60 cursor-not-allowed"
                   : "bg-[#007AFF] hover:bg-[#0062CC] active:bg-[#0051A8] cursor-pointer"

@@ -2,8 +2,9 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ShieldCheck, ShieldAlert, Smartphone, ArrowRight, RefreshCw, Loader2 } from "lucide-react";
+import { ShieldCheck, ShieldAlert, Smartphone, ArrowRight, RefreshCw } from "lucide-react";
 import { claimAccessGrant, loginWithPhone } from "@/app/actions";
+import { AppleSpinner } from "@/components/ui/AppleSpinner";
 
 function AccessTokenProcessor() {
   const router = useRouter();
@@ -95,16 +96,11 @@ function AccessTokenProcessor() {
   return (
     <div className="w-full max-w-md mx-auto p-6 flex flex-col items-center justify-center min-h-[70vh] text-center space-y-6">
       {status === "VERIFYING" && (
-        <div className="space-y-4 flex flex-col items-center">
-          <div className="w-14 h-14 rounded-2xl bg-surface border border-border-light flex items-center justify-center text-primary shadow-xs">
-            <Loader2 className="w-7 h-7 animate-spin text-[#4B1426]" />
-          </div>
-          <div className="space-y-1.5">
-            <h2 className="text-xl font-bold tracking-tight text-on-surface">Verifying Device Security</h2>
-            <p className="text-sm text-on-surface-muted max-w-xs">
-              Validating your one-time municipal link and securing your session...
-            </p>
-          </div>
+        <div className="space-y-4 flex flex-col items-center justify-center">
+          <AppleSpinner size="lg" className="text-foreground" />
+          <h2 className="text-base font-semibold tracking-tight text-on-surface">
+            Verifying Device Security
+          </h2>
         </div>
       )}
 
@@ -142,7 +138,7 @@ function AccessTokenProcessor() {
             >
               {isSendingOtp ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <AppleSpinner size="sm" className="w-4 h-4 text-white" />
                   Sending Verification Code...
                 </>
               ) : (
@@ -198,8 +194,7 @@ export default function AccessTokenPage() {
     <Suspense
       fallback={
         <div className="w-full max-w-md mx-auto p-6 flex flex-col items-center justify-center min-h-[70vh] text-center space-y-4">
-          <Loader2 className="w-7 h-7 animate-spin text-[#4B1426]" />
-          <p className="text-sm text-on-surface-muted">Loading secure portal...</p>
+          <AppleSpinner size="lg" className="text-foreground" />
         </div>
       }
     >
