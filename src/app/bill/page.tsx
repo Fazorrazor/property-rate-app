@@ -25,6 +25,7 @@ function BillViewerContent() {
   const [billData, setBillData] = useState<PropertyBillViewData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<"BILL" | "RECEIPTS">("BILL");
 
   useEffect(() => {
     async function loadBill() {
@@ -125,126 +126,249 @@ function BillViewerContent() {
         </p>
       </div>
 
-      <div className="px-4 space-y-4">
-        {/* Primary CTA if unpaid */}
-        {!isPaid && (
-          <button
-            type="button"
-            onClick={() => router.push(`/checkout?propertyId=${encodeURIComponent(billData.accountNumber)}`)}
-            className="w-full h-12 rounded-xl bg-[#007AFF] hover:bg-[#0062CC] active:scale-[0.99] text-white font-semibold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm"
-          >
-            <CreditCard className="w-4 h-4" />
-            <span>Proceed to Payment ({billData.totalAmountDueFormatted})</span>
-          </button>
-        )}
+      {/* Segmented Typographic Navigation Tabs (UI_STANDARDS: Zero pills, subtle border underline) */}
+      <div className="px-4 border-b border-border-light/70 flex gap-6">
+        <button
+          type="button"
+          onClick={() => setActiveTab("BILL")}
+          className={`pb-2.5 text-xs font-semibold transition-colors cursor-pointer border-b-2 -mb-px ${
+            activeTab === "BILL"
+              ? "text-foreground border-[#007AFF]"
+              : "text-on-surface-muted hover:text-foreground border-transparent"
+          }`}
+        >
+          Bill &amp; Assessment
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("RECEIPTS")}
+          className={`pb-2.5 text-xs font-semibold transition-colors cursor-pointer border-b-2 -mb-px flex items-center gap-1.5 ${
+            activeTab === "RECEIPTS"
+              ? "text-foreground border-[#007AFF]"
+              : "text-on-surface-muted hover:text-foreground border-transparent"
+          }`}
+        >
+          <span>Official Receipts</span>
+          {billData.receipts && billData.receipts.length > 0 && (
+            <span className="text-[11px] tabular-nums font-mono text-on-surface-muted">
+              ({billData.receipts.length})
+            </span>
+          )}
+        </button>
+      </div>
 
-        {/* Official Scanned Paper Bill Card (if attached by admin) */}
-        {billData.billImageUrl && (
-          <div className="space-y-1.5">
-            <p className="text-[11px] font-medium text-on-surface-muted uppercase tracking-wider px-1">
-              Official Paper Bill
-            </p>
-            <div className="bg-surface rounded-xl border border-border-light/70 overflow-hidden p-3 space-y-2.5">
-              <div className="relative group cursor-pointer overflow-hidden rounded-lg border border-border-light bg-black/5" onClick={() => setIsImageModalOpen(true)}>
-                <img
-                  src={billData.billImageUrl}
-                  alt={`Official municipal bill for ${billData.accountNumber}`}
-                  className="w-full h-44 object-cover object-top transition-transform duration-300 group-hover:scale-105"
-                />
-                <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                  <div className="bg-black/70 text-white text-[11px] font-medium px-3 py-1.5 rounded-lg flex items-center gap-1.5">
-                    <Maximize2 className="w-3.5 h-3.5" />
-                    <span>View Full Bill</span>
+      <div className="px-4 py-4 space-y-4">
+        {activeTab === "BILL" ? (
+          <>
+            {/* Primary CTA if unpaid */}
+            {!isPaid && (
+              <button
+                type="button"
+                onClick={() => router.push(`/checkout?propertyId=${encodeURIComponent(billData.accountNumber)}`)}
+                className="w-full h-12 rounded-xl bg-[#007AFF] hover:bg-[#0062CC] active:scale-[0.99] text-white font-semibold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm"
+              >
+                <CreditCard className="w-4 h-4" />
+                <span>Proceed to Payment ({billData.totalAmountDueFormatted})</span>
+              </button>
+            )}
+
+            {/* Official Scanned Paper Bill Card (if attached by admin) */}
+            {billData.billImageUrl && (
+              <div className="space-y-1.5">
+                <p className="text-[11px] font-medium text-on-surface-muted uppercase tracking-wider px-1">
+                  Official Paper Bill
+                </p>
+                <div className="bg-surface rounded-xl border border-border-light/70 overflow-hidden p-3 space-y-2.5">
+                  <div className="relative group cursor-pointer overflow-hidden rounded-lg border border-border-light bg-black/5" onClick={() => setIsImageModalOpen(true)}>
+                    <img
+                      src={billData.billImageUrl}
+                      alt={`Official municipal bill for ${billData.accountNumber}`}
+                      className="w-full h-44 object-cover object-top transition-transform duration-300 group-hover:scale-105"
+                    />
+                    <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="bg-black/70 text-white text-[11px] font-medium px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+                        <Maximize2 className="w-3.5 h-3.5" />
+                        <span>View Full Bill</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-on-surface-muted text-[11px]">Original physical council notice</span>
+                    <button
+                      type="button"
+                      onClick={() => setIsImageModalOpen(true)}
+                      className="text-xs text-[#007AFF] hover:underline font-medium cursor-pointer"
+                    >
+                      Inspect Full Resolution
+                    </button>
                   </div>
                 </div>
               </div>
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-on-surface-muted text-[11px]">Original physical council notice</span>
-                <button
-                  type="button"
-                  onClick={() => setIsImageModalOpen(true)}
-                  className="text-xs text-[#007AFF] hover:underline font-medium cursor-pointer"
-                >
-                  Inspect Full Resolution
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Property & Account Information */}
-        <div className="space-y-1.5">
-          <p className="text-[11px] font-medium text-on-surface-muted uppercase tracking-wider px-1">
-            Property &amp; Account Details
-          </p>
-          <div className="bg-surface rounded-xl border border-border-light/70 overflow-hidden divide-y divide-border-light/60">
-            <div className="flex items-center justify-between px-4 py-3 text-xs">
-              <span className="text-on-surface-muted">Ratepayer Name</span>
-              <span className="font-semibold text-foreground">{billData.ownerName}</span>
-            </div>
-            <div className="flex items-center justify-between px-4 py-3 text-xs">
-              <span className="text-on-surface-muted">Property Account Number</span>
-              <span className="font-mono font-bold text-foreground">{billData.accountNumber}</span>
-            </div>
-            <div className="flex items-center justify-between px-4 py-3 text-xs">
-              <span className="text-on-surface-muted">Digital Address</span>
-              <span className="font-mono font-medium text-foreground">{billData.ownerDigitalAddress}</span>
-            </div>
-            {(billData.houseNo || billData.plotNo) && (
-              <div className="flex items-center justify-between px-4 py-3 text-xs">
-                <span className="text-on-surface-muted">House / Plot No</span>
-                <span className="font-medium text-foreground">
-                  {[billData.houseNo, billData.plotNo].filter(Boolean).join(" • ")}
-                </span>
-              </div>
             )}
-          </div>
-        </div>
 
-        {/* Billing & Payment Summary */}
-        {isPaid ? (
-          <div className="space-y-4">
+            {/* Property & Account Information */}
             <div className="space-y-1.5">
               <p className="text-[11px] font-medium text-on-surface-muted uppercase tracking-wider px-1">
-                Settlement Status
+                Property &amp; Account Details
               </p>
               <div className="bg-surface rounded-xl border border-border-light/70 overflow-hidden divide-y divide-border-light/60">
                 <div className="flex items-center justify-between px-4 py-3 text-xs">
-                  <span className="text-on-surface-muted">{billData.billYear} Assessment</span>
-                  <span className="font-medium text-foreground tabular-nums">{billData.currentFeeFormatted}</span>
+                  <span className="text-on-surface-muted">Ratepayer Name</span>
+                  <span className="font-semibold text-foreground">{billData.ownerName}</span>
                 </div>
-                {billData.arrears > 0 && (
+                <div className="flex items-center justify-between px-4 py-3 text-xs">
+                  <span className="text-on-surface-muted">Property Account Number</span>
+                  <span className="font-mono font-bold text-foreground">{billData.accountNumber}</span>
+                </div>
+                <div className="flex items-center justify-between px-4 py-3 text-xs">
+                  <span className="text-on-surface-muted">Digital Address</span>
+                  <span className="font-mono font-medium text-foreground">{billData.ownerDigitalAddress}</span>
+                </div>
+                {(billData.houseNo || billData.plotNo) && (
                   <div className="flex items-center justify-between px-4 py-3 text-xs">
-                    <span className="text-on-surface-muted">Prior Arrears</span>
-                    <div className="text-right font-mono text-xs">
-                      <span className="line-through text-on-surface-muted/60">{billData.arrearsFormatted}</span>
-                      <span className="text-[#188038] font-medium ml-2">&bull; Cleared</span>
-                    </div>
-                  </div>
-                )}
-                {billData.amountPaid > 0 && (
-                  <div className="flex items-center justify-between px-4 py-3 text-xs bg-surface-subtle/30">
-                    <span className="text-on-surface-muted">Total Credited</span>
-                    <span className="font-mono font-medium text-[#188038] tabular-nums">
-                      - {billData.amountPaidFormatted}
+                    <span className="text-on-surface-muted">House / Plot No</span>
+                    <span className="font-medium text-foreground">
+                      {[billData.houseNo, billData.plotNo].filter(Boolean).join(" • ")}
                     </span>
                   </div>
                 )}
-                <div className="flex items-center justify-between px-4 py-3.5 text-xs font-semibold bg-surface-subtle/50">
-                  <span className="text-foreground">Net Balance Due</span>
-                  <span className="text-base font-bold text-[#188038] tabular-nums">GH₵ 0.00</span>
-                </div>
               </div>
             </div>
 
-            {/* Official Municipal Receipts & Proof of Payment */}
-            <div className="space-y-1.5">
-              <p className="text-[11px] font-medium text-on-surface-muted uppercase tracking-wider px-1">
-                Official Municipal Receipt &amp; Proof of Payment
-              </p>
-              <div className="bg-surface rounded-xl border border-border-light/70 overflow-hidden divide-y divide-border-light/60">
-                {billData.receipts && billData.receipts.length > 0 ? (
-                  billData.receipts.map((r) => (
+            {/* Billing & Payment Summary */}
+            {isPaid ? (
+              <div className="space-y-1.5">
+                <p className="text-[11px] font-medium text-on-surface-muted uppercase tracking-wider px-1">
+                  Settlement Status
+                </p>
+                <div className="bg-surface rounded-xl border border-border-light/70 overflow-hidden divide-y divide-border-light/60">
+                  <div className="flex items-center justify-between px-4 py-3 text-xs">
+                    <span className="text-on-surface-muted">{billData.billYear} Assessment</span>
+                    <span className="font-medium text-foreground tabular-nums">{billData.currentFeeFormatted}</span>
+                  </div>
+                  {billData.arrears > 0 && (
+                    <div className="flex items-center justify-between px-4 py-3 text-xs">
+                      <span className="text-on-surface-muted">Prior Arrears</span>
+                      <div className="text-right font-mono text-xs">
+                        <span className="line-through text-on-surface-muted/60">{billData.arrearsFormatted}</span>
+                        <span className="text-[#188038] font-medium ml-2">&bull; Cleared</span>
+                      </div>
+                    </div>
+                  )}
+                  {billData.amountPaid > 0 && (
+                    <div className="flex items-center justify-between px-4 py-3 text-xs bg-surface-subtle/30">
+                      <span className="text-on-surface-muted">Total Credited</span>
+                      <span className="font-mono font-medium text-[#188038] tabular-nums">
+                        - {billData.amountPaidFormatted}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between px-4 py-3.5 text-xs font-semibold bg-surface-subtle/50">
+                    <span className="text-foreground">Net Balance Due</span>
+                    <span className="text-base font-bold text-[#188038] tabular-nums">GH₵ 0.00</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <p className="text-[11px] font-medium text-on-surface-muted uppercase tracking-wider px-1">
+                  Billing &amp; Payment Summary
+                </p>
+                <div className="bg-surface rounded-xl border border-border-light/70 overflow-hidden divide-y divide-border-light/60">
+                  {billData.arrears > 0 && (
+                    <div className="flex items-center justify-between px-4 py-3 text-xs">
+                      <span className="text-on-surface-muted">Prior Unpaid Arrears</span>
+                      <div className="text-right">
+                        {billData.isArrearsCleared ? (
+                          <span className="font-mono text-xs">
+                            <span className="line-through text-on-surface-muted/60">{billData.arrearsFormatted}</span>
+                            <span className="text-[#188038] font-medium ml-2">&bull; Cleared</span>
+                          </span>
+                        ) : (
+                          <span className="font-medium text-foreground tabular-nums">
+                            {billData.effectiveArrearsFormatted || billData.arrearsFormatted}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between px-4 py-3 text-xs">
+                    <span className="text-on-surface-muted">{billData.billYear} Municipal Rate</span>
+                    <span className="font-medium text-foreground tabular-nums">{billData.currentFeeFormatted}</span>
+                  </div>
+                  {billData.amountPaid > 0 && (
+                    <div className="flex items-center justify-between px-4 py-3 text-xs bg-surface-subtle/30">
+                      <span className="text-on-surface-muted">Payments Credited</span>
+                      <span className="font-mono font-medium text-[#188038] tabular-nums">
+                        - {billData.amountPaidFormatted}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between px-4 py-3.5 text-xs font-semibold bg-surface-subtle/50">
+                    <span className="text-foreground">Net Balance Due</span>
+                    <span className="text-base font-bold text-foreground tabular-nums">
+                      {billData.totalAmountDueFormatted}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Payment Deadline — only shown when unpaid */}
+            {!isPaid && (
+              <div className="bg-surface rounded-xl border border-border-light/70 overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 text-xs">
+                  <span className="text-on-surface-muted">Payment Deadline</span>
+                  <span className="font-medium text-foreground">{billData.dueDateFormatted}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Portfolio Switcher (if owner has multiple properties) */}
+            {billData.portfolioProperties && billData.portfolioProperties.length > 1 && (
+              <div className="space-y-1.5">
+                <p className="text-[11px] font-medium text-on-surface-muted uppercase tracking-wider px-1">
+                  Other Properties in Your Portfolio ({billData.portfolioProperties.length})
+                </p>
+                <div className="bg-surface rounded-xl border border-border-light/70 overflow-hidden divide-y divide-border-light/60">
+                  {billData.portfolioProperties.map((p) => {
+                    const isSelected = p.accountNumber === billData.accountNumber;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => router.push(`/bill?accountNumber=${encodeURIComponent(p.accountNumber)}`)}
+                        className={`w-full flex items-center justify-between px-4 py-3 text-left transition-colors cursor-pointer ${
+                          isSelected ? "bg-surface-subtle" : "hover:bg-surface-subtle/50"
+                        }`}
+                      >
+                        <div>
+                          <div className="text-xs font-semibold text-foreground font-mono">{p.accountNumber}</div>
+                          <div className="text-[11px] text-on-surface-muted">{p.ownerDigitalAddress}</div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-foreground tabular-nums">
+                            {p.totalAmountDueFormatted}
+                          </span>
+                          <ChevronRight className="w-3.5 h-3.5 text-on-surface-muted" />
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          /* RECEIPTS TAB */
+          <div className="space-y-3">
+            {billData.receipts && billData.receipts.length > 0 ? (
+              <div className="space-y-1.5">
+                <p className="text-[11px] font-medium text-on-surface-muted uppercase tracking-wider px-1">
+                  Official Municipal Receipts &amp; Proof of Payment ({billData.receipts.length})
+                </p>
+                <div className="bg-surface rounded-xl border border-border-light/70 overflow-hidden divide-y divide-border-light/60">
+                  {billData.receipts.map((r) => (
                     <div key={r.id} className="p-3.5 space-y-2">
                       <div className="flex items-center justify-between text-xs">
                         <div>
@@ -273,127 +397,54 @@ function BillViewerContent() {
                         <ExternalLink className="w-3 h-3 text-on-surface-muted" />
                       </button>
                     </div>
-                  ))
-                ) : (
-                  <div className="p-3.5 space-y-2">
-                    <div className="flex items-center justify-between text-xs">
-                      <div>
-                        <div className="font-mono font-bold text-[#007AFF] text-xs">
-                          GCR-RECONCILED
-                        </div>
-                        <div className="text-[11px] text-on-surface-muted">
-                          Settled in Full &bull; Treasury Verified
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-xs font-bold text-[#188038] tabular-nums">
-                          {billData.totalGrossBillFormatted}
-                        </span>
-                        <div className="text-[10px] text-[#188038] font-medium">
-                          &bull; Reconciled
-                        </div>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => router.push(`/receipts/verify?code=${encodeURIComponent(billData.accountNumber)}`)}
-                      className="w-full h-8 rounded-lg bg-surface-subtle hover:bg-surface-subtle/80 text-foreground text-[11px] font-medium transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                    >
-                      <span>Verify Municipal Clearance</span>
-                      <ExternalLink className="w-3 h-3 text-on-surface-muted" />
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-1.5">
-            <p className="text-[11px] font-medium text-on-surface-muted uppercase tracking-wider px-1">
-              Billing &amp; Payment Summary
-            </p>
-            <div className="bg-surface rounded-xl border border-border-light/70 overflow-hidden divide-y divide-border-light/60">
-              {billData.arrears > 0 && (
-                <div className="flex items-center justify-between px-4 py-3 text-xs">
-                  <span className="text-on-surface-muted">Prior Unpaid Arrears</span>
-                  <div className="text-right">
-                    {billData.isArrearsCleared ? (
-                      <span className="font-mono text-xs">
-                        <span className="line-through text-on-surface-muted/60">{billData.arrearsFormatted}</span>
-                        <span className="text-[#188038] font-medium ml-2">&bull; Cleared</span>
-                      </span>
-                    ) : (
-                      <span className="font-medium text-foreground tabular-nums">
-                        {billData.effectiveArrearsFormatted || billData.arrearsFormatted}
-                      </span>
-                    )}
-                  </div>
+                  ))}
                 </div>
-              )}
-              <div className="flex items-center justify-between px-4 py-3 text-xs">
-                <span className="text-on-surface-muted">{billData.billYear} Municipal Rate</span>
-                <span className="font-medium text-foreground tabular-nums">{billData.currentFeeFormatted}</span>
               </div>
-              {billData.amountPaid > 0 && (
-                <div className="flex items-center justify-between px-4 py-3 text-xs bg-surface-subtle/30">
-                  <span className="text-on-surface-muted">Payments Credited</span>
-                  <span className="font-mono font-medium text-[#188038] tabular-nums">
-                    - {billData.amountPaidFormatted}
-                  </span>
-                </div>
-              )}
-              <div className="flex items-center justify-between px-4 py-3.5 text-xs font-semibold bg-surface-subtle/50">
-                <span className="text-foreground">Net Balance Due</span>
-                <span className="text-base font-bold text-foreground tabular-nums">
-                  {billData.totalAmountDueFormatted}
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Payment Deadline — only shown when unpaid */}
-        {!isPaid && (
-          <div className="bg-surface rounded-xl border border-border-light/70 overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 text-xs">
-              <span className="text-on-surface-muted">Payment Deadline</span>
-              <span className="font-medium text-foreground">{billData.dueDateFormatted}</span>
-            </div>
-          </div>
-        )}
-
-        {/* Portfolio Switcher (if owner has multiple properties) */}
-        {billData.portfolioProperties && billData.portfolioProperties.length > 1 && (
-          <div className="space-y-1.5">
-            <p className="text-[11px] font-medium text-on-surface-muted uppercase tracking-wider px-1">
-              Other Properties in Your Portfolio ({billData.portfolioProperties.length})
-            </p>
-            <div className="bg-surface rounded-xl border border-border-light/70 overflow-hidden divide-y divide-border-light/60">
-              {billData.portfolioProperties.map((p) => {
-                const isSelected = p.accountNumber === billData.accountNumber;
-                return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => router.push(`/bill?accountNumber=${encodeURIComponent(p.accountNumber)}`)}
-                    className={`w-full flex items-center justify-between px-4 py-3 text-left transition-colors cursor-pointer ${
-                      isSelected ? "bg-surface-subtle" : "hover:bg-surface-subtle/50"
-                    }`}
-                  >
+            ) : isPaid ? (
+              <div className="space-y-1.5">
+                <p className="text-[11px] font-medium text-on-surface-muted uppercase tracking-wider px-1">
+                  Official Municipal Receipt &amp; Proof of Payment
+                </p>
+                <div className="bg-surface rounded-xl border border-border-light/70 overflow-hidden p-3.5 space-y-2">
+                  <div className="flex items-center justify-between text-xs">
                     <div>
-                      <div className="text-xs font-semibold text-foreground font-mono">{p.accountNumber}</div>
-                      <div className="text-[11px] text-on-surface-muted">{p.ownerDigitalAddress}</div>
+                      <div className="font-mono font-bold text-[#007AFF] text-xs">
+                        GCR-RECONCILED
+                      </div>
+                      <div className="text-[11px] text-on-surface-muted">
+                        Settled in Full &bull; Treasury Verified
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-foreground tabular-nums">
-                        {p.totalAmountDueFormatted}
+                    <div className="text-right">
+                      <span className="text-xs font-bold text-[#188038] tabular-nums">
+                        {billData.totalGrossBillFormatted}
                       </span>
-                      <ChevronRight className="w-3.5 h-3.5 text-on-surface-muted" />
+                      <div className="text-[10px] text-[#188038] font-medium">
+                        &bull; Reconciled
+                      </div>
                     </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/receipts/verify?code=${encodeURIComponent(billData.accountNumber)}`)}
+                    className="w-full h-8 rounded-lg bg-surface-subtle hover:bg-surface-subtle/80 text-foreground text-[11px] font-medium transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <span>Verify Municipal Clearance</span>
+                    <ExternalLink className="w-3 h-3 text-on-surface-muted" />
                   </button>
-                );
-              })}
-            </div>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-surface rounded-xl border border-border-light/70 p-8 text-center space-y-2">
+                <div className="w-10 h-10 rounded-full bg-surface-subtle text-on-surface-muted flex items-center justify-center mx-auto">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <p className="text-xs font-semibold text-foreground">No Official Receipts Issued Yet</p>
+                <p className="text-[11px] text-on-surface-muted max-w-xs mx-auto">
+                  Official General Counterfoil Receipts (GCR) are automatically published here upon municipal treasury reconciliation.
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -620,16 +620,210 @@ export const ratepayerDb = {
       return data;
     },
 
-    async findMany(args?: { where?: any; orderBy?: any }) {
+    async findUnique(args: { where: { receiptNumber?: string; id?: string; transactionId?: string }; include?: any }) {
       let query = supabase.from('Receipt').select('*');
-      if (args?.where?.userId) query = query.eq('userId', args.where.userId);
-      if (args?.where?.propertyId) query = query.eq('propertyId', args.where.propertyId);
+      if (args.where.receiptNumber) query = query.eq('receiptNumber', args.where.receiptNumber);
+      if (args.where.id) query = query.eq('id', args.where.id);
+      if (args.where.transactionId) query = query.eq('transactionId', args.where.transactionId);
+      const { data, error } = await query.maybeSingle();
+      if (error || !data) return null;
+
+      if (args.include?.property && data.propertyId) {
+        const { data: propData } = await supabase.from('Property').select('*').eq('id', data.propertyId).maybeSingle();
+        if (propData) {
+          data.property = {
+            ...propData,
+            accountNumber: propData.account_no || propData.accountNumber || '',
+            propertyClassification: propData.property_cat || propData.propertyClassification || 'RESIDENTIAL',
+            currentFee: propData.current_bill !== undefined ? propData.current_bill : propData.currentFee,
+            totalAmountDue: propData.bill_amount !== undefined ? propData.bill_amount : propData.totalAmountDue,
+          };
+        } else {
+          data.property = null;
+        }
+      }
+
+      if (args.include?.user && data.userId) {
+        const { data: userData } = await supabase.from('User').select('*').eq('id', data.userId).maybeSingle();
+        data.user = userData || null;
+      }
+
+      return data;
+    },
+
+    async findFirst(args?: { where?: any; include?: any; orderBy?: any }) {
+      let query = supabase.from('Receipt').select('*');
+      if (args?.where) {
+        const w = args.where;
+        if (w.receiptNumber) query = query.eq('receiptNumber', w.receiptNumber);
+        if (w.id) query = query.eq('id', w.id);
+        if (w.transactionId) query = query.eq('transactionId', w.transactionId);
+        if (w.propertyId) query = query.eq('propertyId', w.propertyId);
+        if (w.OR && Array.isArray(w.OR)) {
+          const orClauses: string[] = [];
+          for (const cond of w.OR) {
+            if (cond.receiptNumber) orClauses.push(`receiptNumber.eq.${cond.receiptNumber}`);
+            if (cond.id) orClauses.push(`id.eq.${cond.id}`);
+            if (cond.transactionId) orClauses.push(`transactionId.eq.${cond.transactionId}`);
+          }
+          if (orClauses.length > 0) {
+            query = query.or(orClauses.join(','));
+          }
+        }
+      }
+
       if (args?.orderBy?.datePaid) {
         query = query.order('datePaid', { ascending: args.orderBy.datePaid === 'asc' });
+      } else if (args?.orderBy?.createdAt) {
+        query = query.order('createdAt', { ascending: args.orderBy.createdAt === 'asc' });
+      }
+
+      const { data, error } = await query.limit(1).maybeSingle();
+      if (error || !data) return null;
+
+      if (args?.include?.property && data.propertyId) {
+        const { data: propData } = await supabase.from('Property').select('*').eq('id', data.propertyId).maybeSingle();
+        if (propData) {
+          data.property = {
+            ...propData,
+            accountNumber: propData.account_no || propData.accountNumber || '',
+            propertyClassification: propData.property_cat || propData.propertyClassification || 'RESIDENTIAL',
+            currentFee: propData.current_bill !== undefined ? propData.current_bill : propData.currentFee,
+            totalAmountDue: propData.bill_amount !== undefined ? propData.bill_amount : propData.totalAmountDue,
+          };
+        } else {
+          data.property = null;
+        }
+      }
+
+      if (args?.include?.user && data.userId) {
+        const { data: userData } = await supabase.from('User').select('*').eq('id', data.userId).maybeSingle();
+        data.user = userData || null;
+      }
+
+      return data;
+    },
+
+    async findMany(args?: { where?: any; orderBy?: any; take?: number }) {
+      let query = supabase.from('Receipt').select('*');
+
+      if (args?.where) {
+        const w = args.where;
+        if (w.userId) query = query.eq('userId', w.userId);
+        if (w.propertyId) query = query.eq('propertyId', w.propertyId);
+        if (w.receiptNumber) query = query.eq('receiptNumber', w.receiptNumber);
+
+        if (w.OR && Array.isArray(w.OR)) {
+          const directIds: string[] = [];
+          for (const cond of w.OR) {
+            if (cond.propertyId) directIds.push(cond.propertyId);
+            if (cond.receiptNumber) query = query.eq('receiptNumber', cond.receiptNumber);
+          }
+          if (directIds.length > 0) {
+            query = query.in('propertyId', directIds);
+          }
+        }
+      }
+
+      if (args?.orderBy?.datePaid) {
+        query = query.order('datePaid', { ascending: args.orderBy.datePaid === 'asc' });
+      } else if (args?.orderBy?.createdAt) {
+        query = query.order('createdAt', { ascending: args.orderBy.createdAt === 'asc' });
+      }
+
+      if (args?.take) {
+        query = query.limit(args.take);
+      }
+
+      const { data, error } = await query;
+      if (error || !data) return [];
+      return data;
+    },
+  },
+
+  paidUserRecord: {
+    async findUnique(args: { where: { reference?: string; id?: string }; include?: any }) {
+      let query = supabase.from('PaidUserRecord').select('*');
+      if (args.where.reference) query = query.eq('reference', args.where.reference);
+      if (args.where.id) query = query.eq('id', args.where.id);
+      const { data, error } = await query.maybeSingle();
+      if (error || !data) return null;
+      return data;
+    },
+
+    async findFirst(args?: { where?: any; include?: any; orderBy?: any }) {
+      let query = supabase.from('PaidUserRecord').select('*');
+      if (args?.where) {
+        const w = args.where;
+        if (w.reference) query = query.eq('reference', w.reference);
+        if (w.receiptNumber) query = query.eq('receiptNumber', w.receiptNumber);
+        if (w.accountNumber) query = query.eq('accountNumber', w.accountNumber);
+        if (w.OR && Array.isArray(w.OR)) {
+          const orClauses: string[] = [];
+          for (const cond of w.OR) {
+            if (cond.receiptNumber) orClauses.push(`receiptNumber.eq.${cond.receiptNumber}`);
+            if (cond.reference) orClauses.push(`reference.eq.${cond.reference}`);
+            if (cond.accountNumber) orClauses.push(`accountNumber.eq.${cond.accountNumber}`);
+          }
+          if (orClauses.length > 0) {
+            query = query.or(orClauses.join(','));
+          }
+        }
+      }
+
+      if (args?.orderBy?.paidAt) {
+        query = query.order('paidAt', { ascending: args.orderBy.paidAt === 'asc' });
+      } else if (args?.orderBy?.createdAt) {
+        query = query.order('createdAt', { ascending: args.orderBy.createdAt === 'asc' });
+      }
+
+      const { data, error } = await query.limit(1).maybeSingle();
+      if (error || !data) return null;
+      return data;
+    },
+
+    async findMany(args?: { where?: any; orderBy?: any; take?: number }) {
+      let query = supabase.from('PaidUserRecord').select('*');
+      if (args?.where) {
+        const w = args.where;
+        if (w.accountNumber) query = query.eq('accountNumber', w.accountNumber);
+        if (w.phoneNumber) query = query.eq('phoneNumber', w.phoneNumber);
+      }
+      if (args?.orderBy?.paidAt) {
+        query = query.order('paidAt', { ascending: args.orderBy.paidAt === 'asc' });
+      } else if (args?.orderBy?.createdAt) {
+        query = query.order('createdAt', { ascending: args.orderBy.createdAt === 'asc' });
+      }
+      if (args?.take) {
+        query = query.limit(args.take);
       }
       const { data, error } = await query;
       if (error || !data) return [];
       return data;
+    },
+
+    async create(args: { data: any }) {
+      const id = args.data.id || `pur_${Math.random().toString(36).substring(2, 12)}`;
+      const row = {
+        ...args.data,
+        id,
+        paidAt: args.data.paidAt || new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      const { data, error } = await supabase.from('PaidUserRecord').insert([row]).select().single();
+      if (error) throw new Error(error.message);
+      return data;
+    },
+
+    async upsert(args: { where: { reference: string }; update: any; create: any }) {
+      const existing = await ratepayerDb.paidUserRecord.findUnique({ where: { reference: args.where.reference } });
+      if (existing) {
+        const { data, error } = await supabase.from('PaidUserRecord').update({ ...args.update, updatedAt: new Date().toISOString() }).eq('id', existing.id).select().single();
+        if (error) throw new Error(error.message);
+        return data;
+      }
+      return ratepayerDb.paidUserRecord.create({ data: args.create });
     },
   },
 
