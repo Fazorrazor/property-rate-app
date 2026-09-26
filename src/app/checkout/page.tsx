@@ -319,7 +319,7 @@ function CheckoutContent() {
                   receiptNumber: res.receipt.receiptNumber,
                   receiptId: res.receipt.receiptId || "PENDING",
                   reference: res.reference || activeReference || undefined,
-                  amountFormatted: checkoutData?.totalAmountFormatted || activeTotalAmountFormatted,
+                  amountFormatted: activeTotalAmountFormatted,
                   paymentMethod: `${network} Mobile Money`,
                   timestamp: new Date().toLocaleString(),
                 });
@@ -333,7 +333,7 @@ function CheckoutContent() {
                       receiptNumber: "OFFICIAL-RECEIPT-ISSUED",
                       receiptId: "PENDING",
                       reference: res.reference || activeReference || undefined,
-                      amountFormatted: checkoutData?.totalAmountFormatted || activeTotalAmountFormatted,
+                      amountFormatted: activeTotalAmountFormatted,
                       paymentMethod: `${network} Mobile Money`,
                       timestamp: new Date().toLocaleString(),
                     });
@@ -514,12 +514,13 @@ function CheckoutContent() {
     setStep("FAILED");
   };
 
+  const accToView = rawAccountNumber || (propertyId !== "ALL" ? propertyId : undefined);
+
   if (isLoading) {
     return <CheckoutSkeleton />;
   }
 
   if (!checkoutData || checkoutData.totalAmount <= 0) {
-    const accToView = rawAccountNumber || (propertyId !== "ALL" ? propertyId : undefined);
     return (
       <main className="min-h-screen bg-background text-foreground flex flex-col max-w-md mx-auto w-full font-sans">
         <header className="sticky top-0 z-30 bg-background/95 backdrop-blur-md border-b border-border-light/60 h-11 flex items-center justify-between px-4">
@@ -541,21 +542,12 @@ function CheckoutContent() {
             </p>
           </div>
           <div className="flex flex-col gap-2.5 w-full max-w-xs pt-4">
-            {accToView && (
-              <button
-                type="button"
-                onClick={() => router.push(`/bill?accountNumber=${encodeURIComponent(accToView)}`)}
-                className="w-full h-11 rounded-xl bg-[#007AFF] hover:bg-[#0062CC] text-white font-semibold text-xs transition-colors cursor-pointer"
-              >
-                View Property Bill &amp; Receipts
-              </button>
-            )}
             <button
               type="button"
-              onClick={() => window.close()}
-              className="w-full h-11 rounded-xl bg-surface border border-border-light/70 text-foreground font-medium text-xs hover:bg-surface-subtle transition-colors cursor-pointer"
+              onClick={() => router.push(accToView ? `/bill?accountNumber=${encodeURIComponent(accToView)}` : "/bill")}
+              className="w-full h-11 rounded-xl bg-[#007AFF] hover:bg-[#0062CC] text-white font-semibold text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
             >
-              Close Window
+              View Property Bill &amp; Receipts
             </button>
           </div>
         </div>
@@ -606,10 +598,10 @@ function CheckoutContent() {
           </div>
           <button
             type="button"
-            onClick={() => window.close()}
-            className="w-full h-11 rounded-xl bg-[#007AFF] hover:bg-[#0062CC] text-white font-semibold text-xs transition-colors cursor-pointer"
+            onClick={() => router.push(accToView ? `/bill?accountNumber=${encodeURIComponent(accToView)}` : "/bill")}
+            className="w-full h-11 rounded-xl bg-[#007AFF] hover:bg-[#0062CC] text-white font-semibold text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
           >
-            Close Window
+            View Property Bill &amp; Receipts
           </button>
         </div>
       </main>

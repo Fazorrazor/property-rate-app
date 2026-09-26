@@ -47,6 +47,19 @@ export function RequiredFieldsFilterPopover({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left?: number; right?: number } | null>(null);
+
+  const computePosition = () => {
+    if (!buttonRef.current) return;
+    const rect = buttonRef.current.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    if (align === 'right') {
+      const rightFromEdge = viewportWidth - rect.right;
+      setDropdownPos({ top: rect.bottom + 6, right: rightFromEdge });
+    } else {
+      setDropdownPos({ top: rect.bottom + 6, left: rect.left });
+    }
+  };
 
   useEffect(() => {
     setDraftFields(requiredFields);
@@ -64,8 +77,17 @@ export function RequiredFieldsFilterPopover({
         setIsOpen(false);
       }
     };
+    const handleScrollOrResize = () => {
+      if (isOpen) setIsOpen(false);
+    };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    window.addEventListener("scroll", handleScrollOrResize, true);
+    window.addEventListener("resize", handleScrollOrResize);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      window.removeEventListener("scroll", handleScrollOrResize, true);
+      window.removeEventListener("resize", handleScrollOrResize);
+    };
   }, [isOpen]);
 
   const filteredFields = useMemo(() => {
@@ -103,12 +125,13 @@ export function RequiredFieldsFilterPopover({
   };
 
   return (
-    <div className="relative shrink-0 z-40 isolate">
+    <div className="relative shrink-0 z-40">
       <button
         ref={buttonRef}
         type="button"
         onClick={() => {
           setDraftFields(requiredFields);
+          if (!isOpen) computePosition();
           setIsOpen((prev) => !prev);
         }}
         className={`h-8 px-3 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
@@ -127,10 +150,17 @@ export function RequiredFieldsFilterPopover({
         <ChevronDown className={`w-3 h-3 transition-transform ${isOpen ? "rotate-180" : ""}`} />
       </button>
 
-      {isOpen && (
+      {isOpen && dropdownPos && (
         <div
           ref={containerRef}
-          className={`absolute ${align === "left" ? "left-0" : "right-0"} top-full mt-1.5 w-[340px] sm:w-[380px] max-w-[calc(100vw-32px)] z-50 rounded-xl border border-[#E5E5EA] bg-white/95 backdrop-blur-xl shadow-xl p-3 flex flex-col font-sans max-h-[360px] overflow-hidden`}
+          style={{
+            position: 'fixed',
+            top: dropdownPos.top,
+            ...(dropdownPos.right !== undefined ? { right: dropdownPos.right } : { left: dropdownPos.left }),
+            width: Math.min(380, window.innerWidth - 32),
+            zIndex: 9999,
+          }}
+          className="rounded-xl border border-[#E5E5EA] bg-white/95 backdrop-blur-xl shadow-xl p-3 flex flex-col font-sans max-h-[360px] overflow-hidden"
         >
           <div className="flex items-center justify-between border-b border-[#E5E5EA] pb-2 shrink-0">
             <div className="flex items-center gap-1.5">

@@ -21,8 +21,10 @@ import {
   getSmsSettings,
   updateSmsSettings,
   testArkeselGatewayConnection,
+  resetTestAccountAction,
   SmsSettingsData,
 } from "@/app/actions";
+import { TEST_ACCOUNT_PRESETS, TestAccountPreset } from "@/lib/testPresets";
 import { AppleSpinner } from "./ui/AppleSpinner";
 import { SettingsSkeleton } from "@/components/Skeletons";
 
@@ -53,6 +55,18 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
 
   // Safety confirmation dialog state
   const [showLiveConfirmModal, setShowLiveConfirmModal] = useState(false);
+  const [isResetting, setIsResetting] = useState<number | null>(null);
+  const [resetResult, setResetResult] = useState<{ success: boolean; label: string } | null>(null);
+
+  const handleTestReset = async (presetIndex: number) => {
+    setIsResetting(presetIndex);
+    setResetResult(null);
+    const preset = TEST_ACCOUNT_PRESETS[presetIndex];
+    const res = await resetTestAccountAction(preset.accountNumber, presetIndex);
+    setIsResetting(null);
+    setResetResult({ success: res.success, label: preset.label });
+    setTimeout(() => setResetResult(null), 3000);
+  };
 
   const fetchSettings = async () => {
     setIsLoading(true);
@@ -496,6 +510,45 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
               </span>
             </div>
           </div>
+        </div>
+
+        {/* ── TEST SANDBOX ─────────────────────────────────── */}
+        <div className="space-y-3 pt-2 border-t border-[#E5E5EA] mt-2">
+          <div>
+            <h3 className="text-sm font-bold text-[#1C1C1E]">Test Sandbox</h3>
+            <p className="text-xs text-[#6C6C70] mt-0.5">
+              Reset test accounts to specific balance states for payment flow testing. Affects live DB instantly.
+            </p>
+          </div>
+
+          <div className="bg-[#F8F9FA] rounded-xl border border-[#E5E5EA] overflow-hidden divide-y divide-[#E5E5EA]">
+            <div className="px-4 py-2.5">
+              <span className="text-[11px] font-semibold text-[#6C6C70] uppercase tracking-wider">Pablo · KKDA03991002</span>
+            </div>
+            {TEST_ACCOUNT_PRESETS.map((preset, i) => (
+              <div key={i} className="flex items-center justify-between px-4 py-3 gap-3">
+                <span className="text-xs text-[#1C1C1E] flex-1 leading-snug">{preset.label}</span>
+                <button
+                  type="button"
+                  disabled={isResetting !== null}
+                  onClick={() => handleTestReset(i)}
+                  className="h-8 px-3 rounded-lg text-[11px] font-semibold bg-[#1C1C1E] text-white hover:bg-[#3A3A3C] active:scale-[0.97] transition-all disabled:opacity-40 cursor-pointer flex items-center gap-1.5 shrink-0"
+                >
+                  {isResetting === i ? <AppleSpinner size="sm" className="text-white" /> : null}
+                  {isResetting === i ? "Applying…" : "Apply"}
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {resetResult && (
+            <div className={`flex items-center gap-2 text-xs px-1 ${
+              resetResult.success ? "text-[#34C759]" : "text-[#FF3B30]"
+            }`}>
+              {resetResult.success ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> : <AlertTriangle className="w-3.5 h-3.5 shrink-0" />}
+              <span>{resetResult.success ? `Reset applied: ${resetResult.label}` : `Failed: ${resetResult.label}`}</span>
+            </div>
+          )}
         </div>
       </div>
 

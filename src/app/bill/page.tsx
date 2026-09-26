@@ -198,87 +198,169 @@ function BillViewerContent() {
                 </span>
               </div>
             )}
-            <div className="flex items-center justify-between px-4 py-3 text-xs">
-              <span className="text-on-surface-muted">Property Classification</span>
-              <span className="font-medium text-foreground">{billData.propertyClassification}</span>
-            </div>
           </div>
         </div>
 
         {/* Billing & Payment Summary */}
-        <div className="space-y-1.5">
-          <p className="text-[11px] font-medium text-on-surface-muted uppercase tracking-wider px-1">
-            Billing &amp; Payment Summary
-          </p>
-          <div className="bg-surface rounded-xl border border-border-light/70 overflow-hidden divide-y divide-border-light/60">
-            <div className="flex items-center justify-between px-4 py-3 text-xs">
-              <span className="text-on-surface-muted">Prior Unpaid Arrears</span>
-              <div className="text-right">
-                {billData.isArrearsCleared ? (
-                  <span className="font-mono text-xs">
-                    <span className="line-through text-on-surface-muted/60">{billData.arrearsFormatted}</span>
-                    <span className="text-[#188038] font-medium ml-2">&bull; Cleared</span>
-                  </span>
+        {isPaid ? (
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-medium text-on-surface-muted uppercase tracking-wider px-1">
+                Settlement Status
+              </p>
+              <div className="bg-surface rounded-xl border border-border-light/70 overflow-hidden divide-y divide-border-light/60">
+                <div className="flex items-center justify-between px-4 py-3 text-xs">
+                  <span className="text-on-surface-muted">{billData.billYear} Assessment</span>
+                  <span className="font-medium text-foreground tabular-nums">{billData.currentFeeFormatted}</span>
+                </div>
+                {billData.arrears > 0 && (
+                  <div className="flex items-center justify-between px-4 py-3 text-xs">
+                    <span className="text-on-surface-muted">Prior Arrears</span>
+                    <div className="text-right font-mono text-xs">
+                      <span className="line-through text-on-surface-muted/60">{billData.arrearsFormatted}</span>
+                      <span className="text-[#188038] font-medium ml-2">&bull; Cleared</span>
+                    </div>
+                  </div>
+                )}
+                {billData.amountPaid > 0 && (
+                  <div className="flex items-center justify-between px-4 py-3 text-xs bg-surface-subtle/30">
+                    <span className="text-on-surface-muted">Total Credited</span>
+                    <span className="font-mono font-medium text-[#188038] tabular-nums">
+                      - {billData.amountPaidFormatted}
+                    </span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between px-4 py-3.5 text-xs font-semibold bg-surface-subtle/50">
+                  <span className="text-foreground">Net Balance Due</span>
+                  <span className="text-base font-bold text-[#188038] tabular-nums">GH₵ 0.00</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Official Municipal Receipts & Proof of Payment */}
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-medium text-on-surface-muted uppercase tracking-wider px-1">
+                Official Municipal Receipt &amp; Proof of Payment
+              </p>
+              <div className="bg-surface rounded-xl border border-border-light/70 overflow-hidden divide-y divide-border-light/60">
+                {billData.receipts && billData.receipts.length > 0 ? (
+                  billData.receipts.map((r) => (
+                    <div key={r.id} className="p-3.5 space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <div>
+                          <div className="font-mono font-bold text-[#007AFF] text-xs">
+                            {r.receiptNumber}
+                          </div>
+                          <div className="text-[11px] text-on-surface-muted">
+                            {r.datePaidFormatted} &bull; {r.paymentMethod}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-xs font-bold text-[#188038] tabular-nums">
+                            {r.amountFormatted}
+                          </span>
+                          <div className="text-[10px] text-[#188038] font-medium">
+                            &bull; Reconciled
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => router.push(`/receipts/verify?code=${encodeURIComponent(r.receiptNumber)}`)}
+                        className="w-full h-8 rounded-lg bg-surface-subtle hover:bg-surface-subtle/80 text-foreground text-[11px] font-medium transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <span>View Official GCR Receipt</span>
+                        <ExternalLink className="w-3 h-3 text-on-surface-muted" />
+                      </button>
+                    </div>
+                  ))
                 ) : (
-                  <span className="font-medium text-foreground tabular-nums">
-                    {billData.effectiveArrearsFormatted || billData.arrearsFormatted}
-                  </span>
+                  <div className="p-3.5 space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <div>
+                        <div className="font-mono font-bold text-[#007AFF] text-xs">
+                          GCR-RECONCILED
+                        </div>
+                        <div className="text-[11px] text-on-surface-muted">
+                          Settled in Full &bull; Treasury Verified
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-xs font-bold text-[#188038] tabular-nums">
+                          {billData.totalGrossBillFormatted}
+                        </span>
+                        <div className="text-[10px] text-[#188038] font-medium">
+                          &bull; Reconciled
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/receipts/verify?code=${encodeURIComponent(billData.accountNumber)}`)}
+                      className="w-full h-8 rounded-lg bg-surface-subtle hover:bg-surface-subtle/80 text-foreground text-[11px] font-medium transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <span>Verify Municipal Clearance</span>
+                      <ExternalLink className="w-3 h-3 text-on-surface-muted" />
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
-
-            <div className="flex items-center justify-between px-4 py-3 text-xs">
-              <span className="text-on-surface-muted">{billData.billYear} Municipal Rate</span>
-              <span className="font-medium text-foreground tabular-nums">{billData.currentFeeFormatted}</span>
-            </div>
-
-            <div className="flex items-center justify-between px-4 py-3 text-xs">
-              <span className="text-on-surface-muted font-medium">Gross Assessment</span>
-              <span className="font-mono font-medium text-foreground tabular-nums">{billData.totalGrossBillFormatted}</span>
-            </div>
-
-            {billData.amountPaid > 0 && (
-              <div className="flex items-center justify-between px-4 py-3 text-xs bg-surface-subtle/30">
-                <span className="text-on-surface-muted">Payments Credited</span>
-                <span className="font-mono font-medium text-[#188038] tabular-nums">
-                  - {billData.amountPaidFormatted}
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            <p className="text-[11px] font-medium text-on-surface-muted uppercase tracking-wider px-1">
+              Billing &amp; Payment Summary
+            </p>
+            <div className="bg-surface rounded-xl border border-border-light/70 overflow-hidden divide-y divide-border-light/60">
+              {billData.arrears > 0 && (
+                <div className="flex items-center justify-between px-4 py-3 text-xs">
+                  <span className="text-on-surface-muted">Prior Unpaid Arrears</span>
+                  <div className="text-right">
+                    {billData.isArrearsCleared ? (
+                      <span className="font-mono text-xs">
+                        <span className="line-through text-on-surface-muted/60">{billData.arrearsFormatted}</span>
+                        <span className="text-[#188038] font-medium ml-2">&bull; Cleared</span>
+                      </span>
+                    ) : (
+                      <span className="font-medium text-foreground tabular-nums">
+                        {billData.effectiveArrearsFormatted || billData.arrearsFormatted}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+              <div className="flex items-center justify-between px-4 py-3 text-xs">
+                <span className="text-on-surface-muted">{billData.billYear} Municipal Rate</span>
+                <span className="font-medium text-foreground tabular-nums">{billData.currentFeeFormatted}</span>
+              </div>
+              {billData.amountPaid > 0 && (
+                <div className="flex items-center justify-between px-4 py-3 text-xs bg-surface-subtle/30">
+                  <span className="text-on-surface-muted">Payments Credited</span>
+                  <span className="font-mono font-medium text-[#188038] tabular-nums">
+                    - {billData.amountPaidFormatted}
+                  </span>
+                </div>
+              )}
+              <div className="flex items-center justify-between px-4 py-3.5 text-xs font-semibold bg-surface-subtle/50">
+                <span className="text-foreground">Net Balance Due</span>
+                <span className="text-base font-bold text-foreground tabular-nums">
+                  {billData.totalAmountDueFormatted}
                 </span>
               </div>
-            )}
-
-            <div className="flex items-center justify-between px-4 py-3.5 text-xs font-semibold bg-surface-subtle/50">
-              <span className="text-foreground">Net Balance Due</span>
-              <span className="text-base font-bold text-foreground tabular-nums">
-                {isPaid ? "GH₵ 0.00" : billData.totalAmountDueFormatted}
-              </span>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* How Your Bill Is Calculated */}
-        <div className="space-y-1.5">
-          <p className="text-[11px] font-medium text-on-surface-muted uppercase tracking-wider px-1">
-            How Your Bill Is Calculated
-          </p>
-          <div className="bg-surface rounded-xl border border-border-light/70 overflow-hidden divide-y divide-border-light/60">
-            <div className="flex items-center justify-between px-4 py-3 text-xs">
-              <span className="text-on-surface-muted">Property Valuation</span>
-              <span className="font-mono font-medium text-foreground tabular-nums">
-                {billData.rateableValueFormatted}
-              </span>
-            </div>
-            <div className="flex items-center justify-between px-4 py-3 text-xs">
-              <span className="text-on-surface-muted">Municipal Rate Percentage</span>
-              <span className="font-mono font-medium text-foreground">
-                {billData.rateImposedFormatted}
-              </span>
-            </div>
+        {/* Payment Deadline — only shown when unpaid */}
+        {!isPaid && (
+          <div className="bg-surface rounded-xl border border-border-light/70 overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 text-xs">
               <span className="text-on-surface-muted">Payment Deadline</span>
               <span className="font-medium text-foreground">{billData.dueDateFormatted}</span>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Portfolio Switcher (if owner has multiple properties) */}
         {billData.portfolioProperties && billData.portfolioProperties.length > 1 && (
@@ -314,11 +396,6 @@ function BillViewerContent() {
             </div>
           </div>
         )}
-
-        {/* Footer Legal Context */}
-        <p className="text-[11px] text-on-surface-muted text-center pt-2 pb-4 leading-relaxed">
-          Official bill issued by Kpone-Katamanso Municipal Assembly pursuant to Local Governance Act, 2016 (Act 936).
-        </p>
       </div>
 
       {/* Full-Screen Bill Image Modal */}

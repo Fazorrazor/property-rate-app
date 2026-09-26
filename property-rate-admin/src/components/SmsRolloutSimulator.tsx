@@ -1445,28 +1445,28 @@ export function SmsRolloutSimulator({
                                         <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E] truncate" title={cleanDash(prop.ownerPhone)}>{cleanDash(prop.ownerPhone)}</td>
                                         <td className="py-2.5 px-3 whitespace-nowrap font-mono font-medium text-[11px] text-[#1C1C1E] truncate" title={cleanDash(prop.id)}>{cleanDash(prop.id)}</td>
                                         <td className="py-2.5 px-3 whitespace-nowrap font-mono font-medium text-[11px] text-[#1C1C1E] truncate" title={cleanDash(prop.ownerDigitalAddress)}>{cleanDash(prop.ownerDigitalAddress)}</td>
-                                        <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums truncate" title={String(prop.arrearsFormatted || "—")}>
+                                         <td className="py-2.5 px-3 text-right text-[11px] font-semibold text-[#1C1C1E] tabular-nums" title={String(prop.arrearsFormatted || "—")}>
                               {prop.arrears > 0 ? (
                                 (prop.status === "PAID" || Number(prop.amountPaidLastYear || 0) >= prop.arrears) ? (
-                                  <>
-                                    <span className="line-through text-[#8E8E93] tabular-nums" title={`Original arrears: ${prop.arrearsFormatted} (Fully cleared)`}>
+                                  <div className="flex flex-col items-end leading-tight">
+                                    <span className="line-through text-[#8E8E93] text-[10px] tabular-nums" title={`Original arrears: ${prop.arrearsFormatted} (Fully cleared)`}>
                                       {prop.arrearsFormatted}
                                     </span>
-                                    <span className="text-[10px] text-[#34C759] font-medium ml-1.5 whitespace-nowrap">
+                                    <span className="text-[10px] text-[#34C759] font-medium whitespace-nowrap">
                                       &bull; Cleared
                                     </span>
-                                  </>
+                                  </div>
                                 ) : Number(prop.amountPaidLastYear || 0) > 0 ? (
-                                  <>
-                                    <span className="line-through text-[#8E8E93] text-[10px] mr-1 tabular-nums" title={`Original arrears: ${prop.arrearsFormatted}`}>
+                                  <div className="flex flex-col items-end leading-tight">
+                                    <span className="line-through text-[#8E8E93] text-[10px] tabular-nums" title={`Original arrears: ${prop.arrearsFormatted}`}>
                                       {prop.arrearsFormatted}
                                     </span>
-                                    <span className="text-[#FF9500] font-semibold tabular-nums" title="Remaining unpaid arrears">
+                                    <span className="text-[#FF9500] font-semibold tabular-nums text-[11px] whitespace-nowrap" title="Remaining unpaid arrears">
                                       GH₵ {(prop.arrears - Number(prop.amountPaidLastYear || 0)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     </span>
-                                  </>
+                                  </div>
                                 ) : (
-                                  <span className="text-[#FF3B30] font-semibold tabular-nums">{prop.arrearsFormatted || "—"}</span>
+                                  <span className="text-[#FF3B30] font-semibold tabular-nums whitespace-nowrap">{prop.arrearsFormatted || "—"}</span>
                                 )
                               ) : (
                                 <span className="text-[#8E8E93]">—</span>
@@ -1547,28 +1547,28 @@ export function SmsRolloutSimulator({
                             <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E] truncate" title={cleanDash(prop.ownerPhone)}>{cleanDash(prop.ownerPhone)}</td>
                             <td className="py-2.5 px-3 whitespace-nowrap font-mono font-medium text-[11px] text-[#1C1C1E] truncate" title={cleanDash(prop.id)}>{cleanDash(prop.id)}</td>
                             <td className="py-2.5 px-3 whitespace-nowrap font-mono font-medium text-[11px] text-[#1C1C1E] truncate" title={cleanDash(prop.ownerDigitalAddress)}>{cleanDash(prop.ownerDigitalAddress)}</td>
-                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums truncate" title={String(prop.arrearsFormatted || "—")}>
+                            <td className="py-2.5 px-3 text-right text-[11px] font-semibold text-[#1C1C1E] tabular-nums" title={String(prop.arrearsFormatted || "—")}>
                               {prop.arrears > 0 ? (
                                 (prop.status === "PAID" || Number(prop.amountPaidLastYear || 0) >= prop.arrears) ? (
-                                  <>
-                                    <span className="line-through text-[#8E8E93] tabular-nums" title={`Original arrears: ${prop.arrearsFormatted} (Fully cleared)`}>
+                                  <div className="flex flex-col items-end leading-tight">
+                                    <span className="line-through text-[#8E8E93] text-[10px] tabular-nums" title={`Original arrears: ${prop.arrearsFormatted} (Fully cleared)`}>
                                       {prop.arrearsFormatted}
                                     </span>
-                                    <span className="text-[10px] text-[#34C759] font-medium ml-1.5 whitespace-nowrap">
+                                    <span className="text-[10px] text-[#34C759] font-medium whitespace-nowrap">
                                       &bull; Cleared
                                     </span>
-                                  </>
+                                  </div>
                                 ) : Number(prop.amountPaidLastYear || 0) > 0 ? (
-                                  <>
-                                    <span className="line-through text-[#8E8E93] text-[10px] mr-1 tabular-nums" title={`Original arrears: ${prop.arrearsFormatted}`}>
+                                  <div className="flex flex-col items-end leading-tight">
+                                    <span className="line-through text-[#8E8E93] text-[10px] tabular-nums" title={`Original arrears: ${prop.arrearsFormatted}`}>
                                       {prop.arrearsFormatted}
                                     </span>
-                                    <span className="text-[#FF9500] font-semibold tabular-nums" title="Remaining unpaid arrears">
+                                    <span className="text-[#FF9500] font-semibold tabular-nums text-[11px] whitespace-nowrap" title="Remaining unpaid arrears">
                                       GH₵ {(prop.arrears - Number(prop.amountPaidLastYear || 0)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     </span>
-                                  </>
+                                  </div>
                                 ) : (
-                                  <span className="text-[#FF3B30] font-semibold tabular-nums">{prop.arrearsFormatted || "—"}</span>
+                                  <span className="text-[#FF3B30] font-semibold tabular-nums whitespace-nowrap">{prop.arrearsFormatted || "—"}</span>
                                 )
                               ) : (
                                 <span className="text-[#8E8E93]">—</span>
@@ -1628,28 +1628,28 @@ export function SmsRolloutSimulator({
                             <td className="py-2.5 px-3 whitespace-nowrap text-[11px] font-medium text-[#1C1C1E] truncate" title={cleanDash(prop.ownerPhone)}>{cleanDash(prop.ownerPhone)}</td>
                             <td className="py-2.5 px-3 whitespace-nowrap font-mono font-medium text-[11px] text-[#1C1C1E] truncate" title={cleanDash(prop.id)}>{cleanDash(prop.id)}</td>
                             <td className="py-2.5 px-3 whitespace-nowrap font-mono font-medium text-[11px] text-[#1C1C1E] truncate" title={cleanDash(prop.ownerDigitalAddress)}>{cleanDash(prop.ownerDigitalAddress)}</td>
-                            <td className="py-2.5 px-3 text-right whitespace-nowrap text-[11px] font-semibold text-[#1C1C1E] tabular-nums truncate" title={String(prop.arrearsFormatted || "—")}>
+                            <td className="py-2.5 px-3 text-right text-[11px] font-semibold text-[#1C1C1E] tabular-nums" title={String(prop.arrearsFormatted || "—")}>
                               {prop.arrears > 0 ? (
                                 (prop.status === "PAID" || Number(prop.amountPaidLastYear || 0) >= prop.arrears) ? (
-                                  <>
-                                    <span className="line-through text-[#8E8E93] tabular-nums" title={`Original arrears: ${prop.arrearsFormatted} (Fully cleared)`}>
+                                  <div className="flex flex-col items-end leading-tight">
+                                    <span className="line-through text-[#8E8E93] text-[10px] tabular-nums" title={`Original arrears: ${prop.arrearsFormatted} (Fully cleared)`}>
                                       {prop.arrearsFormatted}
                                     </span>
-                                    <span className="text-[10px] text-[#34C759] font-medium ml-1.5 whitespace-nowrap">
+                                    <span className="text-[10px] text-[#34C759] font-medium whitespace-nowrap">
                                       &bull; Cleared
                                     </span>
-                                  </>
+                                  </div>
                                 ) : Number(prop.amountPaidLastYear || 0) > 0 ? (
-                                  <>
-                                    <span className="line-through text-[#8E8E93] text-[10px] mr-1 tabular-nums" title={`Original arrears: ${prop.arrearsFormatted}`}>
+                                  <div className="flex flex-col items-end leading-tight">
+                                    <span className="line-through text-[#8E8E93] text-[10px] tabular-nums" title={`Original arrears: ${prop.arrearsFormatted}`}>
                                       {prop.arrearsFormatted}
                                     </span>
-                                    <span className="text-[#FF9500] font-semibold tabular-nums" title="Remaining unpaid arrears">
+                                    <span className="text-[#FF9500] font-semibold tabular-nums text-[11px] whitespace-nowrap" title="Remaining unpaid arrears">
                                       GH₵ {(prop.arrears - Number(prop.amountPaidLastYear || 0)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     </span>
-                                  </>
+                                  </div>
                                 ) : (
-                                  <span className="text-[#FF3B30] font-semibold tabular-nums">{prop.arrearsFormatted || "—"}</span>
+                                  <span className="text-[#FF3B30] font-semibold tabular-nums whitespace-nowrap">{prop.arrearsFormatted || "—"}</span>
                                 )
                               ) : (
                                 <span className="text-[#8E8E93]">—</span>

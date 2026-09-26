@@ -25,9 +25,11 @@ export function AppleSpinner({ className = "", size = "md" }: AppleSpinnerProps)
     { angle: 315, opacity: 0.12 },
   ];
 
+  const hasPosition = /\b(absolute|fixed)\b/.test(className);
+
   return (
     <div
-      className={`relative inline-flex items-center justify-center animate-spin shrink-0 ${sizeClasses} ${className}`}
+      className={`${hasPosition ? "" : "relative "}inline-flex items-center justify-center animate-spin shrink-0 ${sizeClasses} ${className}`}
       style={{ animationDuration: "0.85s", animationTimingFunction: "steps(8, end)" }}
       role="status"
       aria-label="Loading"

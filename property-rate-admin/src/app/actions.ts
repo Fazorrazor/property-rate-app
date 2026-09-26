@@ -3034,3 +3034,35 @@ export async function getPaidUsersList(
         return { records: [], total: 0, totalAmount: 0 };
     }
 }
+
+// ─── TEST SANDBOX: Reset test account to predefined balance ────────────────
+import { TestAccountPreset, TEST_ACCOUNT_PRESETS } from '@/lib/testPresets';
+export type { TestAccountPreset };
+
+export async function resetTestAccountAction(accountNumber: string, presetIndex: number): Promise<{ success: boolean; error?: string; preset?: TestAccountPreset }> {
+  try {
+    const admin = await verifyAdminSession();
+    if (!admin) return { success: false, error: 'Not authenticated' };
+
+    const preset = TEST_ACCOUNT_PRESETS[presetIndex];
+    if (!preset) return { success: false, error: 'Invalid preset' };
+    if (preset.accountNumber !== accountNumber) return { success: false, error: 'Account mismatch' };
+
+    // Reset via raw SQL to handle the non-typed columns
+    await supabase
+      .from('Property')
+      .update({
+        arrears: preset.arrears,
+        current_bill: preset.currentBill,
+        outstanding_amt: preset.outstandingAmt,
+        amount_paid: 0,
+        status: preset.outstandingAmt <= 0 ? 'PAID' : 'UNPAID',
+      })
+      .eq('account_no', accountNumber);
+
+    return { success: true, preset };
+  } catch (err) {
+    console.error('[Test Reset] Error:', err);
+    return { success: false, error: 'Reset failed' };
+  }
+}

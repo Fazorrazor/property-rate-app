@@ -1744,7 +1744,7 @@ export default function AdminDashboardPage() {
               >
                 {/* Desktop Cadastre Table (>= 768px) */}
                 <table className="hidden md:table table-fixed w-full text-left text-xs border-collapse">
-                  <thead className="bg-[#F8F9FA] border-b border-[#E5E5EA] text-[#6C6C70] font-semibold text-[11px] sticky top-0 z-10">
+                  <thead className="bg-[#F8F9FA] border-b border-[#E5E5EA] text-[#6C6C70] font-semibold text-[11px] sticky top-0 z-[1]">
                     <tr>
                       <th className="py-2.5 px-3 text-center w-8 bg-[#F8F9FA]">
                         <input
@@ -1808,8 +1808,13 @@ export default function AdminDashboardPage() {
                           <tr
                             key={prop.id}
                             onClick={() => setSelectedAccount(prop)}
-                            className={`hover:bg-[#F8F9FA] transition-colors cursor-pointer ${selectedAccount?.id === prop.id ? "bg-[#007AFF]/8" : ""
-                              }`}
+                            className={`transition-colors cursor-pointer ${
+                              isSelected
+                                ? "bg-[#007AFF]/10 hover:bg-[#007AFF]/15"
+                                : selectedAccount?.id === prop.id
+                                ? "bg-[#007AFF]/8 hover:bg-[#007AFF]/12"
+                                : "hover:bg-[#F8F9FA]"
+                            }`}
                           >
                             <td className="py-2.5 px-3 text-center" onClick={(e) => e.stopPropagation()}>
                               <input
@@ -2235,7 +2240,13 @@ export default function AdminDashboardPage() {
                     }`}
                   >
                     <span>Official Ratepayers</span>
-                    {paidUsersSubTab === "LIVE" && <span className="text-[11px] font-mono text-[#007AFF]">({paidUsersTotal})</span>}
+                    {paidUsersSubTab === "LIVE" && (
+                      isLoadingPaidUsers ? (
+                        <AppleSpinner size="xs" className="text-[#007AFF]" />
+                      ) : (
+                        <span className="text-[11px] font-mono text-[#007AFF]">({paidUsersTotal})</span>
+                      )
+                    )}
                   </button>
 
                   <button
@@ -2248,7 +2259,13 @@ export default function AdminDashboardPage() {
                     }`}
                   >
                     <span>Sandbox Test Accounts</span>
-                    {paidUsersSubTab === "TEST" && <span className="text-[11px] font-mono text-[#007AFF]">({paidUsersTotal})</span>}
+                    {paidUsersSubTab === "TEST" && (
+                      isLoadingPaidUsers ? (
+                        <AppleSpinner size="xs" className="text-[#007AFF]" />
+                      ) : (
+                        <span className="text-[11px] font-mono text-[#007AFF]">({paidUsersTotal})</span>
+                      )
+                    )}
                   </button>
 
                   <button
@@ -2261,18 +2278,20 @@ export default function AdminDashboardPage() {
                     }`}
                   >
                     <span>All Records</span>
-                    {paidUsersSubTab === "ALL" && <span className="text-[11px] font-mono text-[#007AFF]">({paidUsersTotal})</span>}
+                    {paidUsersSubTab === "ALL" && (
+                      isLoadingPaidUsers ? (
+                        <AppleSpinner size="xs" className="text-[#007AFF]" />
+                      ) : (
+                        <span className="text-[11px] font-mono text-[#007AFF]">({paidUsersTotal})</span>
+                      )
+                    )}
                   </button>
                 </div>
 
                 {/* Search Bar */}
                 <div className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 pt-2">
                   <div className="relative flex items-center w-full lg:flex-1 lg:max-w-md">
-                    {isLoadingPaidUsers ? (
-                      <AppleSpinner size="sm" className="text-[#007AFF] absolute left-3 pointer-events-none" />
-                    ) : (
-                      <Search className="w-4 h-4 text-[#8E8E93] absolute left-3 pointer-events-none" />
-                    )}
+                    <Search className="w-4 h-4 text-[#8E8E93] absolute left-3 pointer-events-none" />
                     <input
                       type="text"
                       inputMode="search"
@@ -2287,7 +2306,11 @@ export default function AdminDashboardPage() {
                       }}
                       className="w-full h-8 pl-9 pr-8 rounded-lg border border-[#E5E5EA] bg-[#F2F2F7] text-xs text-[#1C1C1E] placeholder:text-[#8E8E93] focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] focus:bg-white focus:outline-none transition-colors"
                     />
-                    {paidUsersSearchQuery && (
+                    {isLoadingPaidUsers && paidUsersSearchQuery ? (
+                      <span className="absolute right-2.5 flex items-center pointer-events-none">
+                        <AppleSpinner size="xs" className="text-[#007AFF]" />
+                      </span>
+                    ) : paidUsersSearchQuery ? (
                       <button
                         type="button"
                         onClick={() => setPaidUsersSearchQuery("")}
@@ -2296,12 +2319,15 @@ export default function AdminDashboardPage() {
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
-                    )}
+                    ) : null}
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-[#6C6C70]">
                       Showing <span className="font-semibold text-[#1C1C1E]">{paidUsers.length}</span> of <span className="font-semibold text-[#1C1C1E]">{paidUsersTotal}</span> payments
                     </span>
+                    {isLoadingPaidUsers && !paidUsersSearchQuery && (
+                      <AppleSpinner size="xs" className="text-[#007AFF]" />
+                    )}
                   </div>
                 </div>
               </div>
@@ -2321,7 +2347,7 @@ export default function AdminDashboardPage() {
                       <th className="px-4 lg:px-6 py-3 font-semibold text-[#6C6C70] text-right">Action</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#E5E5EA]">
+                  <tbody className={`divide-y divide-[#E5E5EA] transition-opacity duration-150 ${isLoadingPaidUsers && paidUsers.length > 0 ? "opacity-50" : "opacity-100"}`}>
                     {isLoadingPaidUsers && paidUsers.length === 0 ? (
                       Array.from({ length: 6 }).map((_, i) => (
                         <tr key={i} className="animate-pulse">

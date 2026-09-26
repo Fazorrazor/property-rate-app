@@ -2052,6 +2052,43 @@ export async function verifyPaymentTransaction(reference: string) {
         return { success: true, status: 'FAILED', amount: transaction.amount };
       }
       if (transaction.status === 'SUCCESS' && transaction.receipt) {
+        // Immediately ensure PaidUserRecord exists — so admin directory is up-to-date
+        // before the webhook fires or in case it already fired.
+        try {
+          const txWithDetails = await prisma.transaction.findUnique({
+            where: { reference },
+            include: { receipt: true, user: true, property: true },
+          });
+          if (txWithDetails?.receipt && txWithDetails.property) {
+            const prop = txWithDetails.property as any;
+            const payerPhone = (txWithDetails.user?.phoneNumber || prop.telephone || '').replace(/\D/g, '');
+            const isTestAccount = ['0206882328', '0209067556', '0244044647', '206882328', '209067556', '244044647'].some(p => payerPhone.endsWith(p));
+            await (prisma as any).paidUserRecord.upsert({
+              where: { reference: txWithDetails.reference },
+              update: { status: 'SUCCESS' },
+              create: {
+                userId: txWithDetails.userId || null,
+                userName: txWithDetails.user?.name || prop.name || 'Ratepayer',
+                phoneNumber: txWithDetails.user?.phoneNumber || prop.telephone || 'N/A',
+                accountNumber: txWithDetails.property.accountNumber || 'N/A',
+                propertyId: txWithDetails.property.id,
+                amountPaid: txWithDetails.amount,
+                arrearsPaid: 0,
+                currentPaid: 0,
+                paymentMethod: 'Paystack MoMo',
+                reference: txWithDetails.reference,
+                receiptNumber: txWithDetails.receipt.receiptNumber,
+                status: 'SUCCESS',
+                isTestUser: isTestAccount,
+                paidAt: txWithDetails.receipt.createdAt || new Date(),
+              },
+            });
+          }
+        } catch (paidRecordErr) {
+          // Non-critical — don't block the verification response
+          console.warn('[Verify] PaidUserRecord upsert warning:', paidRecordErr);
+        }
+
         return {
           success: true,
           status: 'SUCCESS',
@@ -2063,6 +2100,7 @@ export async function verifyPaymentTransaction(reference: string) {
           }
         };
       }
+
     }
 
     // 2. If PENDING in our DB, check Paystack's API
@@ -2149,17 +2187,68 @@ export interface PublicReceiptVerificationData {
 
 export async function getPublicReceiptVerification(receiptNumber: string): Promise<PublicReceiptVerificationData | null> {
   try {
-    if (!receiptNumber || !receiptNumber.trim()) return null;
-
-    const receipt = await prisma.receipt.findUnique({
-      where: { receiptNumber: receiptNumber.trim() },
+    const cleanCode = receiptNumber.trim();
+    let receipt: any = await prisma.receipt.findUnique({
+      where: { receiptNumber: cleanCode },
       include: {
         property: true,
         user: true,
       },
     });
 
-    if (!receipt) return null;
+    if (!receipt) {
+      receipt = await prisma.receipt.findFirst({
+        where: {
+          OR: [
+            { transactionId: cleanCode },
+            { id: cleanCode },
+          ],
+        },
+        include: {
+          property: true,
+          user: true,
+        },
+      });
+    }
+
+    if (!receipt) {
+      // Fallback check against PaidUserRecord
+      const paidRec = await (prisma as any).paidUserRecord.findFirst({
+        where: {
+          OR: [
+            { receiptNumber: cleanCode },
+            { reference: cleanCode },
+            { accountNumber: cleanCode },
+          ],
+        },
+      });
+
+      if (paidRec) {
+        const dt = new Date(paidRec.paidAt || Date.now());
+        const antiFraudCode = `KKMA-AUTH-${paidRec.id.slice(0, 8).toUpperCase()}-${dt.getFullYear()}`;
+        return {
+          isValid: true,
+          receiptNumber: paidRec.receiptNumber || 'GCR-RECONCILED',
+          amount: Number(paidRec.amountPaid || 0),
+          amountFormatted: `GH₵ ${Number(paidRec.amountPaid || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          settlementType: 'TOTAL',
+          settlementScopeFormatted: 'Full Annual Rate Assessment Settlement',
+          paymentMethod: paidRec.paymentMethod || 'Mobile Money',
+          status: 'PAID',
+          datePaidFormatted: dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+          timestamp: dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+          ratepayerName: paidRec.ratepayerName || 'Registered Municipal Ratepayer',
+          propertyAccountNumber: paidRec.accountNumber || 'N/A',
+          propertyClassification: paidRec.propertyClassification || 'RESIDENTIAL',
+          digitalAddress: paidRec.digitalAddress || 'KKMA',
+          municipality: 'Kpone-Katamanso Municipal Assembly (KKMA)',
+          fiscalYear: dt.getFullYear(),
+          antiFraudCode,
+          scannedImageUrl: null,
+        };
+      }
+      return null;
+    }
 
     const dt = new Date(receipt.datePaid || Date.now());
     const property = receipt.property;
@@ -2241,6 +2330,13 @@ export interface PropertyBillViewData {
     totalAmountDueFormatted: string;
     status: string;
   }>;
+  receipts?: Array<{
+    id: string;
+    receiptNumber: string;
+    amountFormatted: string;
+    datePaidFormatted: string;
+    paymentMethod: string;
+  }>;
 }
 
 export async function getPropertyBillData(accountNumberOrId?: string): Promise<PropertyBillViewData | null> {
@@ -2310,6 +2406,54 @@ export async function getPropertyBillData(accountNumberOrId?: string): Promise<P
       }));
     }
 
+    let receipts: Array<{
+      id: string;
+      receiptNumber: string;
+      amountFormatted: string;
+      datePaidFormatted: string;
+      paymentMethod: string;
+    }> = [];
+
+    try {
+      const dbReceipts = await (prisma as any).receipt.findMany({
+        where: {
+          OR: [
+            { propertyId: targetProp.id },
+            { property: { accountNumber: targetProp.accountNumber } },
+          ],
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+      });
+
+      if (dbReceipts && dbReceipts.length > 0) {
+        receipts = dbReceipts.map((r: any) => ({
+          id: r.id,
+          receiptNumber: r.receiptNumber || 'GCR-PROCESSED',
+          amountFormatted: `GH₵ ${Number(r.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          datePaidFormatted: r.createdAt ? new Date(r.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Recent',
+          paymentMethod: r.paymentMethod || 'Mobile Money',
+        }));
+      } else {
+        const paidRecords = await (prisma as any).paidUserRecord.findMany({
+          where: { accountNumber: targetProp.accountNumber },
+          orderBy: { paidAt: 'desc' },
+          take: 5,
+        });
+        if (paidRecords && paidRecords.length > 0) {
+          receipts = paidRecords.map((pr: any) => ({
+            id: pr.id,
+            receiptNumber: pr.receiptNumber || 'GCR-PROCESSED',
+            amountFormatted: `GH₵ ${Number(pr.amountPaid || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+            datePaidFormatted: pr.paidAt ? new Date(pr.paidAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Recent',
+            paymentMethod: pr.paymentMethod || 'Paystack MoMo',
+          }));
+        }
+      }
+    } catch (err) {
+      console.warn('Error fetching receipts for bill view:', err);
+    }
+
     return {
       id: targetProp.id,
       accountNumber: targetProp.accountNumber,
@@ -2341,6 +2485,7 @@ export async function getPropertyBillData(accountNumberOrId?: string): Promise<P
       status: (isPaid ? 'PAID' : (targetProp.status || 'UNPAID')) as 'PAID' | 'PARTIALLY_PAID' | 'UNPAID',
       billImageUrl: targetProp.billImageUrl || (targetProp as any).bill_image_url || null,
       portfolioProperties: portfolioProps.length > 0 ? portfolioProps : undefined,
+      receipts: receipts.length > 0 ? receipts : undefined,
     };
   } catch (error) {
     console.error('Error fetching property bill data:', error);

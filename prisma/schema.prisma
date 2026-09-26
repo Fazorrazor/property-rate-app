@@ -115,7 +115,7 @@ model PaidUserRecord {
   arrearsPaid   Float    @default(0.0)
   currentPaid   Float    @default(0.0)
   paymentMethod String   @default("Paystack MoMo")
-  reference     String
+  reference     String   @unique
   receiptNumber String?
   status        String   @default("SUCCESS")
   isTestUser    Boolean  @default(false)

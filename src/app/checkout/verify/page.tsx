@@ -113,10 +113,10 @@ function VerifyCheckoutContent() {
               Print / Save Receipt
             </button>
             <button
-              onClick={() => window.close()}
+              onClick={() => router.push("/bill")}
               className="w-full h-10 rounded-xl bg-surface border border-border-light text-foreground text-xs font-medium flex items-center justify-center transition-colors cursor-pointer"
             >
-              Close Window
+              View Property Bill &amp; Receipts
             </button>
           </div>
         </motion.div>
