@@ -22,6 +22,12 @@ const cardVariants = cva(
           "bg-[#FFF8E6] text-[#8C6500] border-0",
         dark:
           "bg-[#111827] text-white border-0 shadow-[0_8px_30px_rgba(0,0,0,0.12)]",
+        glass:
+          "apple-glass text-[#121212]",
+        glassDark:
+          "apple-glass-dark text-white",
+        glassSubtle:
+          "apple-glass-subtle text-[#121212]",
       },
       interactive: {
         true: "cursor-pointer hover:shadow-[0_8px_30px_-6px_rgba(0,0,0,0.08)] active:scale-[0.99]",

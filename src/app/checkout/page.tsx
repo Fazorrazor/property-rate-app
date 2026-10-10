@@ -282,11 +282,11 @@ function CheckoutContent() {
     const timer = setTimeout(async () => {
       setIsVerifyingSubscriber(true);
       try {
-        const res = await verifySubscriberAction(phoneNumber);
+        const res = await verifySubscriberAction(phoneNumber, network);
         if (res.success && res.subscriberName) {
           setPayerName(res.subscriberName);
           setIsHubtelVerified(true);
-          if (res.network) {
+          if (res.network && res.network !== network) {
             setNetwork(res.network);
           }
         } else {
@@ -297,10 +297,10 @@ function CheckoutContent() {
       } finally {
         setIsVerifyingSubscriber(false);
       }
-    }, 600);
+    }, 500);
 
     return () => clearTimeout(timer);
-  }, [phoneNumber]);
+  }, [phoneNumber, network]);
 
   // Polling Effect for Processing
   useEffect(() => {
@@ -434,6 +434,7 @@ function CheckoutContent() {
         processingFee: processingFee,
         phone: phoneNumber,
         network: network,
+        payerName: payerName.trim() || undefined,
         targetPropertyIds: isMultiPropertyMode && selectedPropertyIds.length > 0 ? selectedPropertyIds : undefined,
         accountNumberOverride: rawAccountNumber,
       });

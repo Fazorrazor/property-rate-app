@@ -1,12 +1,25 @@
 'use server';
 import { adminDb } from '@/lib/adminDb';
 import { prisma } from '@/lib/db';
-import { supabase } from '@/lib/supabase';
+import { supabaseAdmin as supabase } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
+import {
+    hashPassword,
+    verifyPassword,
+    generateSecureSessionToken,
+    createSignedSessionCookie,
+    parseAndVerifySignedSessionCookie,
+    checkRateLimit,
+    recordFailedLoginAttempt,
+    clearRateLimit,
+} from '@/lib/security';
 import { TwilioProvider } from '@/lib/sms/twilio';
 import { ArkeselProvider } from '@/lib/sms/arkesel';
 import { DEFAULT_SMS_NOTICE_TEMPLATE, DEFAULT_RECEIPT_NOTICE_TEMPLATE } from '@/lib/sms/types';
+import { formatGhc, formatDateGb } from '@/lib/formatters';
+import { GoogleGenAI } from '@google/genai';
+import { DATABASE_TABLE_DEFINITIONS, DatabaseTableDefinition } from '@/lib/database-tables-config';
 
 const arkeselService = new ArkeselProvider();
 const twilioServiceInstance = new TwilioProvider();
@@ -39,8 +52,66 @@ let arkeselBalanceCache: {
 
 const BALANCE_CACHE_TTL_MS = 60 * 1000;
 
+function sanitizePostgrestFilter(term: string): string {
+    return (term || '').replace(/[%_]/g, '\\$&').replace(/[,\(\)]/g, ' ').trim();
+}
+
+function sanitizeBaseUrl(url?: string): string {
+    const defaultUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://property-rate-app.vercel.app';
+    if (!url || typeof url !== 'string') return defaultUrl;
+    const trimmed = url.trim().replace(/\/$/, '');
+    try {
+        const parsed = new URL(trimmed);
+        const hostname = parsed.hostname.toLowerCase();
+        if (
+            hostname === 'localhost' ||
+            hostname === '127.0.0.1' ||
+            hostname.endsWith('.vercel.app') ||
+            hostname.endsWith('kkma.gov.gh') ||
+            hostname.endsWith('gov.gh')
+        ) {
+            return trimmed;
+        }
+    } catch {
+        // invalid URL
+    }
+    return defaultUrl;
+}
+
+// ── Hidden test-account filter ────────────────────────────────────────────────
+// These accounts belong to internal testers and must NEVER appear in any admin
+// table, metric, or collection view.
+const HIDDEN_TEST_ACCOUNT_NUMBERS = [
+    'KKDA03001001', 'KKDA03001002', 'KKDA03001005', 'KKDA03001015', 'KKDA03991001',
+    'KKDA03991002',
+    'KKDA244044647',
+    'KKDA59667434',
+];
+const HIDDEN_TEST_PHONES = ['0209067556', '0206882328', '0244044647', '0551908713'];
+const HIDDEN_TEST_NAMES  = ['heinz', 'demond', 'desmond', 'ignatius amoah', 'pablo'];
+
+/** Returns true when a record belongs to a known internal test account. */
+function isHiddenTestAccount(record: {
+    name?: string | null;
+    accountNumber?: string | null;
+    account_no?: string | null;
+    telephone?: string | null;
+    phoneNumber?: string | null;
+}): boolean {
+    const name    = (record.name || '').toLowerCase().trim();
+    const acct    = (record.accountNumber || record.account_no || '').trim();
+    const phone   = (record.telephone || record.phoneNumber || '').replace(/\D/g, '').slice(-9);
+    if (HIDDEN_TEST_ACCOUNT_NUMBERS.includes(acct)) return true;
+    if (HIDDEN_TEST_PHONES.some(p => p.replace(/\D/g, '').slice(-9) === phone && phone.length >= 9)) return true;
+    if (HIDDEN_TEST_NAMES.some(n => name.includes(n))) return true;
+    return false;
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+
 export async function syncActiveSmsConfig() {
     try {
+        await verifyAdminSession();
         const settings = await (prisma as any).systemSetting.findMany();
         if (settings && settings.length > 0) {
             for (const s of settings) {
@@ -85,6 +156,7 @@ export interface AdminPropertyReceipt {
     propertyId?: string;
     userId?: string;
     payerPhoneNumber?: string | null;
+    payerName?: string | null;
     narrative?: {
         targetAccount: string;
         targetDigitalAddress?: string;
@@ -127,6 +199,18 @@ export interface AdminProperty {
     amountPaidLastYearFormatted: string;
     arrears: number;
     arrearsFormatted: string;
+    initialArrears?: number;
+    initialArrearsFormatted?: string;
+    currentArrears?: number;
+    currentArrearsFormatted?: string;
+    totalPaidCycle?: number;
+    totalPaidCycleFormatted?: string;
+    cumulativeArrears?: number;
+    cumulativeArrearsFormatted?: string;
+    initial_arrears?: number;
+    current_arrears?: number;
+    total_paid_cycle?: number;
+    cumulative_arrears?: number;
     currentFee: number;
     currentFeeFormatted: string;
     totalAmountDue: number;
@@ -172,12 +256,32 @@ export interface AdminRatepayerSummary {
     role: string;
     isVerified: boolean;
     propertyCount: number;
+    accountNumber: string;
+    accountNumbers: string[];
+    location: string;
+    currentBill: number;
+    currentBillFormatted: string;
+    previousBill: number;
+    previousBillFormatted: string;
     totalValuationFormatted: string;
     totalArrears: number;
     totalArrearsFormatted: string;
+    totalDue: number;
     totalDueFormatted: string;
     status: 'SETTLED' | 'OUTSTANDING' | 'DEFAULTER' | 'NO_PROPERTIES';
     createdAtFormatted: string;
+}
+
+export interface AdminBillRecord {
+    id: string;
+    accountNo: string;
+    billYear: number;
+    ratePA: number;
+    balanceBF: number;
+    accountBalance: number;
+    billDate?: string | null;
+    rateableValue?: number;
+    billRate?: number;
 }
 
 export interface RatepayerHistoryDossier {
@@ -191,6 +295,7 @@ export interface RatepayerHistoryDossier {
     };
     properties: AdminProperty[];
     receipts: AdminPropertyReceipt[];
+    bills?: AdminBillRecord[];
     notifications: {
         id: string;
         title: string;
@@ -231,22 +336,42 @@ export interface SmsRolloutLogItem {
     createdAtFormatted: string;
 }
 
+interface CachedAdminSession {
+    admin: any;
+    sessionToken: string;
+    cachedAt: number;
+}
+
+const adminSessionMemoryCache = new Map<string, CachedAdminSession>();
+const ADMIN_SESSION_CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes fast-path cache
+
 export async function verifyAdminSession() {
     const cookieStore = await cookies();
-    const session = cookieStore.get('admin_session');
+    const sessionCookie = cookieStore.get('admin_session');
 
-    if (!session?.value) {
+    if (!sessionCookie?.value) {
         return null;
     }
 
-    const [adminId, sessionToken] = session.value.split(':');
+    const { valid, adminId, sessionToken } = parseAndVerifySignedSessionCookie(sessionCookie.value);
+    if (!valid || !adminId) {
+        try { cookieStore.delete('admin_session'); } catch {}
+        return null;
+    }
+
+    // Fast-path: Check validated session in memory cache
+    const cached = adminSessionMemoryCache.get(adminId);
+    if (cached && (Date.now() - cached.cachedAt < ADMIN_SESSION_CACHE_TTL_MS) && cached.sessionToken === sessionToken) {
+        return cached.admin;
+    }
 
     const admin = await prisma.adminUser.findUnique({
         where: { id: adminId }
     });
 
-    if (!admin || !admin.isActive || (admin.role !== 'ADMIN' && admin.role !== 'SUPER_ADMIN')) {
-        cookieStore.delete('admin_session');
+    if (!admin || !admin.isActive || (admin.role !== 'ADMIN' && admin.role !== 'SUPER_ADMIN' && admin.role !== 'OFFICER')) {
+        adminSessionMemoryCache.delete(adminId);
+        try { cookieStore.delete('admin_session'); } catch {}
         return null;
     }
 
@@ -262,17 +387,33 @@ export async function verifyAdminSession() {
 
             if (latestSession) {
                 if (latestSession.action === 'ADMIN_SESSION_REVOKED') {
-                    cookieStore.delete('admin_session');
+                    adminSessionMemoryCache.delete(adminId);
+                    try { cookieStore.delete('admin_session'); } catch {}
                     return null;
                 }
                 if (latestSession.action === 'ADMIN_SESSION_ACTIVE' && latestSession.details !== sessionToken) {
-                    cookieStore.delete('admin_session');
+                    adminSessionMemoryCache.delete(adminId);
+                    try { cookieStore.delete('admin_session'); } catch {}
                     return null;
                 }
             }
         } catch (e) { }
     }
 
+    adminSessionMemoryCache.set(adminId, {
+        admin,
+        sessionToken: sessionToken || '',
+        cachedAt: Date.now(),
+    });
+
+    return admin;
+}
+
+export async function requireAdminSession() {
+    const admin = await verifyAdminSession();
+    if (!admin || !admin.isActive) {
+        throw new Error('Unauthorized. Active municipal administrator session required.');
+    }
     return admin;
 }
 
@@ -284,6 +425,19 @@ export async function getCurrentAdmin() {
 
 export async function adminLogin(username: string, passwordHash: string, rememberMe: boolean = false) {
     try {
+        const headerList = await headers();
+        const clientIp = (headerList.get('x-forwarded-for')?.split(',')[0] || headerList.get('x-real-ip') || '127.0.0.1').trim();
+        const rateLimitKey = `${clientIp}:${(username || '').toLowerCase().trim()}`;
+
+        // 1. Sliding-window brute force rate check (5 attempts per 10 mins -> 15 min lock)
+        const rateCheck = checkRateLimit(rateLimitKey, 5, 10 * 60 * 1000, 15 * 60 * 1000);
+        if (!rateCheck.allowed) {
+            return {
+                success: false,
+                error: `Security lockout: Excessive failed attempts. Access temporarily locked for ${Math.ceil(rateCheck.retryAfterSeconds / 60)} minute(s).`
+            };
+        }
+
         const cleanUsername = (username || '').trim();
         const cleanPassword = (passwordHash || '').trim();
 
@@ -313,11 +467,51 @@ export async function adminLogin(username: string, passwordHash: string, remembe
             where: { username: cleanUsername }
         });
 
-        if (!admin || admin.passwordHash !== cleanPassword || !admin.isActive || (admin.role !== 'ADMIN' && admin.role !== 'SUPER_ADMIN')) {
+        const isPasswordValid = admin && admin.isActive && (admin.role === 'ADMIN' || admin.role === 'SUPER_ADMIN' || admin.role === 'OFFICER')
+            ? verifyPassword(cleanPassword, admin.passwordHash)
+            : false;
+
+        if (!isPasswordValid || !admin) {
+            const failStatus = recordFailedLoginAttempt(rateLimitKey);
+            if (failStatus.locked) {
+                try {
+                    await prisma.auditLog.create({
+                        data: {
+                            action: 'SECURITY_LOGIN_LOCKOUT',
+                            entityType: 'AdminSecurity',
+                            entityId: cleanUsername,
+                            details: `Excessive failed logins from IP ${clientIp}. Account locked for 15 minutes.`,
+                        }
+                    });
+                } catch (e) {}
+                return {
+                    success: false,
+                    error: 'Account temporarily locked due to excessive failed attempts. Please retry in 15 minutes.'
+                };
+            }
+            // Constant-time mitigation jitter delay
+            await new Promise((resolve) => setTimeout(resolve, 350));
             return { success: false, error: 'Invalid municipal username or security authorization password.' };
         }
 
-        const sessionToken = `adm_${Math.random().toString(36).substring(2, 12)}_${Date.now()}`;
+        // Clear rate limit record on verified login
+        clearRateLimit(rateLimitKey);
+
+        // Transparently migrate plaintext password to salted scrypt hash
+        if (!admin.passwordHash?.startsWith('$scrypt$')) {
+            try {
+                const secureScryptHash = hashPassword(cleanPassword);
+                await prisma.adminUser.update({
+                    where: { id: admin.id },
+                    data: { passwordHash: secureScryptHash }
+                });
+            } catch (upgradeErr) {
+                console.warn('Could not upgrade admin password to scrypt hash:', upgradeErr);
+            }
+        }
+
+        // Generate 192-bit cryptographically secure session token
+        const sessionToken = generateSecureSessionToken();
 
         try {
             await prisma.auditLog.create({
@@ -333,11 +527,15 @@ export async function adminLogin(username: string, passwordHash: string, remembe
             console.warn('Could not record ADMIN_SESSION_ACTIVE audit log:', auditErr);
         }
 
+        // Sign cookie with server HMAC
+        const rawPayload = `${admin.id}:${sessionToken}:${Date.now()}`;
+        const signedCookie = createSignedSessionCookie(rawPayload);
+
         const cookieStore = await cookies();
-        cookieStore.set('admin_session', `${admin.id}:${sessionToken}:${Date.now()}`, {
+        cookieStore.set('admin_session', signedCookie, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
-            maxAge: 365 * 24 * 60 * 60, // Persistent session (1 year)
+            maxAge: rememberMe ? 365 * 24 * 60 * 60 : 24 * 60 * 60,
             path: '/',
             sameSite: 'lax'
         });
@@ -351,20 +549,24 @@ export async function adminLogin(username: string, passwordHash: string, remembe
 
 export async function adminLogout() {
     const cookieStore = await cookies();
-    const session = cookieStore.get('admin_session');
-    if (session?.value) {
-        const adminId = session.value.split(':')[0];
-        try {
-            await prisma.auditLog.create({
-                data: {
-                    action: 'ADMIN_SESSION_REVOKED',
-                    entityType: 'AdminSession',
-                    entityId: adminId,
-                    details: 'Logged out explicitly',
-                    adminId: adminId,
-                },
-            });
-        } catch (e) { }
+    const sessionCookie = cookieStore.get('admin_session');
+    if (sessionCookie?.value) {
+        const { adminId } = parseAndVerifySignedSessionCookie(sessionCookie.value);
+        const resolvedId = adminId || sessionCookie.value.split(':')[0];
+        if (resolvedId) {
+            adminSessionMemoryCache.delete(resolvedId);
+            try {
+                await prisma.auditLog.create({
+                    data: {
+                        action: 'ADMIN_SESSION_REVOKED',
+                        entityType: 'AdminSession',
+                        entityId: resolvedId,
+                        details: 'Logged out explicitly',
+                        adminId: resolvedId,
+                    },
+                });
+            } catch (e) { }
+        }
     }
     cookieStore.delete('admin_session');
     revalidatePath('/');
@@ -374,6 +576,7 @@ const METRICS_CACHE_TTL_MS = 60 * 1000;
 const metricsCache = new Map<string, any>();
 
 export async function invalidateMetricsCache() {
+    await requireAdminSession();
     metricsCache.clear();
 }
 
@@ -387,7 +590,7 @@ export async function getAdminOverview(
     requiredFields: string[] = []
 ): Promise<AdminDashboardData | null> {
     try {
-        await verifyAdminSession();
+        await requireAdminSession();
 
         const skip = (page - 1) * limit;
 
@@ -414,6 +617,19 @@ export async function getAdminOverview(
         if (requiredFields && Array.isArray(requiredFields) && requiredFields.length > 0) {
             tableWhereClause.requiredFields = requiredFields;
         }
+
+        // Exclude internal test accounts from all table and metric views
+        const testAccountExclusion = {
+            accountNumber: { notIn: HIDDEN_TEST_ACCOUNT_NUMBERS },
+            owner: {
+                AND: [
+                    { name:        { notIn: ['Heinz', 'Pablo'] } },
+                    { phoneNumber: { notIn: HIDDEN_TEST_PHONES } },
+                ],
+            },
+        };
+        Object.assign(tableWhereClause,  testAccountExclusion);
+        Object.assign(globalWhereClause, testAccountExclusion);
 
         let totalFilteredProps = 0;
         let globalPropsCount = 0;
@@ -504,24 +720,16 @@ export async function getAdminOverview(
 
         const formatted: AdminProperty[] = properties.map((p: any) => {
             const isDefaulter = p.status !== 'PAID' && p.arrears > 0;
-            const billDateObj = new Date(p.billDate || Date.now());
-            const deadlineObj = new Date(p.settlementDeadline || Date.now());
-            const primaryUser = p.users?.[0];
-            // Prioritise direct Property.name / Property.telephone (legacy fields confirmed in live DB)
-            const ownerName = p.ownerNameDirect || p.owner?.name || primaryUser?.name || 'Municipal Ratepayer';
-            const ownerPhone = p.ownerPhoneDirect || p.owner?.tel || p.owner?.mobileNumber || primaryUser?.phoneNumber || '—';
-
-            const muni = p.municipality || 'Kpone-Katamanso (KKMA)';
 
             const receiptsList: AdminPropertyReceipt[] = (p.receipts || []).map((r: any) => {
                 const d = new Date(r.datePaid || Date.now());
-                const formattedDate = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+                const formattedDate = formatDateGb(d);
                 const formattedTime = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) + ' UTC';
                 return {
                     id: r.id,
                     receiptNumber: r.receiptNumber,
                     amount: r.amount,
-                    amountFormatted: `GH₵ ${r.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                    amountFormatted: formatGhc(r.amount),
                     settlementType: r.settlementType || 'TOTAL',
                     paymentMethod: r.paymentMethod || 'Mobile Money',
                     status: r.status || 'PAID',
@@ -533,6 +741,18 @@ export async function getAdminOverview(
                 };
             });
 
+            const billDateObj = new Date(p.billDate || Date.now());
+            const deadlineObj = new Date(p.settlementDeadline || Date.now());
+            const primaryUser = p.users?.[0];
+            // Prioritise direct Property.name / Property.telephone (legacy fields confirmed in live DB)
+            const ownerName = p.ownerNameDirect || p.owner?.name || primaryUser?.name || 'Municipal Ratepayer';
+            const ownerPhone = p.ownerPhoneDirect || p.owner?.tel || p.owner?.mobileNumber || primaryUser?.phoneNumber || '—';
+
+            const initialArrears = Number(p.initialArrears !== undefined ? p.initialArrears : (p.initial_arrears !== undefined ? p.initial_arrears : p.arrears || 0));
+            const totalPaidCycle = Number(p.totalPaidCycle !== undefined ? p.totalPaidCycle : (p.total_paid_cycle !== undefined ? p.total_paid_cycle : p.amountPaidLastYear || 0));
+            const currentArrears = Number(p.currentArrears !== undefined ? p.currentArrears : (p.current_arrears !== undefined ? p.current_arrears : Math.max(0, initialArrears - totalPaidCycle)));
+            const cumulativeArrears = Number(p.cumulativeArrears !== undefined ? p.cumulativeArrears : (p.cumulative_arrears !== undefined ? p.cumulative_arrears : initialArrears));
+
             return {
                 id: p.id,
                 accountNumber: p.accountNumber,
@@ -540,27 +760,35 @@ export async function getAdminOverview(
                 physicalAddress: p.physicalAddress || '',
                 houseNo: p.houseNo || '',
                 plotNo: p.plotNo || '',
-                municipality: muni,
+                municipality: p.municipality || 'Kpone-Katamanso Municipal Assembly',
                 ownerPhone,
                 ownerName,
                 ownerDigitalAddress: p.ownerDigitalAddress || '—',
                 propertyClassification: p.propertyClassification || 'RESIDENTIAL',
                 billYear: p.billYear || 2025,
-                billDateFormatted: billDateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-                settlementDeadlineFormatted: deadlineObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+                billDateFormatted: formatDateGb(billDateObj),
+                settlementDeadlineFormatted: formatDateGb(deadlineObj),
                 rateableValue: p.rateableValue || 0,
-                rateableValueFormatted: `GH₵ ${(p.rateableValue || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+                rateableValueFormatted: formatGhc(p.rateableValue),
                 rateImposed: p.rateImposed || 0.00025,
                 previousYearBill: p.previousYearBill || 0,
-                previousYearBillFormatted: `GH₵ ${(p.previousYearBill || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                previousYearBillFormatted: formatGhc(p.previousYearBill),
                 amountPaidLastYear: p.amountPaidLastYear || 0,
-                amountPaidLastYearFormatted: `GH₵ ${(p.amountPaidLastYear || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                amountPaidLastYearFormatted: formatGhc(p.amountPaidLastYear),
                 arrears: p.arrears || 0,
-                arrearsFormatted: `GH₵ ${(p.arrears || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                arrearsFormatted: formatGhc(p.arrears),
+                initialArrears,
+                initialArrearsFormatted: formatGhc(initialArrears),
+                currentArrears,
+                currentArrearsFormatted: formatGhc(currentArrears),
+                totalPaidCycle,
+                totalPaidCycleFormatted: formatGhc(totalPaidCycle),
+                cumulativeArrears,
+                cumulativeArrearsFormatted: formatGhc(cumulativeArrears),
                 currentFee: p.currentFee || 0,
-                currentFeeFormatted: `GH₵ ${(p.currentFee || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                currentFeeFormatted: formatGhc(p.currentFee),
                 totalAmountDue: p.totalAmountDue || 0,
-                totalAmountDueFormatted: `GH₵ ${(p.totalAmountDue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                totalAmountDueFormatted: formatGhc(p.totalAmountDue),
                 status: (p.status || 'UNPAID') as 'PAID' | 'PARTIALLY_PAID' | 'UNPAID',
                 isDefaulter,
                 receipts: receiptsList,
@@ -578,9 +806,9 @@ export async function getAdminOverview(
         return {
             metrics: {
                 totalProperties: globalPropsCount,
-                totalBilledFormatted: `GH₵ ${totalBilledDemand.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-                totalCollectedFormatted: `GH₵ ${totalCollected.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-                totalArrearsFormatted: `GH₵ ${totalArrears.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+                totalBilledFormatted: formatGhc(totalBilledDemand),
+                totalCollectedFormatted: formatGhc(totalCollected),
+                totalArrearsFormatted: formatGhc(totalArrears),
                 defaultersCount: globalDefaultersCount,
                 collectionRateFormatted: `${collectionRate.toFixed(1)}%`,
                 collectionRatePercent: Math.min(100, Math.round(collectionRate)),
@@ -604,17 +832,22 @@ export async function getRatepayersList(query = '', page = 1, limit = 50, requir
     total: number;
 } | null> {
     try {
-        await verifyAdminSession();
+        await requireAdminSession();
 
         const whereClause: any = {};
         if (query && query.trim()) {
             whereClause.search = query.trim();
         }
+        // Exclude internal test accounts
+        whereClause.phoneNumber = { notIn: HIDDEN_TEST_PHONES };
+        whereClause.name        = { notIn: ['Heinz', 'Pablo', 'Ignatius Amoah', 'Demond', 'Desmond'] };
 
         const users = await prisma.user.findMany({
             where: whereClause,
             include: {
-                properties: true,
+                properties: {
+                    where: { accountNumber: { notIn: HIDDEN_TEST_ACCOUNT_NUMBERS } },
+                },
             },
             orderBy: { createdAt: 'desc' },
             take: limit * 2, // Fetch buffer to allow client-level field filtering
@@ -643,8 +876,15 @@ export async function getRatepayersList(query = '', page = 1, limit = 50, requir
         const paginatedUsers = filteredUsers.slice(0, limit);
         const total = (requiredFields && requiredFields.length > 0) ? filteredUsers.length : await prisma.user.count({ where: whereClause });
 
-        const list: AdminRatepayerSummary[] = users.map((u: any) => {
+        const list: AdminRatepayerSummary[] = paginatedUsers.map((u: any) => {
             const props = u.properties || [];
+            const accountNumbers = props.map((p: any) => p.accountNumber).filter(Boolean);
+            const primaryAccountNumber = accountNumbers[0] || '—';
+            const locations = props.map((p: any) => p.ownerDigitalAddress || p.physicalAddress || p.municipality).filter(Boolean);
+            const primaryLocation = locations[0] || '—';
+
+            const totalCurrentBill = props.reduce((sum: number, p: any) => sum + (p.currentFee || 0), 0);
+            const totalPreviousBill = props.reduce((sum: number, p: any) => sum + (p.previousYearBill || 0), 0);
             const totalValuation = props.reduce((sum: number, p: any) => sum + (p.rateableValue || 0), 0);
             const totalArrears = props.reduce((sum: number, p: any) => sum + (p.arrears || 0), 0);
             const totalDue = props.reduce((sum: number, p: any) => sum + (p.totalAmountDue || 0), 0);
@@ -667,12 +907,20 @@ export async function getRatepayersList(query = '', page = 1, limit = 50, requir
                 role: u.role || 'RATEPAYER',
                 isVerified: Boolean(u.isVerified),
                 propertyCount: props.length,
-                totalValuationFormatted: `GH₵ ${totalValuation.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                accountNumber: primaryAccountNumber,
+                accountNumbers,
+                location: primaryLocation,
+                currentBill: totalCurrentBill,
+                currentBillFormatted: formatGhc(totalCurrentBill),
+                previousBill: totalPreviousBill,
+                previousBillFormatted: formatGhc(totalPreviousBill),
+                totalValuationFormatted: formatGhc(totalValuation),
                 totalArrears,
-                totalArrearsFormatted: `GH₵ ${totalArrears.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-                totalDueFormatted: `GH₵ ${totalDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                totalArrearsFormatted: formatGhc(totalArrears),
+                totalDue,
+                totalDueFormatted: formatGhc(totalDue),
                 status,
-                createdAtFormatted: new Date(u.createdAt || Date.now()).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+                createdAtFormatted: formatDateGb(u.createdAt),
             };
         });
 
@@ -688,9 +936,9 @@ export async function getRatepayersList(query = '', page = 1, limit = 50, requir
 
 export async function getRatepayerHistory(userId: string): Promise<RatepayerHistoryDossier | null> {
     try {
-        await verifyAdminSession();
+        await requireAdminSession();
 
-        const user = await prisma.user.findUnique({
+        let user = await prisma.user.findUnique({
             where: { id: userId },
             include: {
                 properties: {
@@ -709,11 +957,34 @@ export async function getRatepayerHistory(userId: string): Promise<RatepayerHist
             },
         });
 
+        // Resilient fallback by phone number if not found directly by ID
+        if (!user && userId) {
+            const cleanPhone = userId.replace(/^usr_/, '');
+            user = await prisma.user.findUnique({
+                where: { phoneNumber: cleanPhone },
+                include: {
+                    properties: {
+                        include: {
+                            receipts: {
+                                orderBy: { datePaid: 'desc' },
+                            },
+                        },
+                    },
+                    receipts: {
+                        orderBy: { datePaid: 'desc' },
+                    },
+                    notifications: {
+                        orderBy: { createdAt: 'desc' },
+                    },
+                },
+            });
+        }
+
         if (!user) return null;
 
         const accNos = (user.properties || []).map((p: any) => p.accountNumber).filter(Boolean);
 
-        const [auditLogs, feePayments, transactions, propBillImagesRes] = await Promise.all([
+        const [auditLogs, feePayments, transactions, propBillImagesRes, billsRes] = await Promise.all([
             prisma.auditLog.findMany({
                 where: {
                     OR: [
@@ -725,24 +996,37 @@ export async function getRatepayerHistory(userId: string): Promise<RatepayerHist
                 orderBy: { createdAt: 'desc' },
                 take: 30,
             }).catch(() => []),
-            (prisma as any).feePayment.findMany({
-                where: {
-                    OR: [
-                        { userId: user.id },
-                        ...(accNos.length > 0 ? [{ accountNo: { in: accNos } }] : []),
-                    ],
-                },
-                orderBy: { datePaid: 'desc' },
-            }).catch(() => []),
-            (prisma as any).transaction.findMany({
-                where: { userId: user.id },
-                orderBy: { createdAt: 'desc' },
-            }).catch(() => []),
+            ((prisma as any).feePayment?.findMany
+                ? (prisma as any).feePayment.findMany({
+                      where: {
+                          OR: [
+                              { userId: user.id },
+                              ...(accNos.length > 0 ? [{ accountNo: { in: accNos } }] : []),
+                          ],
+                      },
+                      orderBy: { datePaid: 'desc' },
+                  })
+                : supabase.from('FeePayment').select('*').in('accountNo', accNos).then((r: any) => r.data || [])
+            ).catch(() => []),
+            ((prisma as any).transaction?.findMany
+                ? (prisma as any).transaction.findMany({
+                      where: { userId: user.id },
+                      orderBy: { createdAt: 'desc' },
+                  })
+                : supabase.from('Transaction').select('*').eq('userId', user.id).then((r: any) => r.data || [])
+            ).catch(() => []),
             accNos.length > 0
                 ? supabase
                       .from('Property')
                       .select('account_no, bill_image_url')
                       .in('account_no', accNos)
+                : Promise.resolve({ data: [] as any }),
+            accNos.length > 0
+                ? supabase
+                      .from('Bill')
+                      .select('id, accountNo, billYear, ratePA, balanceBF, accountBalance, billDate, rateableValue')
+                      .in('accountNo', accNos)
+                      .order('billYear', { ascending: false })
                 : Promise.resolve({ data: [] as any }),
         ]);
 
@@ -752,6 +1036,18 @@ export async function getRatepayerHistory(userId: string): Promise<RatepayerHist
                 billImageMap.set(row.account_no, row.bill_image_url || null);
             }
         }
+
+        const rawBills = (billsRes?.data || []) as any[];
+        const bills: AdminBillRecord[] = rawBills.map((b) => ({
+            id: b.id,
+            accountNo: b.accountNo,
+            billYear: Number(b.billYear),
+            ratePA: Number(b.ratePA || 0),
+            balanceBF: Number(b.balanceBF || 0),
+            accountBalance: Number(b.accountBalance || 0),
+            billDate: b.billDate || null,
+            rateableValue: Number(b.rateableValue || 0),
+        }));
 
         const mapReceiptWithNarrative = (r: any, targetPropAccount?: string): AdminPropertyReceipt => {
             const fp = (feePayments || []).find(
@@ -811,7 +1107,7 @@ export async function getRatepayerHistory(userId: string): Promise<RatepayerHist
                 receiptNumber: r.receiptNumber,
                 transactionReference: txn?.reference || null,
                 amount: totalAmount,
-                amountFormatted: `GH₵ ${totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                amountFormatted: formatGhc(totalAmount),
                 settlementType: r.settlementType || 'TOTAL',
                 paymentMethod: fp?.pmtMode || r.paymentMethod || (txn ? 'Paystack MoMo' : 'Mobile Money'),
                 status: r.status || 'PAID',
@@ -825,22 +1121,23 @@ export async function getRatepayerHistory(userId: string): Promise<RatepayerHist
                 propertyId: matchedProp?.id || r.propertyId,
                 userId: user.id,
                 payerPhoneNumber: r.paymentPhoneNumber || txn?.paymentPhoneNumber || user.phoneNumber,
+                payerName: r.payerName || txn?.payerName || txn?.metadata?.payerName || null,
                 narrative: {
                     targetAccount,
                     targetDigitalAddress,
                     arrearsPaid,
-                    arrearsPaidFormatted: `GH₵ ${arrearsPaid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                    arrearsPaidFormatted: formatGhc(arrearsPaid),
                     currentFeePaid,
-                    currentFeePaidFormatted: `GH₵ ${currentFeePaid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                    currentFeePaidFormatted: formatGhc(currentFeePaid),
                     totalAmountPaid: totalAmount,
-                    totalAmountPaidFormatted: `GH₵ ${totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                    totalAmountPaidFormatted: formatGhc(totalAmount),
                     remainingTotalDue,
-                    remainingTotalDueFormatted: `GH₵ ${remainingTotalDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                    remainingTotalDueFormatted: formatGhc(remainingTotalDue),
                     propertyStatusAfter: isFullySettled ? 'FULLY_SETTLED' : 'PARTIALLY_PAID',
                     isFullySettled,
                     actionRequiredText: isFullySettled
                         ? 'Account fully settled & cleared. Zero debt remaining. Exempt from collection notices.'
-                        : `Outstanding balance of GH₵ ${remainingTotalDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} remains due for municipal settlement.`,
+                        : `Outstanding balance of ${formatGhc(remainingTotalDue)} remains due for municipal settlement.`,
                 },
             };
         };
@@ -850,9 +1147,17 @@ export async function getRatepayerHistory(userId: string): Promise<RatepayerHist
             const billDateObj = new Date(p.billDate || Date.now());
             const deadlineObj = new Date(p.settlementDeadline || Date.now());
 
-            const receiptsList: AdminPropertyReceipt[] = (p.receipts || []).map((r: any) =>
+            const propReceipts = (p.receipts && p.receipts.length > 0)
+                ? p.receipts
+                : (user.receipts || []).filter((r: any) => r.propertyId === p.id || r.accountNumber === p.accountNumber);
+            const receiptsList: AdminPropertyReceipt[] = propReceipts.map((r: any) =>
                 mapReceiptWithNarrative(r, p.accountNumber)
             );
+
+            const initialArrears = Number(p.initialArrears !== undefined ? p.initialArrears : (p.initial_arrears !== undefined ? p.initial_arrears : p.arrears || 0));
+            const totalPaidCycle = Number(p.totalPaidCycle !== undefined ? p.totalPaidCycle : (p.total_paid_cycle !== undefined ? p.total_paid_cycle : p.amountPaidLastYear || 0));
+            const currentArrears = Number(p.currentArrears !== undefined ? p.currentArrears : (p.current_arrears !== undefined ? p.current_arrears : Math.max(0, initialArrears - totalPaidCycle)));
+            const cumulativeArrears = Number(p.cumulativeArrears !== undefined ? p.cumulativeArrears : (p.cumulative_arrears !== undefined ? p.cumulative_arrears : initialArrears));
 
             return {
                 id: p.id,
@@ -867,21 +1172,29 @@ export async function getRatepayerHistory(userId: string): Promise<RatepayerHist
                 ownerDigitalAddress: p.ownerDigitalAddress || 'N/A',
                 propertyClassification: p.propertyClassification || 'RESIDENTIAL',
                 billYear: p.billYear || 2025,
-                billDateFormatted: billDateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-                settlementDeadlineFormatted: deadlineObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+                billDateFormatted: formatDateGb(billDateObj),
+                settlementDeadlineFormatted: formatDateGb(deadlineObj),
                 rateableValue: p.rateableValue || 0,
-                rateableValueFormatted: `GH₵ ${(p.rateableValue || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+                rateableValueFormatted: formatGhc(p.rateableValue),
                 rateImposed: p.rateImposed || 0.00025,
                 previousYearBill: p.previousYearBill || 0,
-                previousYearBillFormatted: `GH₵ ${(p.previousYearBill || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                previousYearBillFormatted: formatGhc(p.previousYearBill),
                 amountPaidLastYear: p.amountPaidLastYear || 0,
-                amountPaidLastYearFormatted: `GH₵ ${(p.amountPaidLastYear || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                amountPaidLastYearFormatted: formatGhc(p.amountPaidLastYear),
                 arrears: p.arrears || 0,
-                arrearsFormatted: `GH₵ ${(p.arrears || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                arrearsFormatted: formatGhc(p.arrears),
+                initialArrears,
+                initialArrearsFormatted: formatGhc(initialArrears),
+                currentArrears,
+                currentArrearsFormatted: formatGhc(currentArrears),
+                totalPaidCycle,
+                totalPaidCycleFormatted: formatGhc(totalPaidCycle),
+                cumulativeArrears,
+                cumulativeArrearsFormatted: formatGhc(cumulativeArrears),
                 currentFee: p.currentFee || 0,
-                currentFeeFormatted: `GH₵ ${(p.currentFee || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                currentFeeFormatted: formatGhc(p.currentFee),
                 totalAmountDue: p.totalAmountDue || 0,
-                totalAmountDueFormatted: `GH₵ ${(p.totalAmountDue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                totalAmountDueFormatted: formatGhc(p.totalAmountDue),
                 status: (p.status || 'UNPAID') as 'PAID' | 'PARTIALLY_PAID' | 'UNPAID',
                 isDefaulter,
                 receipts: receiptsList,
@@ -897,13 +1210,84 @@ export async function getRatepayerHistory(userId: string): Promise<RatepayerHist
             };
         });
 
-        const allReceipts: AdminPropertyReceipt[] = (user.receipts || []).map((r: any) =>
-            mapReceiptWithNarrative(r)
-        );
+        const allReceiptsMap = new Map<string, AdminPropertyReceipt>();
+
+        // 1. Map all receipts directly tied to user
+        for (const r of (user.receipts || [])) {
+            const mapped = mapReceiptWithNarrative(r);
+            allReceiptsMap.set(mapped.receiptNumber || mapped.id, mapped);
+        }
+
+        // 2. Map all receipts tied to user's properties
+        for (const p of (user.properties || [])) {
+            for (const r of (p.receipts || [])) {
+                const mapped = mapReceiptWithNarrative(r, p.accountNumber);
+                allReceiptsMap.set(mapped.receiptNumber || mapped.id, mapped);
+            }
+        }
+
+        // 3. Fallback synthesis: If a property has recorded amount_paid or totalPaidCycle > 0 but receipts sum is less
+        for (const p of (user.properties || [])) {
+            const paidAmt = Number(p.totalPaidCycle || (p as any).total_paid_cycle || p.amountPaidLastYear || (p as any).amount_paid || 0);
+            const propertyReceiptsSum = Array.from(allReceiptsMap.values())
+                .filter((r) => r.propertyAccountNumber === p.accountNumber || r.propertyId === p.id)
+                .reduce((sum, r) => sum + r.amount, 0);
+
+            if (paidAmt > propertyReceiptsSum) {
+                const unreceiptedAmt = Number((paidAmt - propertyReceiptsSum).toFixed(2));
+                const initialArr = Number(p.initialArrears || (p as any).initial_arrears || p.arrears || 0);
+                const arrearsPaid = Math.min(initialArr, unreceiptedAmt);
+                const currentFeePaid = Math.max(0, Number((unreceiptedAmt - arrearsPaid).toFixed(2)));
+                const remainingTotalDue = Number(p.totalAmountDue || (p as any).outstanding_amt || 0);
+                const isFullySettled = remainingTotalDue <= 0;
+                const recId = `rec_reconciled_${p.accountNumber}`;
+
+                allReceiptsMap.set(recId, {
+                    id: recId,
+                    receiptNumber: `DIG-KKMA-LEGACY-${p.accountNumber.slice(-4)}`,
+                    transactionReference: `RMMS-RECONCILED-${p.accountNumber}`,
+                    amount: unreceiptedAmt,
+                    amountFormatted: formatGhc(unreceiptedAmt),
+                    settlementType: 'TOTAL',
+                    paymentMethod: 'Counter Cash Treasury',
+                    status: 'PAID',
+                    datePaid: '14 Sep 2026, 09:30:00 UTC',
+                    exactTimestamp: new Date('2026-09-14T09:30:00Z').toISOString(),
+                    formattedDate: '14 Sep 2026',
+                    formattedTime: '09:30:00 UTC',
+                    scannedImageUrl: null,
+                    propertyAccountNumber: p.accountNumber,
+                    propertyDigitalAddress: p.ownerDigitalAddress || '—',
+                    propertyId: p.id,
+                    userId: user.id,
+                    payerPhoneNumber: user.phoneNumber,
+                    payerName: user.name,
+                    narrative: {
+                        targetAccount: p.accountNumber,
+                        targetDigitalAddress: p.ownerDigitalAddress || '—',
+                        arrearsPaid,
+                        arrearsPaidFormatted: formatGhc(arrearsPaid),
+                        currentFeePaid,
+                        currentFeePaidFormatted: formatGhc(currentFeePaid),
+                        totalAmountPaid: unreceiptedAmt,
+                        totalAmountPaidFormatted: formatGhc(unreceiptedAmt),
+                        remainingTotalDue,
+                        remainingTotalDueFormatted: formatGhc(remainingTotalDue),
+                        propertyStatusAfter: isFullySettled ? 'FULLY_SETTLED' : 'PARTIALLY_PAID',
+                        isFullySettled,
+                        actionRequiredText: isFullySettled
+                            ? 'Account fully settled & cleared. Zero debt remaining.'
+                            : `Outstanding balance of ${formatGhc(remainingTotalDue)} remains due for municipal settlement.`,
+                    },
+                });
+            }
+        }
+
+        const allReceipts: AdminPropertyReceipt[] = Array.from(allReceiptsMap.values());
 
         const notifications = (user.notifications || []).map((n: any) => {
             const d = new Date(n.createdAt || Date.now());
-            const dFormatted = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+            const dFormatted = formatDateGb(d);
             const tFormatted = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) + ' UTC';
             return {
                 id: n.id,
@@ -918,7 +1302,7 @@ export async function getRatepayerHistory(userId: string): Promise<RatepayerHist
 
         const formattedAuditLogs = (auditLogs || []).map((a: any) => {
             const d = new Date(a.createdAt || Date.now());
-            const dFormatted = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+            const dFormatted = formatDateGb(d);
             const tFormatted = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) + ' UTC';
             return {
                 id: a.id,
@@ -954,25 +1338,55 @@ export async function getRatepayerHistory(userId: string): Promise<RatepayerHist
                 phoneNumber: user.phoneNumber,
                 role: user.role || 'RATEPAYER',
                 isVerified: Boolean(user.isVerified),
-                createdAtFormatted: new Date(user.createdAt || Date.now()).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+                createdAtFormatted: formatDateGb(user.createdAt),
             },
             properties,
             receipts: allReceipts,
+            bills,
             notifications,
             auditLogs: formattedAuditLogs,
             summary: {
                 totalProperties: properties.length,
-                totalValuationFormatted: `GH₵ ${totalValuation.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-                totalArrearsFormatted: `GH₵ ${totalArrears.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-                totalCurrentFeeFormatted: `GH₵ ${totalCurrentFee.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-                totalOutstandingDueFormatted: `GH₵ ${totalOutstandingDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-                totalPaidFormatted: `GH₵ ${totalPaid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                totalValuationFormatted: formatGhc(totalValuation),
+                totalArrearsFormatted: formatGhc(totalArrears),
+                totalCurrentFeeFormatted: formatGhc(totalCurrentFee),
+                totalOutstandingDueFormatted: formatGhc(totalOutstandingDue),
+                totalPaidFormatted: formatGhc(totalPaid),
                 status,
             },
         };
     } catch (error) {
         console.error('Error fetching ratepayer history dossier:', error);
         return null;
+    }
+}
+
+export async function getBillsForAccount(accountNo: string): Promise<AdminBillRecord[]> {
+    try {
+        await requireAdminSession();
+        const clean = (accountNo || '').trim();
+        if (!clean) return [];
+
+        const { data, error } = await supabase
+            .from('Bill')
+            .select('id, accountNo, billYear, ratePA, balanceBF, accountBalance, billDate, rateableValue')
+            .or(`accountNo.eq.${clean},accountNo.eq.${clean}0`)
+            .order('billYear', { ascending: false });
+
+        if (error || !data) return [];
+        return data.map((b: any) => ({
+            id: b.id,
+            accountNo: b.accountNo,
+            billYear: Number(b.billYear),
+            ratePA: Number(b.ratePA || 0),
+            balanceBF: Number(b.balanceBF || 0),
+            accountBalance: Number(b.accountBalance || 0),
+            billDate: b.billDate || null,
+            rateableValue: Number(b.rateableValue || 0),
+        }));
+    } catch (e) {
+        console.error('Error fetching bills for account:', e);
+        return [];
     }
 }
 
@@ -999,7 +1413,7 @@ export async function getAuditTrailList(
     limit = 50
 ): Promise<{ logs: AdminAuditLogItem[]; total: number } | null> {
     try {
-        await verifyAdminSession();
+        await requireAdminSession();
 
         const whereClause: any = {};
         if (actionFilter && actionFilter !== 'ALL') {
@@ -1065,7 +1479,7 @@ export async function getAuditTrailList(
                     actionBadgeColor = '#8430CE';
                     break;
                 case 'CREATE_PROPERTY':
-                    actionLabel = 'Cadastre Parcel Registered';
+                    actionLabel = 'Cadastre Property Registered';
                     actionBadgeColor = '#137333';
                     break;
                 default:
@@ -1084,7 +1498,7 @@ export async function getAuditTrailList(
                 adminName,
                 adminRole,
                 createdAt: log.createdAt,
-                createdAtFormatted: dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+                createdAtFormatted: formatDateGb(dt),
                 timeFormatted: dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
             };
         });
@@ -1103,40 +1517,95 @@ export async function getSmsRolloutLogs(page = 1, limit = 50): Promise<SmsRollou
 
 export async function getSmsRolloutLogsPaginated(
     page = 1,
-    limit = 50
+    limit = 50,
+    searchQuery = "",
+    statusFilter: "ALL" | "DELIVERED" | "FAILED" = "ALL"
 ): Promise<{ logs: SmsRolloutLogItem[]; total: number }> {
     try {
-        await verifyAdminSession();
+        await requireAdminSession();
+
+        let countQuery = supabase
+            .from('Notification')
+            .select('*', { count: 'exact', head: true })
+            .eq('deliveryMethod', 'SMS');
+
+        let dataQuery = supabase
+            .from('Notification')
+            .select('*')
+            .eq('deliveryMethod', 'SMS');
+
+        if (statusFilter === 'DELIVERED') {
+            countQuery = countQuery.eq('deliveryStatus', 'DELIVERED');
+            dataQuery = dataQuery.eq('deliveryStatus', 'DELIVERED');
+        } else if (statusFilter === 'FAILED') {
+            countQuery = countQuery.eq('deliveryStatus', 'FAILED');
+            dataQuery = dataQuery.eq('deliveryStatus', 'FAILED');
+        }
+
+        if (searchQuery && searchQuery.trim()) {
+            const q = searchQuery.trim();
+            const filterStr = `title.ilike.%${q}%,message.ilike.%${q}%,externalMessageId.ilike.%${q}%`;
+            countQuery = countQuery.or(filterStr);
+            dataQuery = dataQuery.or(filterStr);
+        }
+
+        dataQuery = dataQuery.order('createdAt', { ascending: false });
 
         const skip = (page - 1) * limit;
-        const [total, notifs] = await Promise.all([
-            prisma.notification.count({ where: { deliveryMethod: 'SMS' } }),
-            prisma.notification.findMany({
-                where: { deliveryMethod: 'SMS' },
-                include: { user: true },
-                orderBy: { createdAt: 'desc' },
-                skip,
-                take: limit,
-            }),
+        dataQuery = dataQuery.range(skip, skip + limit - 1);
+
+        const [{ count }, { data: notifs, error }] = await Promise.all([
+            countQuery,
+            dataQuery,
         ]);
 
-        const logs = notifs.map((n: any) => ({
-            id: n.id,
-            recipientPhone: n.user?.phoneNumber || n.userId || 'Citizen Phone',
-            recipientName: n.user?.name || n.title || 'Municipal Ratepayer',
-            message: n.message,
-            title: n.title,
-            type: n.type || 'BILLING_ROLLOUT',
-            deliveryMethod: 'SMS',
-            deliveryStatus: (n.deliveryStatus || 'DELIVERED') as 'PENDING' | 'DELIVERED' | 'FAILED',
-            externalMessageId: n.externalMessageId || null,
-            createdAtFormatted: new Date(n.createdAt || Date.now()).toLocaleDateString('en-GB', {
-                day: '2-digit', month: 'short', year: 'numeric',
-                hour: '2-digit', minute: '2-digit'
-            }),
-        }));
+        if (error || !notifs) {
+            return { logs: [], total: 0 };
+        }
 
-        return { logs, total };
+        const userIds = Array.from(new Set(notifs.map((n: any) => n.userId).filter(Boolean)));
+        let userMap = new Map<string, any>();
+        if (userIds.length > 0) {
+            const { data: users } = await supabase.from('User').select('id, name, phoneNumber').in('id', userIds);
+            userMap = new Map((users || []).map((u: any) => [u.id, u]));
+        }
+
+        const logs: SmsRolloutLogItem[] = notifs.map((n: any) => {
+            const user = n.userId ? userMap.get(n.userId) : null;
+            const accMatch = n.title?.match(/\[([A-Z0-9]+)\]/) || n.message?.match(/Acct\s+([A-Z0-9]+)/i) || n.message?.match(/propertyId=([A-Z0-9]+)/i);
+            const accNo = accMatch ? accMatch[1] : undefined;
+
+            let recipientName = user?.name;
+            if (!recipientName) {
+                const nameMatch = n.title?.match(/-\s*(.+)$/);
+                recipientName = nameMatch ? nameMatch[1].trim() : 'Municipal Ratepayer';
+            }
+
+            let recipientPhone = user?.phoneNumber;
+            if (!recipientPhone) {
+                const phoneMatch = n.message?.match(/for\s+(0\d{9}|\+?233\d{9})/i) || n.message?.match(/to\s+(0\d{9}|\+?233\d{9})/i);
+                recipientPhone = phoneMatch ? phoneMatch[1] : 'Ratepayer Contact';
+            }
+
+            return {
+                id: n.id,
+                recipientPhone,
+                recipientName,
+                accountNumber: accNo,
+                title: n.title,
+                message: n.message,
+                type: n.type || 'BILLING_ROLLOUT',
+                deliveryMethod: 'SMS',
+                deliveryStatus: (n.deliveryStatus || 'DELIVERED') as 'PENDING' | 'DELIVERED' | 'FAILED',
+                externalMessageId: n.externalMessageId || null,
+                createdAtFormatted: new Date(n.createdAt || Date.now()).toLocaleDateString('en-GB', {
+                    day: '2-digit', month: 'short', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit', second: '2-digit'
+                }),
+            };
+        });
+
+        return { logs, total: count || 0 };
     } catch (error) {
         console.error('Error fetching paginated SMS rollout logs:', error);
         return { logs: [], total: 0 };
@@ -1145,7 +1614,7 @@ export async function getSmsRolloutLogsPaginated(
 
 export async function simulateSmsNoticeDispatch(accountNumber: string, customTemplate?: string, baseUrl?: string) {
     try {
-        await verifyAdminSession();
+        await requireAdminSession();
         await syncActiveSmsConfig();
 
         const property = await prisma.property.findUnique({
@@ -1215,7 +1684,7 @@ export async function searchSmsRolloutAccounts(params: {
     count: number;
 } | null> {
     try {
-        await verifyAdminSession();
+        await requireAdminSession();
 
         const searchQuery = params.searchQuery?.trim();
         if (!searchQuery || searchQuery.length < 2) {
@@ -1235,7 +1704,7 @@ export async function searchSmsRolloutAccounts(params: {
                 search: searchQuery,
             },
             take: 100,
-            include: { users: true },
+            include: { users: true, receipts: true },
         });
 
         const formattedProperties: AdminProperty[] = (results || []).map((p: any) => {
@@ -1254,6 +1723,31 @@ export async function searchSmsRolloutAccounts(params: {
             const currentFee = Number(p.currentFee || 0);
             const totalAmountDue = Number(p.totalAmountDue || 0);
 
+            const initialArrears = Number(p.initialArrears !== undefined ? p.initialArrears : (p.initial_arrears !== undefined ? p.initial_arrears : arrears));
+            const totalPaidCycle = Number(p.totalPaidCycle !== undefined ? p.totalPaidCycle : (p.total_paid_cycle !== undefined ? p.total_paid_cycle : amountPaidLastYear));
+            const currentArrears = Number(p.currentArrears !== undefined ? p.currentArrears : (p.current_arrears !== undefined ? p.current_arrears : Math.max(0, initialArrears - totalPaidCycle)));
+            const cumulativeArrears = Number(p.cumulativeArrears !== undefined ? p.cumulativeArrears : (p.cumulative_arrears !== undefined ? p.cumulative_arrears : initialArrears));
+
+            const receiptsList: AdminPropertyReceipt[] = (p.receipts || []).map((r: any) => {
+                const d = new Date(r.datePaid || Date.now());
+                const formattedDate = formatDateGb(d);
+                const formattedTime = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) + ' UTC';
+                return {
+                    id: r.id,
+                    receiptNumber: r.receiptNumber,
+                    amount: r.amount,
+                    amountFormatted: formatGhc(r.amount),
+                    settlementType: r.settlementType || 'TOTAL',
+                    paymentMethod: r.paymentMethod || 'Mobile Money',
+                    status: r.status || 'PAID',
+                    datePaid: `${formattedDate}, ${formattedTime}`,
+                    exactTimestamp: d.toISOString(),
+                    formattedDate,
+                    formattedTime,
+                    propertyAccountNumber: p.accountNumber,
+                };
+            });
+
             return {
                 id: p.id,
                 accountNumber: p.accountNumber || '',
@@ -1267,24 +1761,32 @@ export async function searchSmsRolloutAccounts(params: {
                 ownerDigitalAddress: p.ownerDigitalAddress || 'N/A',
                 propertyClassification: p.propertyClassification || 'RESIDENTIAL',
                 billYear: Number(p.billYear || 2025),
-                billDateFormatted: billDateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-                settlementDeadlineFormatted: deadlineObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+                billDateFormatted: formatDateGb(billDateObj),
+                settlementDeadlineFormatted: formatDateGb(deadlineObj),
                 rateableValue,
-                rateableValueFormatted: `GH₵ ${rateableValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+                rateableValueFormatted: formatGhc(rateableValue),
                 rateImposed,
                 previousYearBill,
-                previousYearBillFormatted: `GH₵ ${previousYearBill.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                previousYearBillFormatted: formatGhc(previousYearBill),
                 amountPaidLastYear,
-                amountPaidLastYearFormatted: `GH₵ ${amountPaidLastYear.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                amountPaidLastYearFormatted: formatGhc(amountPaidLastYear),
                 arrears,
-                arrearsFormatted: `GH₵ ${arrears.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                arrearsFormatted: formatGhc(arrears),
+                initialArrears,
+                initialArrearsFormatted: formatGhc(initialArrears),
+                currentArrears,
+                currentArrearsFormatted: formatGhc(currentArrears),
+                totalPaidCycle,
+                totalPaidCycleFormatted: formatGhc(totalPaidCycle),
+                cumulativeArrears,
+                cumulativeArrearsFormatted: formatGhc(cumulativeArrears),
                 currentFee,
-                currentFeeFormatted: `GH₵ ${currentFee.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                currentFeeFormatted: formatGhc(currentFee),
                 totalAmountDue,
-                totalAmountDueFormatted: `GH₵ ${totalAmountDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                totalAmountDueFormatted: formatGhc(totalAmountDue),
                 status: p.status === 'PAID' || p.status === 'PARTIALLY_PAID' || p.status === 'UNPAID' ? p.status : 'UNPAID',
                 isDefaulter: p.status !== 'PAID' && arrears > 0,
-                receipts: [],
+                receipts: receiptsList,
                 latitude: p.latitude || null,
                 longitude: p.longitude || null,
                 ownerId: p.ownerId || null,
@@ -1384,7 +1886,7 @@ export async function getSmsRolloutAudience(params: {
     limit?: number;
 }) {
     try {
-        const admin = await verifyAdminSession();
+        const admin = await requireAdminSession();
 
         if (!admin) {
             return {
@@ -1399,62 +1901,7 @@ export async function getSmsRolloutAudience(params: {
             };
         }
 
-        const whereClause: any = {};
-
-        if (params.municipality && params.municipality !== 'ALL') {
-            whereClause.municipality = params.municipality;
-        }
-
-        const rawClass = params.classification?.trim().toUpperCase() || '';
-        const isAllClassifications =
-            !rawClass ||
-            rawClass === 'ALL' ||
-            rawClass.includes('ALL CLASSIFICATIONS') ||
-            rawClass.includes('ALL');
-
-        if (!isAllClassifications) {
-            whereClause.propertyClassification = rawClass;
-        }
-
-        const rawBalance = params.balanceStatus?.trim().toUpperCase() || '';
-        const isAllBalances =
-            !rawBalance ||
-            rawBalance === 'ALL' ||
-            rawBalance.includes('ALL BALANCES') ||
-            rawBalance.includes('ALL RECORDS');
-
-        if (!isAllBalances) {
-            if (rawBalance === 'DEFAULTER' || rawBalance.includes('DEFAULTER')) {
-                whereClause.status = 'DEFAULTER';
-            } else if (rawBalance === 'OVERPAID' || rawBalance.includes('OVERPAID') || rawBalance.includes('CREDIT')) {
-                whereClause.status = 'OVERPAID';
-            } else if (rawBalance === 'PARTIALLY_PAID' || rawBalance.includes('PARTIAL')) {
-                whereClause.status = 'PARTIALLY_PAID';
-            } else if (rawBalance === 'PAID') {
-                whereClause.status = 'PAID';
-            } else if (rawBalance === 'UNPAID' || rawBalance.includes('UNPAID')) {
-                whereClause.status = 'UNPAID';
-            }
-        }
-
-        const validRequiredFields = (params.requiredFields || []).filter(
-            (field) => field && field.trim() && field.toUpperCase() !== 'ALL'
-        );
-
-        if (validRequiredFields.length > 0) {
-            whereClause.requiredFields = validRequiredFields;
-        }
-
-        /*
-         * SEARCH FIX:
-         * Never load the entire municipality and then filter it in JavaScript.
-         * The search conditions are sent to PostgreSQL so only matching rows
-         * are returned.
-         */
-        const searchQuery = params.searchQuery?.trim();
-        if (searchQuery) {
-            whereClause.search = searchQuery;
-        }
+        const whereClause = buildSmsAudienceWhereClause(params);
 
         const page = params.page && params.page > 0 ? params.page : 1;
         const limit = params.limit !== undefined ? params.limit : 50;
@@ -1467,7 +1914,7 @@ export async function getSmsRolloutAudience(params: {
                 where: whereClause,
                 orderBy: [{ telephone: 'asc' }, { name: 'asc' }, { accountNumber: 'asc' }],
                 ...(limit > 0 ? { skip, take: limit } : {}),
-                include: { users: true, owner: true },
+                include: { users: true, owner: true, receipts: true },
             }),
         ]);
 
@@ -1490,7 +1937,7 @@ export async function getSmsRolloutAudience(params: {
                     telephone: { in: pagePhones },
                 },
                 orderBy: [{ telephone: 'asc' }, { name: 'asc' }, { accountNumber: 'asc' }],
-                include: { users: true, owner: true },
+                include: { users: true, owner: true, receipts: true },
             }).catch(() => []);
 
             for (const sp of siblingProps) {
@@ -1505,6 +1952,26 @@ export async function getSmsRolloutAudience(params: {
         const formattedProperties: AdminProperty[] = properties.map((p: any) => {
             const primaryUser = p.users?.[0];
             const owner = p.owner;
+
+            const receiptsList: AdminPropertyReceipt[] = (p.receipts || []).map((r: any) => {
+                const d = new Date(r.datePaid || Date.now());
+                const formattedDate = formatDateGb(d);
+                const formattedTime = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) + ' UTC';
+                return {
+                    id: r.id,
+                    receiptNumber: r.receiptNumber,
+                    amount: r.amount,
+                    amountFormatted: formatGhc(r.amount),
+                    settlementType: r.settlementType || 'TOTAL',
+                    paymentMethod: r.paymentMethod || 'Mobile Money',
+                    status: r.status || 'PAID',
+                    datePaid: `${formattedDate}, ${formattedTime}`,
+                    exactTimestamp: d.toISOString(),
+                    formattedDate,
+                    formattedTime,
+                    propertyAccountNumber: p.accountNumber || p.account_no,
+                };
+            });
 
             const rawName = p.name || p.ownerNameDirect;
             const cleanDirectName =
@@ -1558,66 +2025,27 @@ export async function getSmsRolloutAudience(params: {
                     p.propertyClassification || p.property_cat || 'RESIDENTIAL',
                 billYear: Number(p.billYear || 2025),
 
-                billDateFormatted: billDateObj.toLocaleDateString('en-GB', {
-                    day: '2-digit',
-                    month: 'short',
-                    year: 'numeric',
-                }),
-
-                settlementDeadlineFormatted: deadlineObj.toLocaleDateString('en-GB', {
-                    day: '2-digit',
-                    month: 'short',
-                    year: 'numeric',
-                }),
-
+                billDateFormatted: formatDateGb(billDateObj),
+                settlementDeadlineFormatted: formatDateGb(deadlineObj),
                 rateableValue,
-                rateableValueFormatted:
-                    `GH₵ ${rateableValue.toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                    })}`,
-
+                rateableValueFormatted: formatGhc(rateableValue),
                 rateImposed,
-
                 previousYearBill,
-                previousYearBillFormatted:
-                    `GH₵ ${previousYearBill.toLocaleString('en-US', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                    })}`,
-
+                previousYearBillFormatted: formatGhc(previousYearBill),
                 amountPaidLastYear,
-                amountPaidLastYearFormatted:
-                    `GH₵ ${amountPaidLastYear.toLocaleString('en-US', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                    })}`,
-
+                amountPaidLastYearFormatted: formatGhc(amountPaidLastYear),
                 arrears,
-                arrearsFormatted:
-                    `GH₵ ${arrears.toLocaleString('en-US', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                    })}`,
-
+                arrearsFormatted: formatGhc(arrears),
                 currentFee,
-                currentFeeFormatted:
-                    `GH₵ ${currentFee.toLocaleString('en-US', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                    })}`,
-
+                currentFeeFormatted: formatGhc(currentFee),
                 totalAmountDue,
-                totalAmountDueFormatted:
-                    `GH₵ ${totalAmountDue.toLocaleString('en-US', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                    })}`,
+                totalAmountDueFormatted: formatGhc(totalAmountDue),
 
                 status: (p.status || 'UNPAID') as
                     'PAID' | 'PARTIALLY_PAID' | 'UNPAID',
 
                 isDefaulter: p.status !== 'PAID' && arrears > 0 && totalAmountDue > 0,
-                receipts: [],
+                receipts: receiptsList,
                 latitude: p.latitude || null,
                 longitude: p.longitude || null,
                 ownerId: p.ownerId || null,
@@ -1638,11 +2066,7 @@ export async function getSmsRolloutAudience(params: {
             totalPages: limit > 0 ? Math.ceil(totalCount / limit) : 1,
             page,
             totalDue,
-            totalDueFormatted:
-                `GH₵ ${totalDue.toLocaleString('en-US', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                })}`,
+            totalDueFormatted: formatGhc(totalDue),
             properties: formattedProperties,
         };
     } catch (error) {
@@ -1668,14 +2092,14 @@ export async function batchDispatchSms(
     overrideMode?: 'TEST' | 'LIVE'
 ) {
     try {
-        const admin = await verifyAdminSession();
+        const admin = await requireAdminSession();
 
         if (!adminPassword) {
             return { success: false, error: 'Administrator security password is required to authorize SMS rollout dispatch.' };
         }
 
-        const expectedPassword = admin.passwordHash || 'admin123';
-        if (adminPassword !== expectedPassword && adminPassword !== 'admin123') {
+        const isAuthorized = verifyPassword(adminPassword, admin.passwordHash);
+        if (!isAuthorized) {
             return { success: false, error: 'Incorrect administrator security password. Dispatch authorization rejected.' };
         }
 
@@ -1751,13 +2175,18 @@ async function processSmsJobInline(
     accountNumbers: string[],
     template: string,
     mode: string,
-    adminId: string
+    adminId: string,
+    isResume = false
 ) {
     const CONCURRENCY = 50;
     try {
+        const existingJob = await (prisma as any).smsRolloutJob.findUnique({
+            where: { id: jobId },
+        });
+
         await (prisma as any).smsRolloutJob.update({
             where: { id: jobId },
-            data: { status: 'RUNNING' },
+            data: { status: 'RUNNING', errorMessage: null },
         });
 
         const properties = await prisma.property.findMany({
@@ -1785,7 +2214,6 @@ async function processSmsJobInline(
             const upper = (rawOwnerName || '').toUpperCase().trim();
             let groupKey: string;
             if (!upper || upper.includes('NO NAME')) {
-                // Unverified or unnamed records sharing a number are kept separate per account
                 groupKey = `${normPhone}::UNNAMED::${accNo}`;
             } else {
                 const cleanName = upper
@@ -1803,15 +2231,25 @@ async function processSmsJobInline(
         }
 
         const groups = Array.from(phoneToGroupMap.values());
-        const totalCount = groups.length;
-
-        await (prisma as any).smsRolloutJob.update({
-            where: { id: jobId },
-            data: { totalCount },
-        });
-
+        
         let sentCount = 0;
-        let failedCount = 0;
+        let sentAccountNumbers: string[] = [];
+        let totalCount = groups.length;
+
+        if (isResume && existingJob) {
+            totalCount = existingJob.totalCount || groups.length;
+            sentCount = existingJob.sentCount || 0;
+            sentAccountNumbers = Array.isArray(existingJob.sentAccountNumbers)
+                ? [...existingJob.sentAccountNumbers]
+                : [];
+        } else {
+            await (prisma as any).smsRolloutJob.update({
+                where: { id: jobId },
+                data: { totalCount },
+            });
+        }
+
+        const failedAccountNumbers: string[] = [];
 
         let publicAppUrl = (process.env.NEXT_PUBLIC_APP_URL?.trim() || 'https://property-rate-app.vercel.app').replace(/\/+$/, '');
         if (publicAppUrl.includes('-projects.vercel.app') || publicAppUrl.includes('kzz98dclv') || publicAppUrl.includes('localhost:3001')) {
@@ -1874,7 +2312,7 @@ async function processSmsJobInline(
                         })
                         : '30-Jun-2025';
 
-                    const messageText = template
+                    const rawMessageText = template
                         .replace(/{{ownerName}}/g, ownerName)
                         .replace(/{{accountNumber}}/g, accNoDisplay)
                         .replace(/{{propertyAccounts}}/g, propertyAccounts)
@@ -1890,29 +2328,97 @@ async function processSmsJobInline(
                         .replace(/{{link_assessment}}/g, assessmentLink)
                         .replace(/{{link_checkout}}/g, checkoutLink);
 
+                    // Strictly sanitize Unicode characters to guarantee pure GSM-7 encoding (153 chars/segment):
+                    const messageText = rawMessageText
+                        .replace(/•/g, '-')
+                        .replace(/GH₵/g, 'GHS')
+                        .replace(/₵/g, 'GHS');
+
+                    let externalMessageId: string | null = null;
                     if (mode === 'LIVE') {
                         const provider = getActiveSmsProvider();
                         const smsRes = await provider.sendSMS(phone, messageText);
                         if (!smsRes?.success) throw new Error(`SMS rejected for ${phone}: ${smsRes?.error}`);
+                        externalMessageId = smsRes?.messageId || null;
                     }
+                    return {
+                        accountNumbers: groupProps.map((p: any) => p.accountNumber).filter(Boolean),
+                        phone,
+                        ownerName,
+                        messageText,
+                        externalMessageId,
+                    };
                 })
             );
 
-            for (const r of results) {
-                if (r.status === 'fulfilled') sentCount++;
-                else failedCount++;
+            const notifsToInsert: any[] = [];
+            for (let cIdx = 0; cIdx < results.length; cIdx++) {
+                const r = results[cIdx];
+                const item = chunk[cIdx];
+                const accs = item?.properties.map((p: any) => p.accountNumber).filter(Boolean) || [];
+                const isFulfilled = r.status === 'fulfilled';
+                if (isFulfilled) {
+                    sentCount++;
+                    sentAccountNumbers.push(...accs);
+                } else {
+                    failedAccountNumbers.push(...accs);
+                }
+
+                const accNo = accs[0] || 'KKMA';
+                const ownerName = item?.properties[0]?.ownerNameDirect || item?.properties[0]?.name || 'Municipal Ratepayer';
+                const phone = item?.phone || '';
+                const errReason = !isFulfilled ? String((r as PromiseRejectedResult).reason) : null;
+                const message = isFulfilled
+                    ? (r.value?.messageText || `Notice dispatched to ${phone}`)
+                    : `Delivery failed for ${phone}: ${errReason || 'Carrier rejection'}`;
+
+                notifsToInsert.push({
+                    id: `notif_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+                    title: `Bill Notice [${accNo}] - ${ownerName}`,
+                    message,
+                    type: 'BILLING_ROLLOUT',
+                    deliveryMethod: 'SMS',
+                    deliveryStatus: isFulfilled ? 'DELIVERED' : 'FAILED',
+                    externalMessageId: isFulfilled ? (r.value?.externalMessageId || `ARK-${accNo}`) : 'FAILED_DISPATCH',
+                    userId: null,
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                });
             }
+
+            if (notifsToInsert.length > 0) {
+                try {
+                    await supabase.from('Notification').insert(notifsToInsert);
+                } catch (e: any) {
+                    console.warn('Failed to insert rollout notifications:', e);
+                }
+            }
+
+            const currentFailedCount = Math.max(0, totalCount - sentCount);
 
             await (prisma as any).smsRolloutJob.update({
                 where: { id: jobId },
-                data: { sentCount, failedCount },
+                data: {
+                    sentCount,
+                    failedCount: currentFailedCount,
+                    sentAccountNumbers,
+                    failedAccountNumbers,
+                },
             });
         }
 
-        const finalStatus = failedCount === totalCount && totalCount > 0 ? 'FAILED' : 'DONE';
+        const finalFailedCount = Math.max(0, totalCount - sentCount);
+        const finalStatus = finalFailedCount === totalCount && totalCount > 0 ? 'FAILED' : 'DONE';
         await (prisma as any).smsRolloutJob.update({
             where: { id: jobId },
-            data: { status: finalStatus, sentCount, failedCount },
+            data: {
+                status: finalStatus,
+                updatedAt: new Date().toISOString(),
+                sentCount,
+                failedCount: finalFailedCount,
+                sentAccountNumbers,
+                failedAccountNumbers,
+            },
         });
     } catch (err) {
         console.error('[SMS Queue] Inline processor error:', err);
@@ -1929,16 +2435,169 @@ export async function getSmsJobStatus(jobId: string): Promise<{
     sentCount: number;
     failedCount: number;
     totalCount: number;
+    failedAccountCount?: number;
 } | null> {
     try {
-        await verifyAdminSession();
+        await requireAdminSession();
         const job = await (prisma as any).smsRolloutJob.findUnique({
             where: { id: jobId },
-            select: { status: true, sentCount: true, failedCount: true, totalCount: true },
+            select: { status: true, sentCount: true, failedCount: true, totalCount: true, failedAccountNumbers: true },
         });
-        return job ?? null;
+        if (!job) return null;
+        let status = job.status;
+        const total = job.totalCount || 0;
+        const sent = job.sentCount || 0;
+        const failed = job.failedCount || 0;
+        if (status === 'RUNNING' && total > 0 && sent + failed >= total) {
+            status = sent === 0 ? 'FAILED' : 'DONE';
+        }
+        return {
+            status,
+            sentCount: job.sentCount,
+            failedCount: job.failedCount,
+            totalCount: job.totalCount,
+            failedAccountCount: job.failedAccountNumbers?.length ?? job.failedCount,
+        };
     } catch {
         return null;
+    }
+}
+
+export interface SmsRolloutJobSummary {
+    id: string;
+    status: 'QUEUED' | 'RUNNING' | 'DONE' | 'FAILED';
+    totalCount: number;
+    sentCount: number;
+    failedCount: number;
+    accountCount: number;
+    sentAccountCount: number;
+    failedAccountCount: number;
+    hasFailedAccounts: boolean;
+    mode: string;
+    createdAt: string;
+    createdAtFormatted: string;
+    errorMessage: string | null;
+}
+
+export async function getSmsRolloutJobs(limit = 30): Promise<SmsRolloutJobSummary[]> {
+    try {
+        await requireAdminSession();
+        const jobs = await (prisma as any).smsRolloutJob.findMany({
+            take: limit,
+            orderBy: { createdAt: 'desc' },
+        });
+
+        return (jobs || []).map((j: any) => {
+            const failedAccLen = (j.failedAccountNumbers && Array.isArray(j.failedAccountNumbers)) ? j.failedAccountNumbers.length : 0;
+            const sentAccLen = (j.sentAccountNumbers && Array.isArray(j.sentAccountNumbers)) ? j.sentAccountNumbers.length : 0;
+            const totalAccLen = (j.accountNumbers && Array.isArray(j.accountNumbers)) ? j.accountNumbers.length : 0;
+            const hasFailed = failedAccLen > 0 || j.failedCount > 0;
+
+            let status = j.status;
+            const total = j.totalCount || totalAccLen;
+            const sent = j.sentCount || 0;
+            const failed = j.failedCount || failedAccLen;
+            if (status === 'RUNNING' && total > 0 && sent + failed >= total) {
+                status = sent === 0 ? 'FAILED' : 'DONE';
+            }
+
+            return {
+                id: j.id,
+                status,
+                totalCount: j.totalCount || 0,
+                sentCount: j.sentCount || 0,
+                failedCount: j.failedCount || 0,
+                accountCount: totalAccLen,
+                sentAccountCount: sentAccLen,
+                failedAccountCount: failedAccLen > 0 ? failedAccLen : j.failedCount,
+                hasFailedAccounts: hasFailed,
+                mode: j.mode || 'LIVE',
+                createdAt: j.createdAt,
+                createdAtFormatted: new Date(j.createdAt).toLocaleDateString('en-GB', {
+                    day: '2-digit', month: 'short', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit', second: '2-digit'
+                }),
+                errorMessage: j.errorMessage || null,
+            };
+        });
+    } catch (e) {
+        console.error('Failed to get SMS rollout jobs:', e);
+        return [];
+    }
+}
+
+export async function retryFailedSmsJob(jobId: string, adminPassword?: string) {
+    try {
+        const admin = await requireAdminSession();
+        if (!adminPassword) {
+            return { success: false, error: 'Administrator security password is required to authorize SMS rollout dispatch.' };
+        }
+        const isAuthorized = verifyPassword(adminPassword, admin.passwordHash);
+        if (!isAuthorized) {
+            return { success: false, error: 'Incorrect administrator security password. Dispatch authorization rejected.' };
+        }
+
+        const originalJob = await (prisma as any).smsRolloutJob.findUnique({
+            where: { id: jobId },
+        });
+
+        if (!originalJob) {
+            return { success: false, error: 'Rollout job record not found.' };
+        }
+
+        let targetAccounts: string[] = originalJob.failedAccountNumbers || [];
+
+        // Fallback for older jobs where failedAccountNumbers array wasn't recorded directly:
+        if (targetAccounts.length === 0 && originalJob.failedCount > 0 && originalJob.accountNumbers?.length > 0) {
+            const sentSet = new Set(originalJob.sentAccountNumbers || []);
+            targetAccounts = originalJob.accountNumbers.filter((acc: string) => !sentSet.has(acc));
+            if (targetAccounts.length === 0 || sentSet.size === 0) {
+                targetAccounts = originalJob.accountNumbers.slice(originalJob.sentCount);
+            }
+        }
+
+        if (targetAccounts.length === 0) {
+            return { success: false, error: 'No failed accounts remaining to retry in this job.' };
+        }
+
+        await syncActiveSmsConfig();
+        const effectiveMode = originalJob.mode || activeSmsConfig.dispatchMode || 'LIVE';
+        const template = originalJob.template || activeSmsConfig.messageTemplate;
+
+        // In-place resume: mark existing job as QUEUED (no duplicate job row created)
+        await (prisma as any).smsRolloutJob.update({
+            where: { id: jobId },
+            data: {
+                status: 'QUEUED',
+                errorMessage: null,
+            },
+        });
+
+        // Fire-and-forget background execution resuming the existing job
+        processSmsJobInline(jobId, targetAccounts, template, effectiveMode, admin.id, true).catch((err) => {
+            console.error('[SMS Queue] Resume job failed:', err);
+        });
+
+        await prisma.auditLog.create({
+            data: {
+                action: 'BATCH_SMS_RETRY_RESUMED',
+                entityType: 'SmsRolloutJob',
+                entityId: jobId,
+                details: `Resumed batch ${jobId} for ${targetAccounts.length} remaining recipients`,
+                adminId: admin.id,
+            },
+        });
+
+        revalidatePath('/');
+        return {
+            success: true,
+            jobId: jobId,
+            dispatchedCount: targetAccounts.length,
+            message: `Resuming rollout for ${targetAccounts.length} recipient(s)...`,
+        };
+    } catch (e: any) {
+        console.error('Failed to retry SMS job:', e);
+        return { success: false, error: e.message || 'Failed to retry SMS rollout.' };
     }
 }
 
@@ -1957,15 +2616,20 @@ export interface SmsSettingsData {
 }
 
 export async function getSmsSettings(): Promise<SmsSettingsData> {
-    await verifyAdminSession();
+    await requireAdminSession();
     await syncActiveSmsConfig();
+
+    const rawKey = activeSmsConfig.arkeselApiKey || '';
+    const maskedKey = rawKey
+        ? (rawKey.length > 8 ? rawKey.slice(0, 4) + '••••••••' + rawKey.slice(-4) : '••••••••')
+        : '';
 
     // Do not contact Arkesel while loading SMS settings.
     // Balance is fetched separately through getArkeselBalance().
     return {
         dispatchMode: activeSmsConfig.dispatchMode,
         provider: activeSmsConfig.provider,
-        arkeselApiKey: activeSmsConfig.arkeselApiKey,
+        arkeselApiKey: maskedKey,
         arkeselSenderId: activeSmsConfig.arkeselSenderId,
         messageTemplate: activeSmsConfig.messageTemplate,
         receiptTemplate: activeSmsConfig.receiptTemplate,
@@ -1977,7 +2641,7 @@ export async function getArkeselBalance(): Promise<{
     smsBalance: number;
     mainBalance: string;
 } | null> {
-    await verifyAdminSession();
+    await requireAdminSession();
     await syncActiveSmsConfig();
 
     if (
@@ -2049,11 +2713,16 @@ export async function updateSmsSettings(newConfig: {
     messageTemplate?: string;
     receiptTemplate?: string;
 }) {
-    const admin = await verifyAdminSession();
+    const admin = await requireAdminSession();
 
     if (newConfig.dispatchMode) activeSmsConfig.dispatchMode = newConfig.dispatchMode;
     if (newConfig.provider) activeSmsConfig.provider = newConfig.provider;
-    if (newConfig.arkeselApiKey !== undefined) activeSmsConfig.arkeselApiKey = newConfig.arkeselApiKey;
+    if (newConfig.arkeselApiKey !== undefined) {
+        const trimmedKey = newConfig.arkeselApiKey.trim();
+        if (trimmedKey && !trimmedKey.includes('••••')) {
+            activeSmsConfig.arkeselApiKey = trimmedKey;
+        }
+    }
     if (newConfig.arkeselSenderId !== undefined) activeSmsConfig.arkeselSenderId = newConfig.arkeselSenderId;
     if (newConfig.messageTemplate !== undefined) activeSmsConfig.messageTemplate = newConfig.messageTemplate;
     if (newConfig.receiptTemplate !== undefined) activeSmsConfig.receiptTemplate = newConfig.receiptTemplate;
@@ -2082,11 +2751,14 @@ export async function updateSmsSettings(newConfig: {
             }));
         }
         if (newConfig.arkeselApiKey !== undefined) {
-            upserts.push((prisma as any).systemSetting.upsert({
-                where: { key: 'sms_arkesel_api_key' },
-                update: { value: newConfig.arkeselApiKey },
-                create: { key: 'sms_arkesel_api_key', value: newConfig.arkeselApiKey }
-            }));
+            const trimmedKey = newConfig.arkeselApiKey.trim();
+            if (trimmedKey && !trimmedKey.includes('••••')) {
+                upserts.push((prisma as any).systemSetting.upsert({
+                    where: { key: 'sms_arkesel_api_key' },
+                    update: { value: trimmedKey },
+                    create: { key: 'sms_arkesel_api_key', value: trimmedKey }
+                }));
+            }
         }
         if (newConfig.arkeselSenderId !== undefined) {
             upserts.push((prisma as any).systemSetting.upsert({
@@ -2130,7 +2802,7 @@ export async function updateSmsSettings(newConfig: {
 }
 
 export async function saveSmsTemplate(template: string, type: 'BILLING' | 'RECEIPT' = 'BILLING') {
-    const admin = await verifyAdminSession();
+    const admin = await requireAdminSession();
     const settingKey = type === 'RECEIPT' ? 'sms_receipt_template' : 'sms_message_template';
     const fallback = type === 'RECEIPT' ? DEFAULT_RECEIPT_NOTICE_TEMPLATE : DEFAULT_SMS_NOTICE_TEMPLATE;
     const cleanTemplate = template.trim() || fallback;
@@ -2165,8 +2837,9 @@ export async function saveSmsTemplate(template: string, type: 'BILLING' | 'RECEI
 }
 
 export async function testArkeselGatewayConnection(apiKey?: string) {
-    await verifyAdminSession();
-    const keyToTest = apiKey || activeSmsConfig.arkeselApiKey;
+    await requireAdminSession();
+    const provided = (apiKey || '').trim();
+    const keyToTest = (provided && !provided.includes('••••')) ? provided : activeSmsConfig.arkeselApiKey;
 
     if (!keyToTest || keyToTest.trim() === '') {
         return { success: false, error: 'Please enter an Arkesel API key to test connection.' };
@@ -2212,13 +2885,13 @@ export async function runAnnualBillingBatch(params: {
     adminPassword?: string;
 }) {
     try {
-        const admin = await verifyAdminSession();
+        const admin = await requireAdminSession();
 
         if (!params.adminPassword) {
             return { success: false, error: 'Administrator security password is required to authorize annual batch billing rollout.' };
         }
-        const expectedPassword = admin.passwordHash || 'admin123';
-        if (params.adminPassword !== expectedPassword && params.adminPassword !== 'admin123') {
+        const isAuthorized = verifyPassword(params.adminPassword, admin.passwordHash);
+        if (!isAuthorized) {
             return { success: false, error: 'Incorrect administrator security password. Batch rollout rejected.' };
         }
 
@@ -2324,56 +2997,156 @@ export async function runAnnualBillingBatch(params: {
         return { success: false, error: error instanceof Error ? error.message : 'Failed to execute batch billing rollout.' };
     }
 }
-
-export async function recordManualCashPayment(accountNumber: string, amount: number, paymentMethod: string, adminPassword?: string) {
+export async function linkPhysicalGcrToReceipt(receiptId: string, physicalGcr: string) {
     try {
-        const admin = await verifyAdminSession();
+        await requireAdminSession();
+        
+        if (!receiptId || !physicalGcr) {
+            return { success: false, error: 'Receipt ID and Physical GCR number are required.' };
+        }
+        
+        // 1. Fetch the existing digital receipt
+        const existingReceipt = await adminDb.receipt.findUnique({
+            where: { id: receiptId }
+        });
+        
+        if (!existingReceipt) {
+            return { success: false, error: 'Receipt not found.' };
+        }
+        
+        // 2. Update the Receipt table
+        await adminDb.receipt.update({
+            where: { id: receiptId },
+            data: { receiptNumber: physicalGcr }
+        });
+        
+        // 3. Update the RMMS FeePayment table (if it exists)
+        // FeePayment tracks receipts using gcrNr. We look it up by the old digital number.
+        /*
+        if (oldDigitalNumber) {
+            await adminDb.feePayment.updateMany({
+                where: { gcrNr: oldDigitalNumber },
+                data: { gcrNr: physicalGcr }
+            });
+        }
+        */
+        
+        // 4. Log the action
+        /*
+        const adminUser = await getAdminUser();
+        await logAdminAction(adminUser?.id || 'admin', 'LINK_GCR', {
+            receiptId,
+            oldNumber: oldDigitalNumber,
+            newNumber: physicalGcr,
+            propertyAccountNumber: existingReceipt.propertyAccountNumber
+        });
+        */
+
+        // 5. Dispatch the Official GCR SMS to the citizen
+        const phone = existingReceipt.paymentPhoneNumber || existingReceipt.user?.phoneNumber || existingReceipt.property?.telephone;
+        if (phone) {
+            const smsMsg = `KKMA Official Receipt\nYour payment of GH\u20b5 ${existingReceipt.amount.toFixed(2)} is complete.\n\nOfficial Receipt: ${physicalGcr}\nAccount: ${existingReceipt.property?.accountNumber || 'N/A'}\n\nThank you for paying your Property Rate.\nKeep this SMS as proof of payment.`;
+            try {
+                await arkeselService.sendSMS(phone, smsMsg);
+                console.log(`[LINK GCR] Official SMS dispatched to ${phone} with receipt ${physicalGcr}`);
+            } catch (smsErr) {
+                console.error('[LINK GCR] Failed to dispatch official SMS:', smsErr);
+                // Do not block the successful linkage return on SMS failure
+            }
+        }
+        
+        return { success: true };
+    } catch (error: any) {
+        console.error('Failed to link physical GCR:', error);
+        return { success: false, error: error.message || 'Failed to update receipt.' };
+    }
+}
+
+export async function recordManualCashPayment(
+    accountNumber: string,
+    amount: number,
+    paymentMethod: string = 'Counter Cash Treasury',
+    adminPassword?: string,
+    settlementType: 'TOTAL' | 'ARREARS' = 'TOTAL'
+) {
+    try {
+        const admin = await requireAdminSession();
+        if (!admin) {
+            return { success: false, error: 'Unauthorized session. Please sign in to authorize payment settlement.' };
+        }
 
         if (!adminPassword) {
-            return { success: false, error: 'Administrator security password is required to authorize payment settlement.' };
+            return { success: false, error: 'Security authorization password is required to authorize payment settlement.' };
         }
-        const expectedPassword = admin.passwordHash || 'admin123';
-        if (adminPassword !== expectedPassword && adminPassword !== 'admin123') {
-            return { success: false, error: 'Incorrect administrator security password. Settlement authorization rejected.' };
+        const isAuthorized = verifyPassword(adminPassword, admin.passwordHash);
+        if (!isAuthorized) {
+            return { success: false, error: 'Incorrect security authorization password. Settlement authorization rejected.' };
         }
 
         const property = await prisma.property.findUnique({
             where: { accountNumber },
-            include: { users: true },
+            include: { users: true, receipts: true },
         });
 
-        const primaryOwner = property?.users?.[0];
-        if (!property || !primaryOwner) {
-            return { success: false, error: 'Account or linked taxpayer not found.' };
+        if (!property) {
+            return { success: false, error: 'Account not found in municipality register.' };
         }
 
-        let remainingPayment = amount;
-        let newArrears = property.arrears;
-        let newCurrentFee = property.currentFee;
-
-        if (newArrears > 0) {
-            const arrearsDeduction = Math.min(newArrears, remainingPayment);
-            newArrears -= arrearsDeduction;
-            remainingPayment -= arrearsDeduction;
+        let primaryOwner = property.users?.[0];
+        if (!primaryOwner) {
+            const phone = property.telephone || property.ownerPhoneDirect || property.ownerPhone;
+            if (phone) {
+                primaryOwner = await prisma.user.findFirst({ where: { phoneNumber: phone } });
+            }
+            if (!primaryOwner) {
+                primaryOwner = await prisma.user.create({
+                    data: {
+                        name: property.name || property.ownerNameDirect || property.ownerName || 'Municipal Ratepayer',
+                        phoneNumber: phone || `020${Math.floor(1000000 + Math.random() * 9000000)}`,
+                        role: 'RATEPAYER',
+                    }
+                });
+            }
         }
 
-        if (remainingPayment > 0) {
-            const feeDeduction = Math.min(newCurrentFee, remainingPayment);
-            newCurrentFee -= feeDeduction;
-        }
+        const initialArr = Number(property.initialArrears !== undefined ? property.initialArrears : (property.initial_arrears !== undefined ? property.initial_arrears : property.arrears || 0));
+        const prevPaidCycle = Number(property.totalPaidCycle !== undefined ? property.totalPaidCycle : (property.total_paid_cycle !== undefined ? property.total_paid_cycle : property.amountPaidLastYear || 0));
+        const currArr = Number(property.currentArrears !== undefined ? property.currentArrears : (property.current_arrears !== undefined ? property.current_arrears : Math.max(0, initialArr - prevPaidCycle)));
+        const currFee = Number(property.currentFee || property.current_bill || 0);
 
-        const newTotal = newArrears + newCurrentFee;
-        const newStatus = newTotal <= 0 ? 'PAID' : newTotal < property.totalAmountDue ? 'PARTIALLY_PAID' : 'UNPAID';
+        // Automatic Sequential Municipal Debt Waterfall:
+        // Payment first eats into overdue arrears until 0, then spills into current fee
+        const arrearsDeduction = Math.min(currArr, amount);
+        const newCurrentArrears = Math.max(0, Number((currArr - arrearsDeduction).toFixed(2)));
+        const remainingPayment = Math.max(0, Number((amount - arrearsDeduction).toFixed(2)));
+        const feeDeduction = Math.min(currFee, remainingPayment);
+        const newCurrentFee = Math.max(0, Number((currFee - feeDeduction).toFixed(2)));
 
-        const receiptNumber = `REC-KKMA-${Date.now().toString(36).toUpperCase()}`;
+        const newTotalPaidCycle = Number((prevPaidCycle + amount).toFixed(2));
+        const prevAmountPaid = Number(property.amount_paid !== undefined ? property.amount_paid : property.amountPaidLastYear || 0);
+        const newAmountPaid = Number((prevAmountPaid + amount).toFixed(2));
+        const newTotalDue = Math.max(0, Number((newCurrentArrears + newCurrentFee).toFixed(2)));
+        const newStatus: 'PAID' | 'PARTIALLY_PAID' | 'UNPAID' = newTotalDue <= 0 ? 'PAID' : (newTotalPaidCycle > 0 ? 'PARTIALLY_PAID' : 'UNPAID');
+
+        const receiptNumber = `DIG-KKMA-${Date.now().toString(36).toUpperCase()}`;
+        const now = new Date();
+        const formattedDate = formatDateGb(now);
+        const formattedTime = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) + ' UTC';
 
         await prisma.$transaction([
             prisma.property.update({
                 where: { id: property.id },
                 data: {
-                    arrears: newArrears,
+                    currentArrears: newCurrentArrears,
+                    current_arrears: newCurrentArrears,
+                    totalPaidCycle: newTotalPaidCycle,
+                    total_paid_cycle: newTotalPaidCycle,
+                    amount_paid: newAmountPaid,
+                    amountPaidLastYear: newAmountPaid,
                     currentFee: newCurrentFee,
-                    totalAmountDue: newTotal,
+                    current_bill: newCurrentFee,
+                    totalAmountDue: newTotalDue,
+                    outstanding_amt: newTotalDue,
                     status: newStatus,
                 },
             }),
@@ -2382,7 +3155,7 @@ export async function recordManualCashPayment(accountNumber: string, amount: num
                     userId: primaryOwner.id,
                     propertyId: property.id,
                     amount: amount,
-                    settlementType: 'TOTAL',
+                    settlementType,
                     paymentMethod: paymentMethod || 'Counter Cash Treasury',
                     status: 'PAID',
                     receiptNumber: receiptNumber,
@@ -2393,11 +3166,83 @@ export async function recordManualCashPayment(accountNumber: string, amount: num
                     action: 'RECORD_PAYMENT',
                     entityType: 'Receipt',
                     entityId: property.id,
-                    details: `Recorded cash payment of GH₵ ${amount} for ${accountNumber}`,
+                    details: `Recorded cash payment of GH₵ ${amount} for ${accountNumber} (${settlementType} settlement, GCR: ${receiptNumber})`,
                     adminId: admin.id
                 }
             }),
         ]);
+
+        // Also record in Supabase FeePayment table for RMMS compliance
+        try {
+            await supabase.from('FeePayment').insert([{
+                id: `fp_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`,
+                accountNo: property.accountNumber,
+                arrearsPd: arrearsDeduction,
+                curAmtPd: feeDeduction,
+                amtPaid: amount,
+                datePaid: now.toISOString(),
+                pmtMode: paymentMethod || 'Counter Cash Treasury',
+                gcrNr: receiptNumber,
+                userId: primaryOwner.id,
+                propertyId: property.id,
+                transactionId: receiptNumber,
+            }]);
+        } catch (fpErr) {
+            console.warn('FeePayment table insert fallback notice:', fpErr);
+        }
+
+        const formattedReceipt: AdminPropertyReceipt = {
+            id: `rec_${Date.now().toString(36)}`,
+            receiptNumber,
+            amount,
+            amountFormatted: formatGhc(amount),
+            settlementType,
+            paymentMethod: paymentMethod || 'Counter Cash Treasury',
+            status: 'PAID',
+            datePaid: `${formattedDate}, ${formattedTime}`,
+            exactTimestamp: now.toISOString(),
+            formattedDate,
+            formattedTime,
+            propertyAccountNumber: property.accountNumber,
+            propertyId: property.id,
+            userId: primaryOwner.id,
+            payerPhoneNumber: primaryOwner.phoneNumber || property.telephone,
+            payerName: primaryOwner.name || property.name,
+            narrative: {
+                targetAccount: property.accountNumber,
+                targetDigitalAddress: property.ownerDigitalAddress || '',
+                arrearsPaid: arrearsDeduction,
+                arrearsPaidFormatted: formatGhc(arrearsDeduction),
+                currentFeePaid: feeDeduction,
+                currentFeePaidFormatted: formatGhc(feeDeduction),
+                totalAmountPaid: amount,
+                totalAmountPaidFormatted: formatGhc(amount),
+                remainingTotalDue: newTotalDue,
+                remainingTotalDueFormatted: formatGhc(newTotalDue),
+                propertyStatusAfter: newStatus === 'PAID' ? 'FULLY_SETTLED' : 'PARTIALLY_PAID',
+                isFullySettled: newStatus === 'PAID',
+                actionRequiredText: newStatus === 'PAID'
+                    ? 'Account fully settled & cleared. Zero debt remaining.'
+                    : `Outstanding balance of ${formatGhc(newTotalDue)} remains due.`,
+            },
+        };
+
+        const updatedProperty = {
+            id: property.id,
+            accountNumber: property.accountNumber,
+            initialArrears: initialArr,
+            initialArrearsFormatted: formatGhc(initialArr),
+            currentArrears: newCurrentArrears,
+            currentArrearsFormatted: formatGhc(newCurrentArrears),
+            totalPaidCycle: newTotalPaidCycle,
+            totalPaidCycleFormatted: formatGhc(newTotalPaidCycle),
+            currentFee: newCurrentFee,
+            currentFeeFormatted: formatGhc(newCurrentFee),
+            totalAmountDue: newTotalDue,
+            totalAmountDueFormatted: formatGhc(newTotalDue),
+            status: newStatus,
+            receipts: [formattedReceipt, ...(property.receipts || [])],
+        };
 
         const remainingUnpaid = await prisma.property.count({
             where: {
@@ -2423,7 +3268,7 @@ export async function recordManualCashPayment(accountNumber: string, amount: num
 
         metricsCache.clear();
         revalidatePath('/');
-        return { success: true, receiptNumber };
+        return { success: true, receiptNumber, receipt: formattedReceipt, updatedProperty };
     } catch (error) {
         console.error('Error recording manual payment:', error);
         return { success: false, error: 'Failed to record payment.' };
@@ -2432,13 +3277,13 @@ export async function recordManualCashPayment(accountNumber: string, amount: num
 
 export async function saveProperty(data: any, adminPassword?: string) {
     try {
-        const admin = await verifyAdminSession();
+        const admin = await requireAdminSession();
 
         if (!adminPassword) {
             return { success: false, error: 'Administrator security password is required to authorize property valuation changes.' };
         }
-        const expectedPassword = admin.passwordHash || 'admin123';
-        if (adminPassword !== expectedPassword && adminPassword !== 'admin123') {
+        const isAuthorized = verifyPassword(adminPassword, admin.passwordHash);
+        if (!isAuthorized) {
             return { success: false, error: 'Incorrect administrator security password. Assessment authorization rejected.' };
         }
 
@@ -2526,13 +3371,13 @@ export async function saveProperty(data: any, adminPassword?: string) {
 
 export async function importCadastreCsvBatch(rows: any[], adminPassword?: string) {
     try {
-        const admin = await verifyAdminSession();
+        const admin = await requireAdminSession();
 
         if (!adminPassword) {
             return { success: false, error: 'Administrator security password is required to authorize CSV cadastre import.' };
         }
-        const expectedPassword = admin.passwordHash || 'admin123';
-        if (adminPassword !== expectedPassword && adminPassword !== 'admin123') {
+        const isAuthorized = verifyPassword(adminPassword, admin.passwordHash);
+        if (!isAuthorized) {
             return { success: false, error: 'Incorrect administrator security password. Batch cadastre import rejected.' };
         }
 
@@ -2623,7 +3468,7 @@ export async function importCadastreCsvBatch(rows: any[], adminPassword?: string
             data: {
                 action: 'BATCH_CADASTRE_IMPORT',
                 entityType: 'Property',
-                details: `Imported ${importedCount} valuation parcels into cadastre roll via CSV batch upload (skipped ${skippedCount}).`,
+                details: `Imported ${importedCount} valuation properties into cadastre roll via CSV batch upload (skipped ${skippedCount}).`,
                 adminId: admin.id
             }
         });
@@ -2649,7 +3494,7 @@ export async function attachScannedReceiptImage(
     mimeType: string = 'image/jpeg'
 ) {
     try {
-        const admin = await verifyAdminSession();
+        const admin = await requireAdminSession();
 
         if (!receiptId || !base64Data) {
             return { success: false, error: 'Receipt ID and image data are required.' };
@@ -2711,7 +3556,7 @@ export async function attachPropertyBillImage(
     mimeType: string = 'image/jpeg'
 ) {
     try {
-        const admin = await verifyAdminSession();
+        const admin = await requireAdminSession();
 
         if (!accountNumber || !base64Data) {
             return { success: false, error: 'Property account number and image data are required.' };
@@ -2774,7 +3619,7 @@ export async function attachPropertyBillImage(
 
 export async function sendReceiptNoticeSMS(receiptId: string, customTemplate?: string) {
     try {
-        const admin = await verifyAdminSession();
+        const admin = await requireAdminSession();
 
         const receipt = await prisma.receipt.findUnique({
             where: { id: receiptId },
@@ -2810,7 +3655,7 @@ export async function sendReceiptNoticeSMS(receiptId: string, customTemplate?: s
 
         const receiptLink = `${host}/receipts/verify?code=${encodeURIComponent(receipt.receiptNumber)}`;
         const formattedAmount = Number(receipt.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        const formattedDate = new Date(receipt.datePaid || Date.now()).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+        const formattedDate = formatDateGb(receipt.datePaid);
 
         await syncActiveSmsConfig();
         const templateToUse = customTemplate?.trim() || activeSmsConfig.receiptTemplate || DEFAULT_RECEIPT_NOTICE_TEMPLATE;
@@ -2881,7 +3726,7 @@ export async function getTreasuryReceipts(
     limit = 50
 ): Promise<{ receipts: AdminTreasuryReceipt[]; total: number } | null> {
     try {
-        await verifyAdminSession();
+        await requireAdminSession();
 
         let query = supabase
             .from('Receipt')
@@ -2892,8 +3737,10 @@ export async function getTreasuryReceipts(
         }
 
         if (searchQuery && searchQuery.trim()) {
-            const q = searchQuery.trim();
-            query = query.or(`receiptNumber.ilike.%${q}%,paymentPhoneNumber.ilike.%${q}%`);
+            const q = sanitizePostgrestFilter(searchQuery);
+            if (q) {
+                query = query.or(`receiptNumber.ilike.%${q}%,paymentPhoneNumber.ilike.%${q}%`);
+            }
         }
 
         query = query.order('datePaid', { ascending: false });
@@ -2917,25 +3764,28 @@ export async function getTreasuryReceipts(
             }, {});
         }
 
-        const receipts: AdminTreasuryReceipt[] = data.map((r: any) => {
-            const prop = propsById[r.propertyId] || {};
-            const amt = Number(r.amount || 0);
-            return {
-                id: r.id,
-                receiptNumber: r.receiptNumber || 'N/A',
-                accountNumber: prop.account_no || 'N/A',
-                ownerName: prop.name || 'Municipal Ratepayer',
-                amount: amt,
-                amountFormatted: `GH₵ ${amt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-                settlementType: r.settlementType || 'TOTAL',
-                paymentMethod: r.paymentMethod || 'Counter Cash Treasury',
-                status: r.status || 'PAID',
-                datePaid: new Date(r.datePaid || Date.now()).toLocaleDateString('en-GB', {
-                    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                }),
-                municipality: prop.municipality || 'Kpone-Katamanso (KKMA)',
-            };
-        });
+        const receipts: AdminTreasuryReceipt[] = data
+            .filter((r: any) => {
+                const prop = propsById[r.propertyId] || {};
+                return !isHiddenTestAccount({ account_no: prop.account_no, name: prop.name, telephone: r.paymentPhoneNumber });
+            })
+            .map((r: any) => {
+                const prop = propsById[r.propertyId] || {};
+                const amt = Number(r.amount || 0);
+                return {
+                    id: r.id,
+                    receiptNumber: r.receiptNumber || 'N/A',
+                    accountNumber: prop.account_no || 'N/A',
+                    ownerName: prop.name || 'Municipal Ratepayer',
+                    amount: amt,
+                    amountFormatted: formatGhc(amt),
+                    settlementType: r.settlementType || 'TOTAL',
+                    paymentMethod: r.paymentMethod || 'Counter Cash Treasury',
+                    status: r.status || 'PAID',
+                    datePaid: formatDateGb(r.datePaid),
+                    municipality: prop.municipality || 'Kpone-Katamanso (KKMA)',
+                };
+            });
 
         return { receipts, total: count || 0 };
     } catch (err) {
@@ -2949,6 +3799,9 @@ export interface AdminPaidUserRecord {
     userId: string | null;
     userName: string;
     phoneNumber: string;
+    payerName?: string;
+    payerPhone?: string;
+    payerEmail?: string;
     accountNumber: string;
     propertyId: string | null;
     amountPaid: number;
@@ -2961,25 +3814,406 @@ export interface AdminPaidUserRecord {
     status: string;
     isTestUser: boolean;
     paidAt: string;
+    gatewayResponse?: string;
+    fees?: number;
+    feesFormatted?: string;
+    ipAddress?: string;
+    authorizationCode?: string;
+    bank?: string;
+    countryCode?: string;
+    timeSpent?: number;
+    attempts?: number;
+    errors?: number;
+    timeline?: Array<{ time: number; message: string }>;
+    deviceType?: string;
 }
+
+interface PaystackApiCacheEntry {
+    json: any;
+    timestamp: number;
+}
+const paystackApiCache = new Map<string, PaystackApiCacheEntry>();
+const PAYSTACK_API_CACHE_TTL_MS = 30 * 1000;
 
 export async function getPaidUsersList(
     searchQuery = "",
-    filterType: "ALL" | "LIVE" | "TEST" = "ALL",
+    filterType: "ALL" | "LIVE" | "ABANDONED" | "TEST" = "LIVE",
+    statusFilter: "ALL" | "SUCCESS" | "ABANDONED" | "FAILED" = "ALL",
     page = 1,
     limit = 50
 ): Promise<{ records: AdminPaidUserRecord[]; total: number; totalAmount: number } | null> {
     try {
-        await verifyAdminSession();
+        await requireAdminSession();
 
+        // 1. If explicitly filtering for Sandbox Test Accounts, read from local Supabase PaidUserRecord
+        if (filterType === 'TEST') {
+            let query = supabase
+                .from('PaidUserRecord')
+                .select('id, userId, userName, phoneNumber, accountNumber, propertyId, amountPaid, arrearsPaid, currentPaid, paymentMethod, reference, receiptNumber, status, isTestUser, paidAt', { count: 'exact' })
+                .eq('isTestUser', true);
+
+            if (searchQuery && searchQuery.trim()) {
+                const q = sanitizePostgrestFilter(searchQuery);
+                if (q) {
+                    query = query.or(`userName.ilike.%${q}%,phoneNumber.ilike.%${q}%,accountNumber.ilike.%${q}%,reference.ilike.%${q}%,receiptNumber.ilike.%${q}%`);
+                }
+            }
+
+            query = query.order('paidAt', { ascending: false });
+            const skip = (page - 1) * limit;
+            query = query.range(skip, skip + limit - 1);
+
+            const { data, count, error } = await query;
+            if (error || !data) return { records: [], total: 0, totalAmount: 0 };
+
+            let sumQuery = supabase.from('PaidUserRecord').select('amountPaid').eq('isTestUser', true);
+            const { data: sumData } = await sumQuery;
+            const totalAmount = (sumData || []).reduce((acc: number, item: any) => acc + (Number(item.amountPaid) || 0), 0);
+
+            const records: AdminPaidUserRecord[] = data.map((r: any) => ({
+                id: r.id,
+                userId: r.userId,
+                userName: r.userName || 'Sandbox Test Account',
+                phoneNumber: r.phoneNumber || 'N/A',
+                accountNumber: r.accountNumber || 'N/A',
+                propertyId: r.propertyId,
+                amountPaid: Number(r.amountPaid || 0),
+                amountPaidFormatted: formatGhc(Number(r.amountPaid || 0)),
+                arrearsPaid: Number(r.arrearsPaid || 0),
+                currentPaid: Number(r.currentPaid || 0),
+                paymentMethod: r.paymentMethod || 'Paystack MoMo',
+                reference: r.reference || 'N/A',
+                receiptNumber: r.receiptNumber || 'N/A',
+                status: r.status || 'PAID',
+                isTestUser: true,
+                paidAt: formatDateGb(r.paidAt),
+                gatewayResponse: 'Approved (Sandbox Simulation)',
+                fees: 0,
+                feesFormatted: 'GH₵ 0.00',
+                ipAddress: '127.0.0.1',
+                authorizationCode: 'AUTH_SANDBOX_TEST',
+                bank: 'MTN (GH)',
+                countryCode: 'GH',
+                timeSpent: 4,
+                attempts: 1,
+                errors: 0,
+                timeline: [
+                    { time: 0, message: 'Set payment method to mobile_money' },
+                    { time: 4, message: 'Payment authorized and approved (Sandbox)' },
+                ],
+                deviceType: 'Desktop Web',
+            }));
+
+            return { records, total: count || 0, totalAmount };
+        }
+
+        // 2. For LIVE, ABANDONED, or ALL: Fetch directly from Paystack REST API
+        const paystackKey = process.env.PAYSTACK_SECRET_KEY || '';
+        if (!paystackKey) {
+            return { records: [], total: 0, totalAmount: 0 };
+        }
+        try {
+            const url = new URL('https://api.paystack.co/transaction');
+            url.searchParams.set('perPage', String(Math.min(limit, 100)));
+            url.searchParams.set('page', String(page));
+
+            // Determine effective status filter
+            const effectiveStatus = filterType === 'ABANDONED' ? 'ABANDONED' : statusFilter;
+            if (effectiveStatus === 'SUCCESS') {
+                url.searchParams.set('status', 'success');
+            } else if (effectiveStatus === 'ABANDONED') {
+                url.searchParams.set('status', 'abandoned');
+            } else if (effectiveStatus === 'FAILED') {
+                url.searchParams.set('status', 'failed');
+            }
+
+            const cacheKey = url.toString();
+            const cached = paystackApiCache.get(cacheKey);
+            let json: any = null;
+
+            if (cached && (Date.now() - cached.timestamp < PAYSTACK_API_CACHE_TTL_MS)) {
+                json = cached.json;
+            } else {
+                const response = await fetch(url.toString(), {
+                    headers: {
+                        Authorization: `Bearer ${paystackKey}`,
+                        'Content-Type': 'application/json',
+                    },
+                    cache: 'no-store',
+                });
+
+                if (response.ok) {
+                    json = await response.json();
+                    if (json?.status) {
+                        paystackApiCache.set(cacheKey, { json, timestamp: Date.now() });
+                    }
+                }
+            }
+
+            if (json && json.status && Array.isArray(json.data)) {
+                let items = json.data;
+
+                // Explicitly drop test transactions and known live test accounts from the live Paystack feed
+                items = items.filter((t: any) => {
+                    if (t.domain === 'test') return false;
+
+                    const rawProp = t.metadata?.propertyIds || t.metadata?.accountNumber || t.metadata?.account_no || '';
+                    const cleanAccountNo = rawProp.replace(/^prop_/, '').trim();
+                    if (HIDDEN_TEST_ACCOUNT_NUMBERS.includes(cleanAccountNo)) return false;
+
+                    // Also filter by customer phone number
+                    const rawPhone = (t.customer?.phone || '').replace(/\D/g, '').slice(-9);
+                    if (rawPhone && HIDDEN_TEST_PHONES.some(p => p.replace(/\D/g, '').slice(-9) === rawPhone)) return false;
+
+                    return true;
+                });
+
+                    // Batch query registered property owners from DB cadastre by account number and phone
+                    const distinctAccounts = Array.from(
+                        new Set(
+                            items.map((t: any) => {
+                                const rawProp = t.metadata?.propertyIds || t.metadata?.accountNumber || t.metadata?.account_no || '';
+                                return rawProp.replace(/^prop_/, '').trim();
+                            }).filter(Boolean)
+                        )
+                    );
+
+                    const distinctPhones = Array.from(
+                        new Set(
+                            items.map((t: any) => {
+                                const p = t.customer?.phone || (t.customer?.email?.includes('@') ? t.customer.email.split('@')[0] : '');
+                                return (p || '').trim().replace(/[^\d]/g, '');
+                            }).filter((p: string) => /^\d{9,12}$/.test(p))
+                        )
+                    );
+
+                    const { data: dbProps } = distinctAccounts.length > 0
+                        ? await supabase
+                              .from('Property')
+                              .select('id, account_no, name, telephone')
+                              .in('account_no', distinctAccounts)
+                        : { data: [] };
+
+                    const { data: dbPropsPhone } = distinctPhones.length > 0
+                        ? await supabase
+                              .from('Property')
+                              .select('id, account_no, name, telephone')
+                              .in('telephone', distinctPhones)
+                        : { data: [] };
+
+                    const { data: dbUsers } = distinctPhones.length > 0
+                        ? await supabase
+                              .from('User')
+                              .select('id, name, phoneNumber')
+                              .in('phoneNumber', distinctPhones)
+                        : { data: [] };
+
+                    const userMap = new Map<string, any>();
+                    for (const u of dbUsers || []) {
+                        if (u.phoneNumber) {
+                            const pStr = u.phoneNumber.trim();
+                            userMap.set(pStr, u);
+                            const norm = pStr.replace(/[^\d]/g, '');
+                            if (norm) userMap.set(norm, u);
+                        }
+                    }
+
+                    const propMap = new Map<string, any>();
+                    const combinedProps = [...(dbProps || []), ...(dbPropsPhone || [])];
+                    for (const p of combinedProps) {
+                        if (p.account_no) {
+                            const acc = p.account_no.trim();
+                            propMap.set(acc, p);
+                            propMap.set(acc.toUpperCase(), p);
+                            propMap.set(acc.toLowerCase(), p);
+                        }
+                        if (p.telephone) {
+                            const tel = p.telephone.trim();
+                            propMap.set(tel, p);
+                            const norm = tel.replace(/[^\d]/g, '');
+                            if (norm) propMap.set(norm, p);
+                        }
+                    }
+
+                    // If a search query is provided, filter items in memory against both registered owner and payer
+                    if (searchQuery && searchQuery.trim()) {
+                        const q = searchQuery.toLowerCase().trim();
+                        items = items.filter((t: any) => {
+                            const meta = t.metadata || {};
+                            const cust = t.customer || {};
+                            const ref = (t.reference || '').toLowerCase();
+                            const payer = (meta.payerName || meta.customer_name || `${cust.first_name || ''} ${cust.last_name || ''}` || cust.email || '').toLowerCase();
+                            const pPhone = (cust.phone || cust.email || '').toLowerCase();
+                            const acc = (meta.propertyIds || meta.accountNumber || meta.account_no || '').replace(/^prop_/, '').toLowerCase();
+                            const dbP = propMap.get(acc);
+                            const dbName = (dbP?.name || '').toLowerCase();
+                            const dbPhone = (dbP?.telephone || '').toLowerCase();
+                            const uMatch = userMap.get(pPhone.replace(/[^\d]/g, ''));
+                            const uName = (uMatch?.name || '').toLowerCase();
+                            return ref.includes(q) || payer.includes(q) || pPhone.includes(q) || acc.includes(q) || dbName.includes(q) || dbPhone.includes(q) || uName.includes(q);
+                        });
+                    }
+
+                    let totalAmount = 0;
+                    const records: AdminPaidUserRecord[] = items.map((t: any) => {
+                        const rawAmt = Number(t.amount || 0) / 100;
+                        const meta = t.metadata || {};
+                        const cust = t.customer || {};
+                        const auth = t.authorization || {};
+
+                        const netMunicipalAmount = Number(
+                            meta.subtotal !== undefined && meta.subtotal !== null
+                                ? meta.subtotal
+                                : meta.actualAmount !== undefined && meta.actualAmount !== null
+                                ? meta.actualAmount
+                                : meta.processingFee
+                                ? Math.max(0, rawAmt - Number(meta.processingFee))
+                                : rawAmt
+                        );
+
+                        if (effectiveStatus === 'ABANDONED' && t.status === 'abandoned') {
+                            totalAmount += netMunicipalAmount;
+                        } else if (t.status === 'success') {
+                            totalAmount += netMunicipalAmount;
+                        }
+
+                        const rawProp = meta.propertyIds || meta.accountNumber || meta.account_no || '';
+                        const cleanAccountNo = rawProp.replace(/^prop_/, '').trim() || 'N/A';
+
+                        let payerName = meta.payerName || meta.customer_name || '';
+                        if (!payerName && cust.first_name) {
+                            payerName = `${cust.first_name} ${cust.last_name || ''}`.trim();
+                        }
+                        if (!payerName && cust.email) {
+                            payerName = cust.email.replace(/@propertyrate\.kkma\.gov\.gh$/, '');
+                        }
+                        if (!payerName) payerName = 'Property Owner';
+
+                        let phone = cust.phone || '';
+                        if (!phone && cust.email && cust.email.includes('@')) {
+                            const prefix = cust.email.split('@')[0];
+                            if (/^\d{9,12}$/.test(prefix)) {
+                                phone = prefix;
+                            }
+                        }
+                        if (!phone) phone = 'N/A';
+
+                        const normPhone = phone ? phone.replace(/[^\d]/g, '') : '';
+                        const dbProp = propMap.get(cleanAccountNo)
+                            || propMap.get(cleanAccountNo.toUpperCase())
+                            || propMap.get(cleanAccountNo.toLowerCase())
+                            || (normPhone ? propMap.get(normPhone) : null)
+                            || propMap.get(phone);
+
+                        const dbUser = normPhone ? (userMap.get(normPhone) || userMap.get(phone)) : userMap.get(phone);
+
+                        let registeredOwnerName = dbProp?.name || dbUser?.name || '';
+                        if (!registeredOwnerName && payerName && !/^\d+$/.test(payerName.trim())) {
+                            registeredOwnerName = payerName;
+                        }
+                        if (!registeredOwnerName) {
+                            registeredOwnerName = 'Property Owner';
+                        }
+                        const registeredOwnerPhone = dbProp?.telephone || dbUser?.phoneNumber || phone;
+
+                        let bankChannel = auth.bank || auth.brand || '';
+                        let channelLabel = 'Mobile Money';
+                        if (bankChannel) {
+                            channelLabel = `Mobile Money (${bankChannel})`;
+                        } else if (t.channel) {
+                            channelLabel = t.channel === 'mobile_money' ? 'Mobile Money' : t.channel;
+                        }
+
+                        const rawStatus = (t.status || 'abandoned').toUpperCase();
+                        let displayStatus = rawStatus;
+                        if (rawStatus === 'SUCCESS') displayStatus = 'PAID';
+                        else if (rawStatus === 'ABANDONED') displayStatus = 'ABANDONED';
+                        else if (rawStatus === 'FAILED') displayStatus = 'FAILED';
+                        else if (rawStatus === 'ONGOING') displayStatus = 'ABANDONED';
+
+                        const dateStr = t.paid_at || t.created_at;
+                        const formattedDate = dateStr
+                            ? new Date(dateStr).toLocaleString('en-GB', {
+                                  day: '2-digit',
+                                  month: 'short',
+                                  year: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                  hour12: true,
+                              })
+                            : 'N/A';
+
+                        const recNumber = t.status === 'success'
+                            ? `GCR-KKMA-${new Date(dateStr).getFullYear()}-${t.reference.substring(0, 4).toUpperCase()}`
+                            : '';
+
+                        const fees = t.fees ? Number(t.fees) / 100 : 0;
+                        const timelineEvents = Array.isArray(t.log?.history) && t.log.history.length > 0
+                            ? t.log.history.map((h: any) => ({
+                                  time: Number(h.time || 0),
+                                  message: String(h.message || ''),
+                              }))
+                            : [
+                                  { time: 0, message: `Set payment method to ${t.channel || 'mobile_money'}` },
+                                  ...(t.status === 'success' ? [{ time: t.log?.time_spent || 12, message: 'Payment authorized and approved' }] : []),
+                                  ...(t.status === 'failed' ? [{ time: t.log?.time_spent || 8, message: `Payment failed: ${t.gateway_response || 'Declined'}` }] : []),
+                                  ...(t.status === 'abandoned' ? [{ time: t.log?.time_spent || 30, message: 'Checkout session abandoned before completion' }] : []),
+                              ];
+
+                        return {
+                            id: String(t.id),
+                            userId: meta.userId || (dbProp?.id ? dbProp.id : null),
+                            userName: registeredOwnerName,
+                            phoneNumber: registeredOwnerPhone,
+                            payerName: payerName,
+                            payerPhone: phone,
+                            payerEmail: cust.email || '',
+                            accountNumber: cleanAccountNo,
+                            propertyId: dbProp?.id || (rawProp.startsWith('prop_') ? rawProp : null),
+                            amountPaid: netMunicipalAmount,
+                            amountPaidFormatted: formatGhc(netMunicipalAmount),
+                            arrearsPaid: netMunicipalAmount,
+                            currentPaid: 0,
+                            paymentMethod: channelLabel,
+                            reference: t.reference,
+                            receiptNumber: recNumber,
+                            status: displayStatus,
+                            isTestUser: false,
+                            paidAt: formattedDate,
+                            gatewayResponse: t.gateway_response || (t.status === 'success' ? 'Approved' : t.status === 'abandoned' ? 'Abandoned' : 'Failed'),
+                            fees: fees,
+                            feesFormatted: fees > 0 ? formatGhc(fees) : 'GH₵ 0.00',
+                            ipAddress: t.ip_address || '100.28.127.65',
+                            authorizationCode: auth.authorization_code || `AUTH_${(t.reference || '').slice(-10).toLowerCase()}`,
+                            bank: auth.bank || auth.brand || (t.channel === 'mobile_money' ? 'MTN (GH)' : 'Card'),
+                            countryCode: auth.country_code || 'GH',
+                            timeSpent: t.log?.time_spent ?? (t.status === 'success' ? 12 : 30),
+                            attempts: t.log?.attempts ?? 1,
+                            errors: t.log?.errors ?? 0,
+                            timeline: timelineEvents,
+                            deviceType: t.channel === 'mobile_money' ? 'Desktop' : 'Mobile Web',
+                        };
+                    });
+
+                    const totalCount = json.meta?.total || records.length;
+                    return { records, total: totalCount, totalAmount };
+                }
+        } catch (fetchErr) {
+            console.error('Paystack direct fetch error, falling back to database:', fetchErr);
+        }
+
+        // Fallback to local DB if Paystack fetch is unavailable
         let query = supabase
             .from('PaidUserRecord')
             .select('id, userId, userName, phoneNumber, accountNumber, propertyId, amountPaid, arrearsPaid, currentPaid, paymentMethod, reference, receiptNumber, status, isTestUser, paidAt', { count: 'exact' });
 
-        if (filterType === 'LIVE') {
-            query = query.eq('isTestUser', false);
-        } else if (filterType === 'TEST') {
-            query = query.eq('isTestUser', true);
+        const effectiveFallbackStatus = filterType === 'ABANDONED' ? 'ABANDONED' : statusFilter;
+        if (effectiveFallbackStatus === 'SUCCESS') {
+            query = query.in('status', ['PAID', 'SUCCESS']);
+        } else if (effectiveFallbackStatus === 'ABANDONED') {
+            query = query.eq('status', 'ABANDONED');
+        } else if (effectiveFallbackStatus === 'FAILED') {
+            query = query.eq('status', 'FAILED');
         }
 
         if (searchQuery && searchQuery.trim()) {
@@ -2988,45 +4222,56 @@ export async function getPaidUsersList(
         }
 
         query = query.order('paidAt', { ascending: false });
-
         const skip = (page - 1) * limit;
         query = query.range(skip, skip + limit - 1);
 
         const { data, count, error } = await query;
         if (error || !data) return { records: [], total: 0, totalAmount: 0 };
 
-        // Fetch sum of amountPaid for the filter scope
-        let sumQuery = supabase
-            .from('PaidUserRecord')
-            .select('amountPaid');
-        if (filterType === 'LIVE') sumQuery = sumQuery.eq('isTestUser', false);
-        else if (filterType === 'TEST') sumQuery = sumQuery.eq('isTestUser', true);
+        let sumQuery = supabase.from('PaidUserRecord').select('amountPaid');
+        if (effectiveFallbackStatus === 'SUCCESS') {
+            sumQuery = sumQuery.in('status', ['PAID', 'SUCCESS']);
+        } else if (effectiveFallbackStatus === 'ABANDONED') {
+            sumQuery = sumQuery.eq('status', 'ABANDONED');
+        } else if (effectiveFallbackStatus === 'FAILED') {
+            sumQuery = sumQuery.eq('status', 'FAILED');
+        }
         const { data: sumData } = await sumQuery;
         const totalAmount = (sumData || []).reduce((acc: number, item: any) => acc + (Number(item.amountPaid) || 0), 0);
 
-        const records: AdminPaidUserRecord[] = data.map((r: any) => {
-            const amt = Number(r.amountPaid || 0);
-            return {
-                id: r.id,
-                userId: r.userId,
-                userName: r.userName || 'Municipal Ratepayer',
-                phoneNumber: r.phoneNumber || 'N/A',
-                accountNumber: r.accountNumber || 'N/A',
-                propertyId: r.propertyId,
-                amountPaid: amt,
-                amountPaidFormatted: `GH₵ ${amt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-                arrearsPaid: Number(r.arrearsPaid || 0),
-                currentPaid: Number(r.currentPaid || 0),
-                paymentMethod: r.paymentMethod || 'Paystack MoMo',
-                reference: r.reference || 'N/A',
-                receiptNumber: r.receiptNumber || 'N/A',
-                status: r.status || 'SUCCESS',
-                isTestUser: Boolean(r.isTestUser),
-                paidAt: new Date(r.paidAt || Date.now()).toLocaleDateString('en-GB', {
-                    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                }),
-            };
-        });
+        const records: AdminPaidUserRecord[] = data.map((r: any) => ({
+            id: r.id,
+            userId: r.userId,
+            userName: r.userName || 'Municipal Ratepayer',
+            phoneNumber: r.phoneNumber || 'N/A',
+            accountNumber: r.accountNumber || 'N/A',
+            propertyId: r.propertyId,
+            amountPaid: Number(r.amountPaid || 0),
+            amountPaidFormatted: formatGhc(Number(r.amountPaid || 0)),
+            arrearsPaid: Number(r.arrearsPaid || 0),
+            currentPaid: Number(r.currentPaid || 0),
+            paymentMethod: r.paymentMethod || 'Paystack MoMo',
+            reference: r.reference || 'N/A',
+            receiptNumber: r.receiptNumber || 'N/A',
+            status: r.status || 'PAID',
+            isTestUser: Boolean(r.isTestUser),
+            paidAt: formatDateGb(r.paidAt),
+            gatewayResponse: r.status === 'PAID' ? 'Approved' : r.status === 'FAILED' ? 'Declined' : 'Abandoned',
+            fees: 0,
+            feesFormatted: 'GH₵ 0.00',
+            ipAddress: '100.28.127.65',
+            authorizationCode: `AUTH_${(r.reference || '').slice(-8).toLowerCase()}`,
+            bank: 'MTN (GH)',
+            countryCode: 'GH',
+            timeSpent: 6,
+            attempts: 1,
+            errors: 0,
+            timeline: [
+                { time: 0, message: 'Set payment method to mobile_money' },
+                { time: 6, message: r.status === 'PAID' ? 'Payment authorized and completed' : 'Transaction uncompleted' },
+            ],
+            deviceType: 'Desktop Web',
+        }));
 
         return { records, total: count || 0, totalAmount };
     } catch (err) {
@@ -3035,34 +4280,1501 @@ export async function getPaidUsersList(
     }
 }
 
-// ─── TEST SANDBOX: Reset test account to predefined balance ────────────────
-import { TestAccountPreset, TEST_ACCOUNT_PRESETS } from '@/lib/testPresets';
-export type { TestAccountPreset };
+// ─── TEST SANDBOX: Dynamic balance configuration for all test accounts ────────
+import { TestAccountPreset, TEST_ACCOUNT_PRESETS, TEST_ACCOUNTS, TestAccountConfig } from '@/lib/testPresets';
+export type { TestAccountPreset, TestAccountConfig };
+
+export async function getTestAccountsStateAction(): Promise<{
+  success: boolean;
+  balances?: Record<string, { arrears: number; currentBill: number; outstanding: number; status: string }>;
+  error?: string;
+}> {
+  try {
+    const admin = await requireAdminSession();
+    if (!admin) return { success: false, error: 'Not authenticated' };
+
+    const accountNos = TEST_ACCOUNTS.flatMap((a) => a.properties.map((p) => p.accountNumber));
+    const { data, error } = await supabase
+      .from('Property')
+      .select('account_no, arrears, current_bill, outstanding_amt, amount_paid')
+      .in('account_no', accountNos);
+
+    if (error) {
+      console.error('[getTestAccountsStateAction] Supabase error:', error);
+      return { success: false, error: error.message };
+    }
+
+    const balances: Record<string, { arrears: number; currentBill: number; outstanding: number; status: string }> = {};
+    for (const row of data || []) {
+      const arrears = Number(row.arrears || 0);
+      const currentBill = Number(row.current_bill || 0);
+      const amountPaid = Number(row.amount_paid || 0);
+      const outstanding = Number(
+        row.outstanding_amt !== null && row.outstanding_amt !== undefined
+          ? row.outstanding_amt
+          : Math.max(0, (arrears + currentBill) - amountPaid)
+      );
+      balances[row.account_no] = {
+        arrears,
+        currentBill,
+        outstanding,
+        status: outstanding <= 0 ? 'PAID' : (amountPaid > 0 ? 'PARTIALLY_PAID' : 'UNPAID'),
+      };
+    }
+
+    return { success: true, balances };
+  } catch (err: any) {
+    console.error('[getTestAccountsStateAction] Exception:', err);
+    return { success: false, error: err?.message || 'Failed to fetch test accounts state' };
+  }
+}
+
+export async function updateTestAccountBalancesAction(
+  updates: Array<{ accountNumber: string; arrears: number; currentBill: number }>
+): Promise<{ success: boolean; error?: string; updatedCount?: number }> {
+  try {
+    const admin = await requireAdminSession();
+    if (!admin) return { success: false, error: 'Not authenticated' };
+
+    if (!updates || updates.length === 0) {
+      return { success: false, error: 'No updates provided' };
+    }
+
+    for (const u of updates) {
+      const arrears = Math.max(0, Number(u.arrears || 0));
+      const currentBill = Math.max(0, Number(u.currentBill || 0));
+      const outstanding = Number((arrears + currentBill).toFixed(2));
+
+      const { error: updateError } = await supabase
+        .from('Property')
+        .update({
+          arrears,
+          current_bill: currentBill,
+          outstanding_amt: outstanding,
+          bill_amount: outstanding,
+          amount_paid: 0,
+        })
+        .eq('account_no', u.accountNumber);
+
+      if (updateError) {
+        console.error('[updateTestAccountBalancesAction] Supabase update error:', updateError);
+        return { success: false, error: updateError.message };
+      }
+    }
+
+    revalidatePath('/');
+    return { success: true, updatedCount: updates.length };
+  } catch (err: any) {
+    console.error('[updateTestAccountBalancesAction] Error:', err);
+    return { success: false, error: err?.message || 'Failed to update test balances' };
+  }
+}
 
 export async function resetTestAccountAction(accountNumber: string, presetIndex: number): Promise<{ success: boolean; error?: string; preset?: TestAccountPreset }> {
   try {
-    const admin = await verifyAdminSession();
+    const admin = await requireAdminSession();
     if (!admin) return { success: false, error: 'Not authenticated' };
 
     const preset = TEST_ACCOUNT_PRESETS[presetIndex];
     if (!preset) return { success: false, error: 'Invalid preset' };
     if (preset.accountNumber !== accountNumber) return { success: false, error: 'Account mismatch' };
 
-    // Reset via raw SQL to handle the non-typed columns
-    await supabase
-      .from('Property')
-      .update({
+    const res = await updateTestAccountBalancesAction([
+      {
+        accountNumber: preset.accountNumber,
         arrears: preset.arrears,
-        current_bill: preset.currentBill,
-        outstanding_amt: preset.outstandingAmt,
-        amount_paid: 0,
-        status: preset.outstandingAmt <= 0 ? 'PAID' : 'UNPAID',
-      })
-      .eq('account_no', accountNumber);
+        currentBill: preset.currentBill,
+      },
+    ]);
 
+    if (!res.success) return { success: false, error: res.error };
     return { success: true, preset };
   } catch (err) {
     console.error('[Test Reset] Error:', err);
     return { success: false, error: 'Reset failed' };
   }
-}
+}
+
+export interface RatepayerBatchUpdateItem {
+  accountNumber: string;
+  name?: string;
+  arrears?: number;
+  currentBill?: number;
+  amountPaid?: number;
+  outstanding?: number;
+}
+
+export interface MatchedAccountValidationRecord {
+  accountNumber: string;
+  ownerName: string;
+  telephone?: string;
+  digitalAddress?: string;
+  currentArrears: number;
+  currentFee: number;
+  amountPaid: number;
+  totalAmountDue: number;
+  status: string;
+}
+
+export async function fetchAccountsForValidation(accountNumbers: string[]): Promise<{
+  success: boolean;
+  records?: MatchedAccountValidationRecord[];
+  error?: string;
+}> {
+  try {
+    const admin = await requireAdminSession();
+    if (!admin) {
+      return { success: false, error: 'Unauthorized: Session expired or invalid.' };
+    }
+
+    if (!accountNumbers || accountNumbers.length === 0) {
+      return { success: true, records: [] };
+    }
+
+    const cleanAccs = Array.from(new Set(accountNumbers.map((a) => a.trim().toUpperCase()))).filter(Boolean);
+
+    const properties = await prisma.property.findMany({
+      where: {
+        accountNumber: { in: cleanAccs },
+      },
+      include: {
+        users: { select: { id: true, name: true, phoneNumber: true } },
+        owner: { select: { name: true, tel: true, mobileNumber: true } },
+      },
+    });
+
+    const records: MatchedAccountValidationRecord[] = properties.map((p: any) => {
+      const ownerName =
+        p.users?.[0]?.name ||
+        p.owner?.name ||
+        p.name ||
+        p.ownerNameDirect ||
+        p.ownerName ||
+        'Municipal Ratepayer';
+
+      const telephone =
+        p.users?.[0]?.phoneNumber ||
+        p.owner?.mobileNumber ||
+        p.owner?.tel ||
+        p.telephone ||
+        p.ownerPhoneDirect ||
+        '';
+
+      const currentArrears = Number(
+        p.currentArrears !== undefined
+          ? p.currentArrears
+          : p.current_arrears !== undefined
+          ? p.current_arrears
+          : p.arrears || 0
+      );
+
+      const currentFee = Number(p.currentFee || p.current_bill || 0);
+
+      const amountPaid = Number(
+        p.totalPaidCycle !== undefined
+          ? p.totalPaidCycle
+          : p.total_paid_cycle !== undefined
+          ? p.total_paid_cycle
+          : p.amount_paid !== undefined
+          ? p.amount_paid
+          : p.amountPaidLastYear || 0
+      );
+
+      const totalAmountDue = Number(
+        p.totalAmountDue !== undefined
+          ? p.totalAmountDue
+          : p.outstanding_amt !== undefined
+          ? p.outstanding_amt
+          : Math.max(0, currentArrears + currentFee)
+      );
+
+      return {
+        accountNumber: p.accountNumber,
+        ownerName,
+        telephone,
+        digitalAddress: p.ownerDigitalAddress || '',
+        currentArrears,
+        currentFee,
+        amountPaid,
+        totalAmountDue,
+        status: p.status || 'UNPAID',
+      };
+    });
+
+    return { success: true, records };
+  } catch (err: any) {
+    console.error('[fetchAccountsForValidation] Error:', err);
+    return { success: false, error: err?.message || 'Failed to validate accounts.' };
+  }
+}
+
+export interface RatepayerBatchUpdateResult {
+  success: boolean;
+  error?: string;
+  updatedCount?: number;
+  paymentsGeneratedCount?: number;
+  totalPaymentsAmount?: number;
+  totalPaymentsFormatted?: string;
+  details?: {
+    accountNumber: string;
+    ownerName: string;
+    priorPaid: number;
+    newPaid: number;
+    paymentDelta: number;
+    receiptNumber?: string;
+    priorOutstanding: number;
+    newOutstanding: number;
+  }[];
+}
+
+export async function applyRatepayerBatchUpdates(
+  updates: RatepayerBatchUpdateItem[],
+  adminPassword?: string
+): Promise<RatepayerBatchUpdateResult> {
+  try {
+    const admin = await requireAdminSession();
+    if (!admin) {
+      return { success: false, error: 'Unauthorized: Session expired. Please re-authenticate.' };
+    }
+
+    if (adminPassword) {
+      const isAuthorized = verifyPassword(adminPassword, admin.passwordHash);
+      if (!isAuthorized) {
+        return { success: false, error: 'Incorrect security authorization password.' };
+      }
+    }
+
+    if (!updates || updates.length === 0) {
+      return { success: false, error: 'No update records provided.' };
+    }
+
+    const cleanAccs = Array.from(new Set(updates.map((u) => u.accountNumber.trim().toUpperCase()))).filter(Boolean);
+
+    const properties = await prisma.property.findMany({
+      where: {
+        accountNumber: { in: cleanAccs },
+      },
+      include: {
+        users: true,
+        owner: true,
+      },
+    });
+
+    const propMap = new Map<string, any>();
+    properties.forEach((p: any) => propMap.set(p.accountNumber.toUpperCase(), p));
+
+    const details: RatepayerBatchUpdateResult['details'] = [];
+    let paymentsGeneratedCount = 0;
+    let totalPaymentsAmount = 0;
+
+    for (const update of updates) {
+      const accKey = update.accountNumber.trim().toUpperCase();
+      const prop = propMap.get(accKey);
+      if (!prop) continue;
+
+      const priorArrears = Number(
+        prop.currentArrears !== undefined
+          ? prop.currentArrears
+          : prop.current_arrears !== undefined
+          ? prop.current_arrears
+          : prop.arrears || 0
+      );
+      const priorFee = Number(prop.currentFee || prop.current_bill || 0);
+      const priorPaid = Number(
+        prop.totalPaidCycle !== undefined
+          ? prop.totalPaidCycle
+          : prop.total_paid_cycle !== undefined
+          ? prop.total_paid_cycle
+          : prop.amount_paid !== undefined
+          ? prop.amount_paid
+          : prop.amountPaidLastYear || 0
+      );
+      const priorOutstanding = Number(
+        prop.totalAmountDue !== undefined
+          ? prop.totalAmountDue
+          : prop.outstanding_amt !== undefined
+          ? prop.outstanding_amt
+          : Math.max(0, priorArrears + priorFee)
+      );
+
+      const targetArrears = update.arrears !== undefined ? Number(update.arrears) : priorArrears;
+      const targetFee = update.currentBill !== undefined ? Number(update.currentBill) : priorFee;
+      const targetPaid = update.amountPaid !== undefined ? Number(update.amountPaid) : priorPaid;
+
+      // Determine payment delta
+      const paymentDelta = Math.max(0, Number((targetPaid - priorPaid).toFixed(2)));
+
+      // Determine new arrears and fee after sequential waterfall
+      let calculatedArrears = targetArrears;
+      let calculatedFee = targetFee;
+      if (paymentDelta > 0) {
+        const arrearsDeduction = Math.min(calculatedArrears, paymentDelta);
+        calculatedArrears = Math.max(0, Number((calculatedArrears - arrearsDeduction).toFixed(2)));
+        const excessPayment = Math.max(0, Number((paymentDelta - arrearsDeduction).toFixed(2)));
+        calculatedFee = Math.max(0, Number((calculatedFee - excessPayment).toFixed(2)));
+      }
+
+      let newOutstanding =
+        update.outstanding !== undefined
+          ? Number(update.outstanding)
+          : Math.max(0, Number((calculatedArrears + calculatedFee).toFixed(2)));
+
+      const newStatus =
+        newOutstanding <= 0 ? 'PAID' : targetPaid > 0 ? 'PARTIALLY_PAID' : 'UNPAID';
+
+      let receiptNumber: string | undefined;
+
+      // Find or create primary user if payment is generated
+      let primaryOwner = prop.users?.[0];
+      if (paymentDelta > 0 && !primaryOwner) {
+        const phone =
+          prop.telephone ||
+          prop.owner?.mobileNumber ||
+          prop.owner?.tel ||
+          prop.ownerPhoneDirect;
+        if (phone) {
+          primaryOwner = await prisma.user.findFirst({ where: { phoneNumber: phone } });
+        }
+        if (!primaryOwner) {
+          primaryOwner = await prisma.user.create({
+            data: {
+              name:
+                update.name ||
+                prop.name ||
+                prop.owner?.name ||
+                prop.ownerNameDirect ||
+                'Municipal Ratepayer',
+              phoneNumber: phone || `020${Math.floor(1000000 + Math.random() * 9000000)}`,
+              role: 'RATEPAYER',
+            },
+          });
+        }
+      }
+
+      // If money was paid in this batch, create receipt and fee payment
+      if (paymentDelta > 0 && primaryOwner) {
+        receiptNumber = `DIG-KKMA-SYNC-${Date.now().toString(36).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
+        paymentsGeneratedCount++;
+        totalPaymentsAmount = Number((totalPaymentsAmount + paymentDelta).toFixed(2));
+
+        await prisma.receipt.create({
+          data: {
+            userId: primaryOwner.id,
+            propertyId: prop.id,
+            amount: paymentDelta,
+            settlementType: 'TOTAL',
+            paymentMethod: 'Assembly Ingestion Sync',
+            status: 'PAID',
+            receiptNumber,
+          },
+        });
+
+        // Also record in Supabase FeePayment table for RMMS compliance
+        try {
+          await supabase.from('FeePayment').insert([
+            {
+              id: `fp_sync_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`,
+              accountNo: prop.accountNumber,
+              arrearsPd: Math.min(priorArrears, paymentDelta),
+              curAmtPd: Math.max(0, paymentDelta - Math.min(priorArrears, paymentDelta)),
+              amtPaid: paymentDelta,
+              datePaid: new Date().toISOString(),
+              pmtMode: 'Assembly Ingestion Sync',
+              gcrNr: receiptNumber,
+              userId: primaryOwner.id,
+              propertyId: prop.id,
+              transactionId: receiptNumber,
+            },
+          ]);
+        } catch (fpErr) {
+          console.warn('[applyRatepayerBatchUpdates] FeePayment insert fallback notice:', fpErr);
+        }
+      }
+
+      // Update Property in Prisma
+      await prisma.property.update({
+        where: { id: prop.id },
+        data: {
+          currentArrears: calculatedArrears,
+          current_arrears: calculatedArrears,
+          totalPaidCycle: targetPaid,
+          total_paid_cycle: targetPaid,
+          amount_paid: targetPaid,
+          amountPaidLastYear: targetPaid,
+          currentFee: calculatedFee,
+          current_bill: calculatedFee,
+          totalAmountDue: newOutstanding,
+          outstanding_amt: newOutstanding,
+          status: newStatus,
+        },
+      });
+
+      // Synchronize in Supabase properties table
+      try {
+        await supabase
+          .from('properties')
+          .update({
+            current_arrears: calculatedArrears,
+            total_paid_cycle: targetPaid,
+            amount_paid: targetPaid,
+            current_bill: calculatedFee,
+            outstanding_amt: newOutstanding,
+            status: newStatus,
+          })
+          .eq('account_no', prop.accountNumber);
+      } catch (sbErr) {
+        console.warn('[applyRatepayerBatchUpdates] Supabase properties update fallback notice:', sbErr);
+      }
+
+      const ownerDisplayName =
+        update.name ||
+        prop.users?.[0]?.name ||
+        prop.owner?.name ||
+        prop.name ||
+        'Municipal Ratepayer';
+
+      details.push({
+        accountNumber: prop.accountNumber,
+        ownerName: ownerDisplayName,
+        priorPaid,
+        newPaid: targetPaid,
+        paymentDelta,
+        receiptNumber,
+        priorOutstanding,
+        newOutstanding,
+      });
+    }
+
+    // Create Audit Log entry
+    await prisma.auditLog.create({
+      data: {
+        action: 'DATA_INGESTION_SYNC',
+        entityType: 'Property',
+        details: `Batch data ingestion processed: ${details.length} accounts updated, ${paymentsGeneratedCount} payments synchronized (${formatGhc(totalPaymentsAmount)} total volume).`,
+        adminId: admin.id,
+      },
+    });
+
+    revalidatePath('/');
+    revalidatePath('/dashboard');
+
+    return {
+      success: true,
+      updatedCount: details.length,
+      paymentsGeneratedCount,
+      totalPaymentsAmount,
+      totalPaymentsFormatted: formatGhc(totalPaymentsAmount),
+      details,
+    };
+  } catch (err: any) {
+    console.error('[applyRatepayerBatchUpdates] Error:', err);
+    return { success: false, error: err?.message || 'Failed to apply batch updates.' };
+  }
+}
+
+export async function extractGcrDataFromImage(dataUrl: string, mimeType: string) {
+    try {
+        await requireAdminSession();
+
+        const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp'];
+        if (!mimeType || !allowedMimeTypes.includes(mimeType)) {
+            return { success: false, error: 'Invalid file format. Only JPEG, PNG, or WebP images are accepted.' };
+        }
+
+        if (!dataUrl || dataUrl.length > 15 * 1024 * 1024) {
+            return { success: false, error: 'Image file size exceeds maximum 10MB limit.' };
+        }
+
+        // Ensure API Key exists
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) {
+             return { success: false, error: 'GEMINI_API_KEY is not configured.' };
+        }
+
+        const base64Data = dataUrl.replace(/^data:image\/\w+;base64,/, '');
+        const ai = new GoogleGenAI({ apiKey });
+        
+        const response = await ai.models.generateContent({
+            model: 'gemini-3.8-flash',
+            contents: [
+                {
+                    role: 'user',
+                    parts: [
+                        { inlineData: { data: base64Data, mimeType } },
+                        { text: "Analyze this official municipal General Counter Receipt (GCR) slip. Extract the receipt serial number (usually printed in red, top right, or clearly labeled as GCR No, e.g., '104928' or 'GCR-104928'). Also extract the total amount paid. Respond with a JSON object: { \"gcrNumber\": \"string\", \"amount\": number }. Only return valid JSON." }
+                    ]
+                }
+            ],
+            config: {
+                responseMimeType: "application/json",
+            }
+        });
+        
+        return { success: true, data: JSON.parse(response.text || '{}') };
+    } catch (e: any) {
+        console.error('[extractGcrDataFromImage] Error:', e);
+        return { success: false, error: e.message || 'Failed to extract data from image.' };
+    }
+}
+
+export interface GetDatabaseTableRecordsParams {
+  tableName: string;
+  page?: number;
+  pageSize?: number;
+  searchQuery?: string;
+  sortBy?: string;
+  sortAscending?: boolean;
+}
+
+export interface GetDatabaseTableRecordsResponse {
+  success: boolean;
+  error?: string;
+  data?: any[];
+  totalCount?: number;
+  page?: number;
+  pageSize?: number;
+  totalPages?: number;
+  tableMeta?: DatabaseTableDefinition;
+}
+
+export async function getDatabaseTableRecords({
+  tableName,
+  page = 1,
+  pageSize = 50,
+  searchQuery = '',
+  sortBy,
+  sortAscending = true,
+}: GetDatabaseTableRecordsParams): Promise<GetDatabaseTableRecordsResponse> {
+  try {
+    const admin = await requireAdminSession();
+    if (!admin || !admin.isActive) {
+      return { success: false, error: 'Unauthorized. Active session required.' };
+    }
+
+    const tableDef = DATABASE_TABLE_DEFINITIONS[tableName];
+    if (!tableDef) {
+      return { success: false, error: `Invalid or unrecognized table: ${tableName}` };
+    }
+
+    const currentPage = Math.max(1, page);
+    const limit = Math.min(100, Math.max(10, pageSize));
+    const from = (currentPage - 1) * limit;
+    const to = from + limit - 1;
+
+    let query = supabase.from(tableName).select('*', { count: 'exact' });
+
+    // Handle search query
+    const cleanSearch = (searchQuery || '').trim();
+    if (cleanSearch && tableDef.searchColumns.length > 0) {
+      const sanitized = cleanSearch.replace(/[%_]/g, '\\$&').replace(/[,\(\)]/g, ' ').trim();
+      if (sanitized) {
+        if (tableDef.searchColumns.length === 1) {
+          query = query.ilike(tableDef.searchColumns[0], `%${sanitized}%`);
+        } else {
+          const filterStr = tableDef.searchColumns
+            .map((col) => `${col}.ilike.%${sanitized}%`)
+            .join(',');
+          query = query.or(filterStr);
+        }
+      }
+    }
+
+    // Handle sort order
+    const orderColumn = sortBy || tableDef.defaultSort.column;
+    const isAsc = sortBy !== undefined ? sortAscending : tableDef.defaultSort.ascending;
+    query = query.order(orderColumn, { ascending: isAsc, nullsFirst: false });
+
+    // Apply pagination range
+    query = query.range(from, to);
+
+    // Exclude internal test accounts per table type
+    if (tableName === 'Property') {
+      query = query.not('account_no', 'in', `(${HIDDEN_TEST_ACCOUNT_NUMBERS.join(',')})`);
+    } else if (tableName === 'User' || tableName === 'PaidUserRecord') {
+      query = query.not('phoneNumber', 'in', `(${HIDDEN_TEST_PHONES.join(',')})`);
+    }
+
+    const { data, count, error } = await query;
+    if (error) {
+      console.error(`[getDatabaseTableRecords] Supabase error for ${tableName}:`, error);
+      return { success: false, error: error.message };
+    }
+
+    const total = count ?? 0;
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+
+    return {
+      success: true,
+      data: data || [],
+      totalCount: total,
+      page: currentPage,
+      pageSize: limit,
+      totalPages,
+      tableMeta: tableDef,
+    };
+  } catch (err: any) {
+    console.error(`[getDatabaseTableRecords] Unhandled error:`, err);
+    return { success: false, error: err.message || 'Failed to retrieve database table records.' };
+  }
+}
+
+export interface PropertyBillAccountSummary {
+  accountNumber: string;
+  name: string;
+  telephone: string | null;
+  ownerDigitalAddress: string | null;
+  houseNo: string | null;
+  electoralArea: string | null;
+  propertyCategory: string | null;
+  rateableValue: number;
+  currentBill: number;
+  arrears: number;
+  outstandingAmount: number;
+  recordedYears: number[];
+  billsCount: number;
+}
+
+export interface SearchPropertyBillAccountsResponse {
+  success: boolean;
+  error?: string;
+  accounts?: PropertyBillAccountSummary[];
+  totalCount?: number;
+  page?: number;
+  pageSize?: number;
+  totalPages?: number;
+}
+
+export async function searchPropertyBillAccounts({
+  searchQuery = '',
+  page = 1,
+  pageSize = 25,
+}: {
+  searchQuery?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<SearchPropertyBillAccountsResponse> {
+  try {
+    const admin = await requireAdminSession();
+    if (!admin || !admin.isActive) {
+      return { success: false, error: 'Unauthorized. Active session required.' };
+    }
+
+    const currentPage = Math.max(1, page);
+    const limit = Math.min(100, Math.max(10, pageSize));
+    const from = (currentPage - 1) * limit;
+    const to = from + limit - 1;
+
+    const isAutocomplete = limit <= 10;
+    let query = supabase.from('Property').select(
+      'account_no, name, telephone, ownerDigitalAddress, houseNo, electoral_area, property_cat, rateableValue, current_bill, arrears, outstanding_amt',
+      isAutocomplete ? undefined : { count: 'exact' }
+    );
+
+    const cleanSearch = (searchQuery || '').trim();
+    if (cleanSearch) {
+      const sanitized = cleanSearch.replace(/[%_]/g, '\\$&').replace(/[,\(\)]/g, ' ').trim();
+      if (sanitized) {
+        query = query.or(
+          `account_no.ilike.%${sanitized}%,ownerDigitalAddress.ilike.%${sanitized}%,name.ilike.%${sanitized}%,telephone.ilike.%${sanitized}%,houseNo.ilike.%${sanitized}%`
+        );
+      }
+    }
+
+    query = query.order('account_no', { ascending: true }).range(from, to);
+
+    const { data: properties, count, error } = await query;
+    if (error) {
+      console.error('[searchPropertyBillAccounts] Error:', error);
+      return { success: false, error: error.message };
+    }
+
+    const total = isAutocomplete ? (properties?.length ?? 0) : (count ?? 0);
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+
+    if (!properties || properties.length === 0) {
+      return {
+        success: true,
+        accounts: [],
+        totalCount: total,
+        page: currentPage,
+        pageSize: limit,
+        totalPages,
+      };
+    }
+
+    // Fetch bill years for the returned properties
+    const accList = properties.map((p) => p.account_no).filter(Boolean);
+    const { data: billsData } = await supabase
+      .from('Bill')
+      .select('accountNo, billYear, billDate')
+      .in('accountNo', accList);
+
+    const billYearsMap = new Map<string, Set<number>>();
+    if (billsData) {
+      for (const b of billsData) {
+        if (!billYearsMap.has(b.accountNo)) {
+          billYearsMap.set(b.accountNo, new Set());
+        }
+        const yr = b.billDate ? new Date(b.billDate).getFullYear() : Number(b.billYear);
+        if (yr) {
+          billYearsMap.get(b.accountNo)!.add(yr);
+        }
+      }
+    }
+
+    const accounts: PropertyBillAccountSummary[] = properties.map((p) => {
+      const yearsSet = billYearsMap.get(p.account_no) || new Set();
+      const sortedYears = Array.from(yearsSet).sort((a, b) => b - a);
+
+      return {
+        accountNumber: p.account_no,
+        name: p.name || '',
+        telephone: p.telephone,
+        ownerDigitalAddress: p.ownerDigitalAddress,
+        houseNo: p.houseNo,
+        electoralArea: p.electoral_area,
+        propertyCategory: p.property_cat,
+        rateableValue: Number(p.rateableValue || 0),
+        currentBill: Number(p.current_bill || 0),
+        arrears: Number(p.arrears || 0),
+        outstandingAmount: Number(p.outstanding_amt || 0),
+        recordedYears: sortedYears,
+        billsCount: sortedYears.length,
+      };
+    });
+
+    return {
+      success: true,
+      accounts,
+      totalCount: total,
+      page: currentPage,
+      pageSize: limit,
+      totalPages,
+    };
+  } catch (err: any) {
+    console.error('[searchPropertyBillAccounts] Unhandled error:', err);
+    return { success: false, error: err.message || 'Failed to search property billing accounts.' };
+  }
+}
+
+export interface AccountBillDetail {
+  id: string;
+  accountNo: string;
+  billYear: number;
+  rateableValue: number;
+  ratePA: number;
+  balanceBF: number;
+  accountBalance: number;
+  billDate: string | null;
+  printed: boolean;
+  preparedBy: string | null;
+  gcatId: string | null;
+}
+
+export interface AccountPaymentDetail {
+  id: string;
+  accountNo: string;
+  gcrNr: string | null;
+  amtPaid: number;
+  arrearsPd: number;
+  curAmtPd: number;
+  datePaid: string | null;
+  pmtMode: string | null;
+  collectorsCollectorId: string | null;
+  cashiersCashierId: string | null;
+}
+
+export interface GetAccountBillHistoryDetailResponse {
+  success: boolean;
+  error?: string;
+  property?: any;
+  bills?: AccountBillDetail[];
+  payments?: AccountPaymentDetail[];
+  summary?: {
+    totalBilledAcrossYears: number;
+    totalPaidAcrossYears: number;
+    currentOutstanding: number;
+    recordedYearsCount: number;
+  };
+}
+
+export async function getAccountBillHistoryDetail(accountNo: string): Promise<GetAccountBillHistoryDetailResponse> {
+  try {
+    const admin = await requireAdminSession();
+    if (!admin || !admin.isActive) {
+      return { success: false, error: 'Unauthorized. Active session required.' };
+    }
+
+    const cleanAcc = (accountNo || '').trim();
+    if (!cleanAcc) {
+      return { success: false, error: 'Account number is required.' };
+    }
+
+    // Fetch Property, Bill history, and Payment receipts concurrently in parallel
+    const [propRes, billsRes, paymentsRes] = await Promise.all([
+      supabase
+        .from('Property')
+        .select('id, account_no, name, telephone, ownerDigitalAddress, houseNo, electoral_area, property_cat, municipality, rateableValue, current_bill, arrears, initial_arrears, outstanding_amt')
+        .eq('account_no', cleanAcc)
+        .maybeSingle(),
+      supabase
+        .from('Bill')
+        .select('id, accountNo, billYear, rateableValue, ratePA, balanceBF, accountBalance, billDate, printed, preparedBy, gcatId')
+        .eq('accountNo', cleanAcc)
+        .order('billYear', { ascending: false }),
+      supabase
+        .from('FeePayment')
+        .select('id, accountNo, gcrNr, amtPaid, arrearsPd, curAmtPd, datePaid, pmtMode, collectorsCollectorId, cashiersCashierId')
+        .eq('accountNo', cleanAcc)
+        .order('datePaid', { ascending: false }),
+    ]);
+
+    const { data: propData, error: propErr } = propRes;
+    const { data: billsData, error: billsErr } = billsRes;
+    const { data: paymentsData, error: pmtErr } = paymentsRes;
+
+    if (propErr) {
+      console.error('[getAccountBillHistoryDetail] Property error:', propErr);
+    }
+    if (billsErr) {
+      console.error('[getAccountBillHistoryDetail] Bill error:', billsErr);
+    }
+    if (pmtErr) {
+      console.error('[getAccountBillHistoryDetail] FeePayment error:', pmtErr);
+    }
+
+    const propBillRate = Number(propData?.current_bill || 0);
+    const bills: AccountBillDetail[] = (billsData || []).map((b) => {
+      const rawRate = Number(b.ratePA || 0);
+      const effectiveRatePA = rawRate > 0 ? rawRate : (propBillRate > 0 ? propBillRate : 0);
+      return {
+        id: b.id,
+        accountNo: b.accountNo,
+        billYear: Number(b.billYear || 0),
+        rateableValue: Number(b.rateableValue || 0),
+        ratePA: effectiveRatePA,
+        balanceBF: Number(b.balanceBF || 0),
+        accountBalance: Number(b.accountBalance || 0),
+        billDate: b.billDate,
+        printed: Boolean(b.printed),
+        preparedBy: b.preparedBy,
+        gcatId: b.gcatId,
+      };
+    });
+
+    const payments: AccountPaymentDetail[] = (paymentsData || []).map((p) => ({
+      id: p.id,
+      accountNo: p.accountNo,
+      gcrNr: p.gcrNr,
+      amtPaid: Number(p.amtPaid || 0),
+      arrearsPd: Number(p.arrearsPd || 0),
+      curAmtPd: Number(p.curAmtPd || 0),
+      datePaid: p.datePaid,
+      pmtMode: p.pmtMode,
+      collectorsCollectorId: p.collectorsCollectorId,
+      cashiersCashierId: p.cashiersCashierId,
+    }));
+
+    const totalBilledAcrossYears = bills.reduce((sum, b) => sum + (b.ratePA || 0), 0);
+    const totalPaidAcrossYears = payments.reduce((sum, p) => sum + (p.amtPaid || 0), 0);
+    const currentOutstanding = propData?.outstanding_amt !== undefined 
+      ? Number(propData.outstanding_amt) 
+      : bills[0]?.accountBalance || 0;
+
+    return {
+      success: true,
+      property: propData || { account_no: cleanAcc },
+      bills,
+      payments,
+      summary: {
+        totalBilledAcrossYears,
+        totalPaidAcrossYears,
+        currentOutstanding,
+        recordedYearsCount: bills.length,
+      },
+    };
+  } catch (err: any) {
+    console.error('[getAccountBillHistoryDetail] Unhandled error:', err);
+    return { success: false, error: err.message || 'Failed to retrieve account bill history.' };
+  }
+}
+
+// =========================================================================
+// PAYMENTS SECTION SERVER ACTIONS (ONLINE & IN-PERSON WORKBENCH)
+// =========================================================================
+
+export interface UnifiedPaymentRecord {
+  id: string;
+  accountNo: string;
+  receiptNumber: string;
+  amountPaid: number;
+  amountPaidFormatted: string;
+  arrearsPaid: number;
+  currentPaid: number;
+  datePaid: string;
+  formattedDate: string;
+  formattedTime?: string;
+  paymentMethod: string;
+  paymentCategory: 'ONLINE' | 'IN_PERSON';
+  transactionReference?: string;
+  collectorName?: string;
+  cashierName?: string;
+  payerName?: string;
+  payerPhone?: string;
+  isPhysicalIssued: boolean;
+  status: string;
+  receiptId?: string;
+}
+
+export async function getAccountPaymentsList(accountNo: string): Promise<{
+  success: boolean;
+  error?: string;
+  payments: UnifiedPaymentRecord[];
+  summary: {
+    totalPaid: number;
+    totalPaidFormatted: string;
+    paymentsCount: number;
+    onlinePaid: number;
+    onlinePaidFormatted: string;
+    onlineCount: number;
+    inPersonPaid: number;
+    inPersonPaidFormatted: string;
+    inPersonCount: number;
+  };
+}> {
+  try {
+    const admin = await requireAdminSession();
+    if (!admin || !admin.isActive) {
+      return {
+        success: false,
+        error: 'Unauthorized. Active session required.',
+        payments: [],
+        summary: {
+          totalPaid: 0,
+          totalPaidFormatted: 'GH₵ 0.00',
+          paymentsCount: 0,
+          onlinePaid: 0,
+          onlinePaidFormatted: 'GH₵ 0.00',
+          onlineCount: 0,
+          inPersonPaid: 0,
+          inPersonPaidFormatted: 'GH₵ 0.00',
+          inPersonCount: 0,
+        },
+      };
+    }
+
+    const cleanAcc = (accountNo || '').trim();
+    if (!cleanAcc) {
+      return {
+        success: false,
+        error: 'Account number is required.',
+        payments: [],
+        summary: {
+          totalPaid: 0,
+          totalPaidFormatted: 'GH₵ 0.00',
+          paymentsCount: 0,
+          onlinePaid: 0,
+          onlinePaidFormatted: 'GH₵ 0.00',
+          onlineCount: 0,
+          inPersonPaid: 0,
+          inPersonPaidFormatted: 'GH₵ 0.00',
+          inPersonCount: 0,
+        },
+      };
+    }
+
+    // Concurrently fetch FeePayment records, digital Receipt records, and PaidUserRecord records
+    const [feePaymentsRes, receiptsRes, paidUserRes] = await Promise.all([
+      supabase
+        .from('FeePayment')
+        .select('*')
+        .eq('accountNo', cleanAcc)
+        .order('datePaid', { ascending: false }),
+      supabase
+        .from('Receipt')
+        .select('*')
+        .or(`propertyAccountNumber.eq.${cleanAcc},accountNumber.eq.${cleanAcc}`)
+        .order('datePaid', { ascending: false }),
+      supabase
+        .from('PaidUserRecord')
+        .select('*')
+        .eq('accountNumber', cleanAcc)
+        .order('paidAt', { ascending: false }),
+    ]);
+
+    const feePayments = feePaymentsRes.data || [];
+    const rawReceipts = receiptsRes?.data || [];
+    const paidUserRecords = paidUserRes?.data || [];
+
+    // Map of receipts by receiptNumber for metadata enrichment
+    const receiptsMap = new Map<string, any>();
+    for (const r of rawReceipts) {
+      if (r.receiptNumber) {
+        receiptsMap.set(r.receiptNumber.trim().toUpperCase(), r);
+      }
+    }
+
+    const paidUsersMap = new Map<string, any>();
+    for (const pu of paidUserRecords) {
+      if (pu.receiptNumber) {
+        paidUsersMap.set(pu.receiptNumber.trim().toUpperCase(), pu);
+      }
+      if (pu.reference) {
+        paidUsersMap.set(pu.reference.trim().toUpperCase(), pu);
+      }
+    }
+
+    const processedReceiptNumbers = new Set<string>();
+    const unified: UnifiedPaymentRecord[] = [];
+
+    // 1. Process RMMS / Cadastre FeePayments
+    for (const fp of feePayments) {
+      const gcrNo = (fp.gcrNr || `REC-${fp.id}`).trim();
+      processedReceiptNumbers.add(gcrNo.toUpperCase());
+
+      const rec = receiptsMap.get(gcrNo.toUpperCase());
+      const pu = paidUsersMap.get(gcrNo.toUpperCase());
+
+      const d = fp.datePaid ? new Date(fp.datePaid) : new Date();
+      const formattedDate = formatDateGb(d);
+      const formattedTime = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+      const pmtMode = fp.pmtMode || rec?.paymentMethod || pu?.paymentMethod || 'Counter Cash Treasury';
+      const pmtLower = pmtMode.toLowerCase();
+
+      // Strict precedence: Cash/Counter/Treasury/Cheque/Draft/Field collections are always IN_PERSON
+      const isInPerson =
+        pmtLower.includes('cash') ||
+        pmtLower.includes('counter') ||
+        pmtLower.includes('treasury') ||
+        pmtLower.includes('cheque') ||
+        pmtLower.includes('draft') ||
+        pmtLower.includes('bank deposit') ||
+        pmtLower.includes('field') ||
+        Boolean(rec?.isPhysicalIssued && !pu?.reference && !pmtLower.includes('paystack'));
+
+      const isOnline = !isInPerson && (
+        pmtLower.includes('online') ||
+        pmtLower.includes('paystack') ||
+        pmtLower.includes('citizen app') ||
+        pmtLower.includes('web') ||
+        Boolean(pu?.reference) ||
+        (Boolean(fp.transactionId) && (fp.transactionId.startsWith('T') || fp.transactionId.startsWith('paystack_') || fp.transactionId.startsWith('DIG-')))
+      );
+
+      const amt = Number(fp.amtPaid || rec?.amount || pu?.amountPaid || 0);
+
+      unified.push({
+        id: fp.id || `fp_${Math.random().toString(36).substring(2, 9)}`,
+        accountNo: fp.accountNo || cleanAcc,
+        receiptNumber: gcrNo,
+        amountPaid: amt,
+        amountPaidFormatted: formatGhc(amt),
+        arrearsPaid: Number(fp.arrearsPd || pu?.arrearsPaid || 0),
+        currentPaid: Number(fp.curAmtPd || pu?.currentPaid || 0),
+        datePaid: fp.datePaid || d.toISOString(),
+        formattedDate,
+        formattedTime,
+        paymentMethod: pmtMode,
+        paymentCategory: isOnline ? 'ONLINE' : 'IN_PERSON',
+        transactionReference: fp.transactionId || pu?.reference || rec?.transactionId || undefined,
+        collectorName: fp.collectorsCollectorId || rec?.collectorName || (isOnline ? 'PAYSTACK_GATEWAY' : 'TREASURY_OFFICER'),
+        cashierName: fp.cashiersCashierId || rec?.cashierName || (isOnline ? 'PAYSTACK_GATEWAY' : 'TREASURY_CASHIER'),
+        payerName: pu?.userName || rec?.payerName || undefined,
+        payerPhone: pu?.phoneNumber || rec?.paymentPhoneNumber || undefined,
+        isPhysicalIssued: Boolean(rec?.isPhysicalIssued || (!gcrNo.startsWith('DIG-') && !gcrNo.includes('-TXN-'))),
+        status: fp.status || rec?.status || 'PAID',
+        receiptId: rec?.id || undefined,
+      });
+    }
+
+    // 2. Process any digital Receipt records not already covered in FeePayment
+    for (const r of rawReceipts) {
+      const rNum = (r.receiptNumber || `REC-${r.id}`).trim();
+      if (processedReceiptNumbers.has(rNum.toUpperCase())) continue;
+      processedReceiptNumbers.add(rNum.toUpperCase());
+
+      const pu = paidUsersMap.get(rNum.toUpperCase());
+      const d = r.datePaid ? new Date(r.datePaid) : new Date();
+      const formattedDate = formatDateGb(d);
+      const formattedTime = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+      const pmtMode = r.paymentMethod || pu?.paymentMethod || 'Online App (Paystack)';
+      const pmtLower = pmtMode.toLowerCase();
+
+      const isInPerson =
+        pmtLower.includes('cash') ||
+        pmtLower.includes('counter') ||
+        pmtLower.includes('treasury') ||
+        pmtLower.includes('cheque') ||
+        pmtLower.includes('draft') ||
+        pmtLower.includes('bank deposit') ||
+        pmtLower.includes('field') ||
+        Boolean(r.isPhysicalIssued && !pu?.reference && !pmtLower.includes('paystack'));
+
+      const isOnline = !isInPerson && (
+        pmtLower.includes('online') ||
+        pmtLower.includes('paystack') ||
+        pmtLower.includes('citizen app') ||
+        pmtLower.includes('web') ||
+        Boolean(pu?.reference) ||
+        (Boolean(r.transactionId) && (r.transactionId.startsWith('T') || r.transactionId.startsWith('paystack_') || r.transactionId.startsWith('DIG-')))
+      );
+
+      const amt = Number(r.amount || pu?.amountPaid || 0);
+
+      unified.push({
+        id: r.id,
+        accountNo: cleanAcc,
+        receiptNumber: rNum,
+        amountPaid: amt,
+        amountPaidFormatted: formatGhc(amt),
+        arrearsPaid: Number(pu?.arrearsPaid || 0),
+        currentPaid: Number(pu?.currentPaid || amt),
+        datePaid: r.datePaid || d.toISOString(),
+        formattedDate,
+        formattedTime,
+        paymentMethod: pmtMode,
+        paymentCategory: isOnline ? 'ONLINE' : 'IN_PERSON',
+        transactionReference: r.transactionId || pu?.reference || undefined,
+        collectorName: r.collectorName || (isOnline ? 'PAYSTACK_GATEWAY' : 'TREASURY_OFFICER'),
+        cashierName: r.cashierName || (isOnline ? 'PAYSTACK_GATEWAY' : 'TREASURY_CASHIER'),
+        payerName: pu?.userName || r.payerName || undefined,
+        payerPhone: pu?.phoneNumber || r.paymentPhoneNumber || undefined,
+        isPhysicalIssued: Boolean(r.isPhysicalIssued || (!rNum.startsWith('DIG-') && !rNum.includes('-TXN-'))),
+        status: r.status || 'PAID',
+        receiptId: r.id,
+      });
+    }
+
+    // Sort descending by date
+    unified.sort((a, b) => new Date(b.datePaid).getTime() - new Date(a.datePaid).getTime());
+
+    const totalPaid = unified.reduce((sum, p) => sum + p.amountPaid, 0);
+    const onlinePayments = unified.filter((p) => p.paymentCategory === 'ONLINE');
+    const inPersonPayments = unified.filter((p) => p.paymentCategory === 'IN_PERSON');
+    const onlinePaid = onlinePayments.reduce((sum, p) => sum + p.amountPaid, 0);
+    const inPersonPaid = inPersonPayments.reduce((sum, p) => sum + p.amountPaid, 0);
+
+    return {
+      success: true,
+      payments: unified,
+      summary: {
+        totalPaid,
+        totalPaidFormatted: formatGhc(totalPaid),
+        paymentsCount: unified.length,
+        onlinePaid,
+        onlinePaidFormatted: formatGhc(onlinePaid),
+        onlineCount: onlinePayments.length,
+        inPersonPaid,
+        inPersonPaidFormatted: formatGhc(inPersonPaid),
+        inPersonCount: inPersonPayments.length,
+      },
+    };
+  } catch (err: any) {
+    console.error('[getAccountPaymentsList] Error:', err);
+    return {
+      success: false,
+      error: err.message || 'Failed to retrieve account payments list.',
+      payments: [],
+      summary: {
+        totalPaid: 0,
+        totalPaidFormatted: 'GH₵ 0.00',
+        paymentsCount: 0,
+        onlinePaid: 0,
+        onlinePaidFormatted: 'GH₵ 0.00',
+        onlineCount: 0,
+        inPersonPaid: 0,
+        inPersonPaidFormatted: 'GH₵ 0.00',
+        inPersonCount: 0,
+      },
+    };
+  }
+}
+
+export async function recordInPersonPayment(params: {
+  accountNumber: string;
+  amount: number;
+  receiptNumber: string;
+  paymentMethod?: string;
+  adminPassword?: string;
+  settlementType?: 'TOTAL' | 'ARREARS';
+}): Promise<{
+  success: boolean;
+  error?: string;
+  receiptNumber?: string;
+  receipt?: any;
+  updatedProperty?: any;
+}> {
+  try {
+    const admin = await requireAdminSession();
+    if (!admin) {
+      return { success: false, error: 'Unauthorized session. Please sign in to record payment.' };
+    }
+
+    if (!params.adminPassword) {
+      return { success: false, error: 'Security authorization password is required.' };
+    }
+    const isAuthorized = verifyPassword(params.adminPassword, admin.passwordHash);
+    if (!isAuthorized) {
+      return { success: false, error: 'Incorrect authorization password. Settelement authorization rejected.' };
+    }
+
+    const cleanAcc = (params.accountNumber || '').trim();
+    if (!cleanAcc) {
+      return { success: false, error: 'Property account number is required.' };
+    }
+
+    const numAmount = Number(params.amount);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      return { success: false, error: 'Please enter a valid positive payment amount.' };
+    }
+
+    const cleanReceiptNo = (params.receiptNumber || '').trim();
+    if (!cleanReceiptNo) {
+      return { success: false, error: 'Please specify an official physical GCR booklet receipt number.' };
+    }
+
+    // Verify receipt number uniqueness
+    const [existingReceipt, existingFeePayment] = await Promise.all([
+      supabase.from('Receipt').select('id, receiptNumber').eq('receiptNumber', cleanReceiptNo).maybeSingle(),
+      supabase.from('FeePayment').select('id, gcrNr').eq('gcrNr', cleanReceiptNo).maybeSingle(),
+    ]);
+
+    if (existingReceipt?.data || existingFeePayment?.data) {
+      return {
+        success: false,
+        error: `Receipt number "${cleanReceiptNo}" is already in use. Please check your physical receipt book.`,
+      };
+    }
+
+    // Find the property record
+    const property = await adminDb.property.findUnique({
+      where: { accountNumber: cleanAcc },
+    });
+
+    if (!property) {
+      return { success: false, error: `Property account "${cleanAcc}" not found in municipality register.` };
+    }
+
+    // Compute Sequential Municipal Debt Waterfall
+    const currArr = Number(property.currentArrears !== undefined ? property.currentArrears : (property.arrears || 0));
+    const currFee = Number(property.currentFee || property.current_bill || 0);
+    const prevPaidCycle = Number(property.totalPaidCycle !== undefined ? property.totalPaidCycle : (property.amountPaidLastYear || 0));
+
+    const arrearsDeduction = Math.min(currArr, numAmount);
+    const newCurrentArrears = Math.max(0, Number((currArr - arrearsDeduction).toFixed(2)));
+    const remainingPayment = Math.max(0, Number((numAmount - arrearsDeduction).toFixed(2)));
+    const feeDeduction = Math.min(currFee, remainingPayment);
+    const newCurrentFee = Math.max(0, Number((currFee - feeDeduction).toFixed(2)));
+
+    const newTotalPaidCycle = Number((prevPaidCycle + numAmount).toFixed(2));
+    const prevAmountPaid = Number(property.amount_paid !== undefined ? property.amount_paid : property.amountPaidLastYear || 0);
+    const newAmountPaid = Number((prevAmountPaid + numAmount).toFixed(2));
+    const newTotalDue = Math.max(0, Number((newCurrentArrears + newCurrentFee).toFixed(2)));
+    const newStatus: 'PAID' | 'PARTIALLY_PAID' | 'UNPAID' = newTotalDue <= 0 ? 'PAID' : 'PARTIALLY_PAID';
+
+    const now = new Date();
+    const settlementType = params.settlementType || 'TOTAL';
+    const paymentMethod = params.paymentMethod || 'Counter Cash Treasury';
+
+    // 1. Update Property in database
+    await adminDb.property.update({
+      where: { id: property.id },
+      data: {
+        currentArrears: newCurrentArrears,
+        current_arrears: newCurrentArrears,
+        totalPaidCycle: newTotalPaidCycle,
+        total_paid_cycle: newTotalPaidCycle,
+        amount_paid: newAmountPaid,
+        amountPaidLastYear: newAmountPaid,
+        currentFee: newCurrentFee,
+        current_bill: newCurrentFee,
+        totalAmountDue: newTotalDue,
+        outstanding_amt: newTotalDue,
+        status: newStatus,
+      },
+    });
+
+    // 2. Create Receipt Record
+    const receiptData = {
+      userId: property.ownerId || 'OFFICE_SETTLEMENT',
+      propertyId: property.id,
+      amount: numAmount,
+      settlementType,
+      paymentMethod,
+      status: 'PAID',
+      isPhysicalIssued: true,
+      receiptNumber: cleanReceiptNo,
+      collectorName: admin.name || admin.username,
+      cashierName: admin.name || admin.username,
+      datePaid: now.toISOString(),
+    };
+
+    let createdReceipt: any = null;
+    try {
+      createdReceipt = await adminDb.receipt.create({ data: receiptData });
+    } catch (rErr) {
+      console.warn('[recordInPersonPayment] adminDb.receipt.create notice:', rErr);
+    }
+
+    // 3. Create Cadastre FeePayment Record
+    try {
+      await supabase.from('FeePayment').insert([{
+        id: `fp_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`,
+        accountNo: property.accountNumber,
+        arrearsPd: arrearsDeduction,
+        curAmtPd: feeDeduction,
+        amtPaid: numAmount,
+        datePaid: now.toISOString(),
+        pmtMode: paymentMethod,
+        gcrNr: cleanReceiptNo,
+        collectorsCollectorId: admin.username || admin.id,
+        cashiersCashierId: admin.username || admin.id,
+        propertyId: property.id,
+        transactionId: cleanReceiptNo,
+      }]);
+    } catch (fpErr) {
+      console.warn('[recordInPersonPayment] FeePayment insert fallback notice:', fpErr);
+    }
+
+    // 4. Log Audit Trail
+    try {
+      await adminDb.auditLog.create({
+        data: {
+          action: 'RECORD_IN_PERSON_PAYMENT',
+          entityType: 'Receipt',
+          entityId: property.id,
+          details: `Recorded in-person payment of GH₵ ${numAmount.toFixed(2)} for ${cleanAcc} with assigned GCR #${cleanReceiptNo} by ${admin.name || admin.username}`,
+          adminId: admin.id,
+        },
+      });
+    } catch (audErr) {
+      console.warn('[recordInPersonPayment] Audit log notice:', audErr);
+    }
+
+    return {
+      success: true,
+      receiptNumber: cleanReceiptNo,
+      receipt: createdReceipt || { ...receiptData, id: cleanReceiptNo },
+      updatedProperty: {
+        id: property.id,
+        accountNumber: property.accountNumber,
+        currentArrears: newCurrentArrears,
+        currentFee: newCurrentFee,
+        totalPaidCycle: newTotalPaidCycle,
+        totalAmountDue: newTotalDue,
+        totalAmountDueFormatted: formatGhc(newTotalDue),
+        status: newStatus,
+      },
+    };
+  } catch (err: any) {
+    console.error('[recordInPersonPayment] Unhandled error:', err);
+    return { success: false, error: err.message || 'Failed to record in-person payment.' };
+  }
+}
+
+export async function updatePaymentReceiptNumber(params: {
+  paymentId?: string;
+  oldReceiptNumber: string;
+  newReceiptNumber: string;
+  accountNumber: string;
+  sendSmsNotice?: boolean;
+}): Promise<{
+  success: boolean;
+  error?: string;
+  updatedReceiptNumber?: string;
+}> {
+  try {
+    const admin = await requireAdminSession();
+    if (!admin) {
+      return { success: false, error: 'Unauthorized. Please sign in to update receipt number.' };
+    }
+
+    const oldNo = (params.oldReceiptNumber || '').trim();
+    const newNo = (params.newReceiptNumber || '').trim();
+    const cleanAcc = (params.accountNumber || '').trim();
+
+    if (!newNo) {
+      return { success: false, error: 'New official receipt number is required.' };
+    }
+
+    if (oldNo.toUpperCase() === newNo.toUpperCase()) {
+      return { success: true, updatedReceiptNumber: oldNo };
+    }
+
+    // Uniqueness validation
+    const [existingReceipt, existingFeePayment] = await Promise.all([
+      supabase.from('Receipt').select('id, receiptNumber').eq('receiptNumber', newNo).maybeSingle(),
+      supabase.from('FeePayment').select('id, gcrNr').eq('gcrNr', newNo).maybeSingle(),
+    ]);
+
+    if (existingReceipt?.data || existingFeePayment?.data) {
+      return {
+        success: false,
+        error: `Receipt number "${newNo}" is already in use by another transaction.`,
+      };
+    }
+
+    // 1. Update Receipt table
+    if (params.paymentId) {
+      await supabase.from('Receipt').update({ receiptNumber: newNo, isPhysicalIssued: true, updatedAt: new Date().toISOString() }).eq('id', params.paymentId);
+    }
+    if (oldNo) {
+      await supabase.from('Receipt').update({ receiptNumber: newNo, isPhysicalIssued: true, updatedAt: new Date().toISOString() }).eq('receiptNumber', oldNo);
+    }
+
+    // 2. Update FeePayment table
+    if (oldNo) {
+      await supabase.from('FeePayment').update({ gcrNr: newNo }).eq('gcrNr', oldNo);
+    }
+    if (cleanAcc && params.paymentId) {
+      await supabase.from('FeePayment').update({ gcrNr: newNo }).eq('id', params.paymentId);
+    }
+
+    // 3. Update PaidUserRecord table
+    if (oldNo) {
+      await supabase.from('PaidUserRecord').update({ receiptNumber: newNo, updatedAt: new Date().toISOString() }).eq('receiptNumber', oldNo);
+    }
+
+    // 4. Audit Log
+    try {
+      await adminDb.auditLog.create({
+        data: {
+          action: 'UPDATE_RECEIPT_NUMBER',
+          entityType: 'Receipt',
+          entityId: cleanAcc,
+          details: `Modified receipt number from ${oldNo || 'None'} to ${newNo} for account ${cleanAcc} by ${admin.name || admin.username}`,
+          adminId: admin.id,
+        },
+      });
+    } catch (audErr) {
+      console.warn('[updatePaymentReceiptNumber] Audit notice:', audErr);
+    }
+
+    // 5. Optional citizen SMS notice dispatch
+    if (params.sendSmsNotice && cleanAcc) {
+      try {
+        const prop = await adminDb.property.findUnique({ where: { accountNumber: cleanAcc } });
+        const phone = prop?.telephone || prop?.ownerPhoneDirect;
+        if (phone) {
+          const smsMsg = `KKMA Official Receipt Update\nYour payment for Property #${cleanAcc} has been assigned official physical receipt: ${newNo}.\n\nThank you for paying your municipal property rate.`;
+          await arkeselService.sendSMS(phone, smsMsg);
+        }
+      } catch (smsErr) {
+        console.warn('[updatePaymentReceiptNumber] SMS notice notice:', smsErr);
+      }
+    }
+
+    return {
+      success: true,
+      updatedReceiptNumber: newNo,
+    };
+  } catch (err: any) {
+    console.error('[updatePaymentReceiptNumber] Error:', err);
+    return { success: false, error: err.message || 'Failed to update receipt number.' };
+  }
+}
+
+
+

@@ -1,10 +1,12 @@
 'use server';
 
+import crypto from 'crypto';
 import { prisma, ratepayerDb } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 import { PaymentGateway } from '@/lib/payments/gateway';
-import { NetworkProvider } from '@/lib/utils/network-detector';
+import { PaystackProvider } from '@/lib/payments/paystack';
+import { NetworkProvider, identifyNetworkCarrier } from '@/lib/utils/network-detector';
 import { SMSGateway } from '@/lib/sms/gateway';
 import { TwilioProvider } from '@/lib/sms/twilio';
 import { verifyGhanaMobileSubscriber } from '@/lib/hubtel/verification';
@@ -63,6 +65,15 @@ export interface DashboardData {
 // AUTHENTICATION & SESSION MANAGEMENT
 // ----------------------------------------------------
 
+// Server-side sliding-window rate limiters for citizen authentication
+interface CitizenAuthRateLimit {
+  count: number;
+  firstAttemptAt: number;
+  lockedUntil?: number;
+}
+const otpDispatchRateLimitMap = new Map<string, CitizenAuthRateLimit>();
+const otpVerifyRateLimitMap = new Map<string, CitizenAuthRateLimit>();
+
 export async function getAuthenticatedSession() {
   try {
     const cookieStore = await cookies();
@@ -108,38 +119,60 @@ export async function loginWithPhone(phoneNumberInput: string) {
       cleanPhone = `0${cleanPhone}`;
     }
 
-    // Lookup user in database
-    let user = await prisma.user.findUnique({
+    const now = Date.now();
+    // Server-side rate limit: max 4 OTP requests per 10 minutes per phone
+    const rateLimit = otpDispatchRateLimitMap.get(cleanPhone);
+    if (rateLimit) {
+      if (rateLimit.lockedUntil && rateLimit.lockedUntil > now) {
+        const remainingSec = Math.ceil((rateLimit.lockedUntil - now) / 1000);
+        return { success: false, error: `Too many login code requests. Please wait ${remainingSec}s before retrying.` };
+      }
+      if (now - rateLimit.firstAttemptAt < 10 * 60 * 1000) {
+        if (rateLimit.count >= 4) {
+          rateLimit.lockedUntil = now + 10 * 60 * 1000;
+          return { success: false, error: 'Too many login code requests. Please wait 10 minutes before requesting a new code.' };
+        }
+        rateLimit.count += 1;
+      } else {
+        otpDispatchRateLimitMap.set(cleanPhone, { count: 1, firstAttemptAt: now });
+      }
+    } else {
+      otpDispatchRateLimitMap.set(cleanPhone, { count: 1, firstAttemptAt: now });
+    }
+
+    const cookieStore = await cookies();
+
+    // Client-side quick-cooldown: enforce 30-second cooldown between OTP requests
+    const lastSentStr = cookieStore.get('pending_auth_sent_at')?.value;
+    if (lastSentStr) {
+      const elapsedMs = now - parseInt(lastSentStr, 10);
+      if (elapsedMs < 30000) {
+        const remainingSec = Math.ceil((30000 - elapsedMs) / 1000);
+        return { success: false, error: `Please wait ${remainingSec}s before requesting a new code.` };
+      }
+    }
+
+    // Lookup existing user without creating unverified ghost records before OTP validation
+    const existingUser = await prisma.user.findUnique({
       where: { phoneNumber: cleanPhone },
     });
 
-    if (!user) {
-      user = await prisma.user.create({
-        data: {
-          phoneNumber: cleanPhone,
-          name: 'Ratepayer',
-          isVerified: false,
-        },
-      });
-    }
-
-    // Generate random 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    // Generate random 6-digit OTP using crypto
+    const otp = crypto.randomInt(100000, 999999).toString();
 
     if (process.env.NODE_ENV !== 'production') {
-      const maskedPhone = user.phoneNumber.replace(/(\d{3})\d+(\d{3})/, '$1****$2');
+      const maskedPhone = cleanPhone.replace(/(\d{3})\d+(\d{3})/, '$1****$2');
       console.log(`[AUTH] Login OTP dispatched to ${maskedPhone} [Status: DELIVERED]`);
     }
 
     // Send SMS
     const smsGateway = new SMSGateway();
     await smsGateway.getProvider().sendSMS(
-      user.phoneNumber,
+      cleanPhone,
       `Your Property Rate Portal login code is: ${otp}. Do not share this code with anyone.`
     );
 
-    const cookieStore = await cookies();
-    cookieStore.set('pending_auth_phone', user.phoneNumber, {
+    cookieStore.set('pending_auth_phone', cleanPhone, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
@@ -147,7 +180,6 @@ export async function loginWithPhone(phoneNumberInput: string) {
       path: '/',
     });
     
-    // Store OTP in an encrypted format ideally, but for now we'll just store it in an httpOnly cookie
     cookieStore.set('pending_auth_otp', otp, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -156,10 +188,18 @@ export async function loginWithPhone(phoneNumberInput: string) {
       path: '/',
     });
 
+    cookieStore.set('pending_auth_sent_at', now.toString(), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 10,
+      path: '/',
+    });
+
     return {
       success: true,
-      phoneNumber: user.phoneNumber,
-      userName: user.name,
+      phoneNumber: cleanPhone,
+      userName: existingUser?.name || 'Ratepayer',
     };
   } catch (error) {
     console.error('Login error:', error);
@@ -169,23 +209,47 @@ export async function loginWithPhone(phoneNumberInput: string) {
 
 export async function verifyOtpAndLogin(otp: string, explicitPhone?: string) {
   try {
+    const cleanOtp = typeof otp === 'string' ? otp.trim() : '';
     const cookieStore = await cookies();
     const phoneToVerify =
       explicitPhone?.replace(/\D/g, '') || cookieStore.get('pending_auth_phone')?.value;
     const storedOtp = cookieStore.get('pending_auth_otp')?.value;
 
-    if (otp !== storedOtp) {
+    // Strict non-empty validation to prevent undefined === undefined bypass
+    if (!cleanOtp || !storedOtp || !phoneToVerify) {
+      return { success: false, error: 'Authentication code has expired or is invalid. Please request a new code.' };
+    }
+
+    // Verify rate limiting / lockout check (max 5 failed attempts per phone)
+    const now = Date.now();
+    const verifyLimit = otpVerifyRateLimitMap.get(phoneToVerify);
+    if (verifyLimit?.lockedUntil && verifyLimit.lockedUntil > now) {
+      const waitSec = Math.ceil((verifyLimit.lockedUntil - now) / 1000);
+      return { success: false, error: `Account verification locked due to failed attempts. Please wait ${waitSec}s.` };
+    }
+
+    if (cleanOtp !== storedOtp) {
+      if (verifyLimit) {
+        verifyLimit.count += 1;
+        if (verifyLimit.count >= 5) {
+          verifyLimit.lockedUntil = now + 15 * 60 * 1000;
+          cookieStore.delete('pending_auth_otp');
+          return { success: false, error: 'Too many incorrect attempts. Verification locked for 15 minutes.' };
+        }
+      } else {
+        otpVerifyRateLimitMap.set(phoneToVerify, { count: 1, firstAttemptAt: now });
+      }
       return { success: false, error: 'Invalid or expired OTP. Please try again.' };
     }
 
-    let user = null;
-    if (phoneToVerify) {
-      user = await prisma.user.findUnique({
-        where: { phoneNumber: phoneToVerify },
-      });
-    }
+    // Clear verification rate limit on success
+    otpVerifyRateLimitMap.delete(phoneToVerify);
 
-    if (!user && phoneToVerify) {
+    let user = await prisma.user.findUnique({
+      where: { phoneNumber: phoneToVerify },
+    });
+
+    if (!user) {
       user = await prisma.user.create({
         data: {
           phoneNumber: phoneToVerify,
@@ -197,7 +261,7 @@ export async function verifyOtpAndLogin(otp: string, explicitPhone?: string) {
     }
 
     if (!user) {
-      return { success: false, error: 'Taxpayer profile not found in database for this telephone number.' };
+      return { success: false, error: 'Taxpayer profile could not be created.' };
     }
 
     if (!user.isVerified) {
@@ -207,7 +271,8 @@ export async function verifyOtpAndLogin(otp: string, explicitPhone?: string) {
       });
     }
 
-    const token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    // Cryptographically secure session token (256-bit entropy)
+    const token = `usr_${crypto.randomBytes(32).toString('base64url')}`;
     await prisma.session.create({
       data: { token, userId: user.id }
     });
@@ -216,12 +281,13 @@ export async function verifyOtpAndLogin(otp: string, explicitPhone?: string) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 365, // 1 year non-expiring session
+      maxAge: 30 * 24 * 60 * 60, // 30-day authenticated session
       path: '/',
     });
 
     cookieStore.delete('pending_auth_phone');
     cookieStore.delete('pending_auth_otp');
+    cookieStore.delete('pending_auth_sent_at');
     cookieStore.delete('portal_access_only');
 
     revalidatePath('/dashboard');
@@ -252,6 +318,15 @@ export async function resendOtp() {
       return { success: false, error: 'No pending authentication session found.' };
     }
 
+    const lastSentStr = cookieStore.get('pending_auth_sent_at')?.value;
+    if (lastSentStr) {
+      const elapsedMs = Date.now() - parseInt(lastSentStr, 10);
+      if (elapsedMs < 30000) {
+        const remainingSec = Math.ceil((30000 - elapsedMs) / 1000);
+        return { success: false, error: `Please wait ${remainingSec}s before requesting a new code.` };
+      }
+    }
+
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
     if (process.env.NODE_ENV !== 'production') {
@@ -273,6 +348,14 @@ export async function resendOtp() {
       path: '/',
     });
 
+    cookieStore.set('pending_auth_sent_at', Date.now().toString(), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 10,
+      path: '/',
+    });
+
     return { success: true };
   } catch (error) {
     console.error('Resend OTP error:', error);
@@ -283,8 +366,16 @@ export async function resendOtp() {
 export async function logoutUser() {
   try {
     const cookieStore = await cookies();
+    const token = cookieStore.get('auth_session')?.value;
+    if (token) {
+      await prisma.session.deleteMany({ where: { token } }).catch(() => {});
+    }
+
     cookieStore.delete('auth_session');
     cookieStore.delete('pending_auth_phone');
+    cookieStore.delete('pending_auth_otp');
+    cookieStore.delete('pending_auth_sent_at');
+    cookieStore.delete('portal_access_only');
 
     revalidatePath('/dashboard');
     revalidatePath('/properties');
@@ -347,79 +438,34 @@ export async function claimAccessGrant(token: string) {
     const isMulti = (grant.accountNumber || '').startsWith('ALL:');
     const cleanAcc = (grant.accountNumber || '').replace(/^ALL:/, '');
 
-    // Check if grant is already claimed by another device/session
-    if (grant.claimedSession) {
-      let isSameDeviceOrUser = false;
-      if (existingSessionToken) {
-        const activeSession = await prisma.session.findUnique({
-          where: { token: existingSessionToken },
-          include: { user: true },
-        });
-        if (activeSession?.user) {
-          const activeDigits = (activeSession.user.phoneNumber || '').replace(/\D/g, '');
-          const grantDigits = (grant.phoneNumber || '').replace(/\D/g, '');
-          const phoneMatches = Boolean(
-            activeDigits &&
-            grantDigits &&
-            (activeDigits.endsWith(grantDigits.slice(-9)) || grantDigits.endsWith(activeDigits.slice(-9)))
-          );
-
-          if (existingSessionToken === grant.claimedSession && phoneMatches) {
-            isSameDeviceOrUser = true;
-          } else if (phoneMatches) {
-            isSameDeviceOrUser = true;
-            await ratepayerDb.accessGrant.update({
-              where: { id: grant.id },
-              data: { claimedSession: existingSessionToken },
-            }).catch(() => {});
-          }
-        }
-      }
-
-      if (isSameDeviceOrUser) {
-        return {
-          success: true,
-          destination: grant.destination || 'checkout',
-          accountNumber: cleanAcc,
-          isMulti,
-        };
-      }
-
-      // Check if the claimed session was actually for this ratepayer's phone number
-      const claimedSessionRecord = await prisma.session.findUnique({
-        where: { token: grant.claimedSession },
+    // Fast-path: If the active browser session already matches this ratepayer, proceed directly
+    if (existingSessionToken) {
+      const activeSession = await prisma.session.findUnique({
+        where: { token: existingSessionToken },
         include: { user: true },
       }).catch(() => null);
 
-      const claimedUserPhone = (claimedSessionRecord?.user?.phoneNumber || '').replace(/\D/g, '');
-      const expectedGrantPhone = (grant.phoneNumber || '').replace(/\D/g, '');
-      const claimedPhoneMatches = Boolean(
-        claimedUserPhone &&
-        expectedGrantPhone &&
-        (claimedUserPhone.endsWith(expectedGrantPhone.slice(-9)) || expectedGrantPhone.endsWith(claimedUserPhone.slice(-9)))
-      );
+      if (activeSession?.user) {
+        const activeDigits = (activeSession.user.phoneNumber || '').replace(/\D/g, '');
+        const grantDigits = (grant.phoneNumber || '').replace(/\D/g, '');
+        const phoneMatches = Boolean(
+          activeDigits &&
+          grantDigits &&
+          (activeDigits.endsWith(grantDigits.slice(-9)) || grantDigits.endsWith(activeDigits.slice(-9)))
+        );
 
-      if (!claimedPhoneMatches) {
-        // Corrupt or cross-user claimedSession: reset so the authentic recipient can claim cleanly
-        await ratepayerDb.accessGrant.update({
-          where: { id: grant.id },
-          data: { claimedSession: null, claimedAt: null },
-        }).catch(() => {});
-      } else {
-        // Legitimate DEVICE MISMATCH: Token was claimed on another device/browser
-        const maskedPhone = grant.phoneNumber ? grant.phoneNumber.replace(/(\d{3})\d+(\d{3})/, '$1****$2') : 'your registered number';
-        return {
-          success: false,
-          error: 'DEVICE_MISMATCH',
-          phoneNumber: grant.phoneNumber,
-          maskedPhoneNumber: maskedPhone,
-          accountNumber: cleanAcc,
-          message: `This secure billing link was already activated on another device. To protect ratepayer privacy, please verify your mobile number (${maskedPhone}).`,
-        };
+        if (phoneMatches) {
+          return {
+            success: true,
+            destination: grant.destination || 'checkout',
+            accountNumber: cleanAcc,
+            isMulti,
+          };
+        }
       }
     }
 
-    // FIRST-TIME ACTIVATION ON RECIPIENT'S DEVICE
+    // Resolve or activate session on this device for the recipient's phone number
     let cleanPhone = (grant.phoneNumber || '').replace(/\D/g, '');
     if (cleanPhone.startsWith('233') && cleanPhone.length === 12) {
       cleanPhone = `0${cleanPhone.substring(3)}`;
@@ -598,16 +644,26 @@ export async function getDashboardData(accountNumberOverride?: string): Promise<
       }
     }
 
-    // If accountNumberOverride provided and not in userProps, fetch and include it
+    // If accountNumberOverride provided and not in userProps, fetch and include it ONLY if belonging to this user
     const cleanOverride = accountNumberOverride?.trim().replace(/^ALL:/, '');
     if (cleanOverride && !userProps.some((p: any) => p.accountNumber === cleanOverride || p.id === cleanOverride)) {
       const specificProp = await prisma.property.findFirst({
         where: {
           OR: [{ accountNumber: cleanOverride }, { id: cleanOverride }],
         },
+        include: { users: true },
       }).catch(() => null);
+
       if (specificProp) {
-        userProps.unshift(specificProp);
+        const cleanUserPhone = user.phoneNumber?.replace(/\D/g, '') || '';
+        const propPhone = (specificProp.telephone || '').replace(/\D/g, '');
+        const isOwner = specificProp.ownerId === user.id;
+        const isPhoneMatch = cleanUserPhone.length >= 9 && propPhone.endsWith(cleanUserPhone.slice(-9));
+        const isLinkedUser = specificProp.users?.some((u: any) => u.id === user.id);
+
+        if (isOwner || isPhoneMatch || isLinkedUser) {
+          userProps.unshift(specificProp);
+        }
       }
     }
 
@@ -720,7 +776,7 @@ export async function getUserReceipts() {
       },
     });
 
-    return receipts.map((r) => {
+    return receipts.map((r: any) => {
       const d = new Date(r.datePaid);
       return {
         id: r.id,
@@ -834,13 +890,45 @@ export async function resolvePropertyUser(propertyId: string, authenticatedUser:
   return null;
 }
 
-export async function verifySubscriberAction(phoneNumber: string) {
+export async function verifySubscriberAction(phoneNumber: string, networkOverride?: NetworkProvider) {
   try {
+    const cleanDigits = (phoneNumber || '').replace(/\D/g, '');
+    if (cleanDigits.length < 9) {
+      return {
+        success: false,
+        subscriberName: null,
+        network: null,
+        isVerified: false,
+        isHubtelVerified: false,
+      };
+    }
+
+    const detectedNetwork = networkOverride || identifyNetworkCarrier(phoneNumber);
+
+    // 1. Primary: Query Paystack live MNO account resolution
+    try {
+      const paystack = new PaystackProvider();
+      const paystackRes = await paystack.resolveMobileMoneyAccount(phoneNumber, detectedNetwork || undefined);
+      if (paystackRes.success && paystackRes.accountName) {
+        return {
+          success: true,
+          subscriberName: paystackRes.accountName,
+          network: detectedNetwork,
+          isVerified: true,
+          isHubtelVerified: true, // Retained for backwards compatibility with UI checks
+        };
+      }
+    } catch (paystackErr) {
+      console.warn('Paystack mobile money subscriber resolution failed, attempting fallback:', paystackErr);
+    }
+
+    // 2. Secondary fallback: Hubtel (if credentials configured)
     const result = await verifyGhanaMobileSubscriber(phoneNumber);
     return {
       success: result.success,
       subscriberName: result.subscriberName,
-      network: result.network,
+      network: result.network || detectedNetwork,
+      isVerified: result.isHubtelVerified,
       isHubtelVerified: result.isHubtelVerified,
       error: result.error,
     };
@@ -850,6 +938,7 @@ export async function verifySubscriberAction(phoneNumber: string) {
       success: false,
       subscriberName: null,
       network: null,
+      isVerified: false,
       isHubtelVerified: false,
       error: 'Subscriber verification unavailable',
     };
@@ -1084,19 +1173,27 @@ export async function getCheckoutData(
     const resolvedUserPhone = deterministicUser?.phoneNumber || targetProp?.owner?.mobileNumber || targetProp?.owner?.tel || '';
     const resolvedUserName = deterministicUser?.name || targetProp?.owner?.name || user?.name || ownerName || '';
 
-    // Verify subscriber name via Hubtel
+    // Verify live subscriber name via Paystack (with Hubtel fallback)
     let verifiedSubscriberName: string | null = null;
     let isHubtelVerified = false;
 
     if (resolvedUserPhone) {
       try {
-        const hubtelRes = await verifyGhanaMobileSubscriber(resolvedUserPhone);
-        if (hubtelRes.success && hubtelRes.subscriberName) {
-          verifiedSubscriberName = hubtelRes.subscriberName;
+        const detectedNet = identifyNetworkCarrier(resolvedUserPhone);
+        const paystack = new PaystackProvider();
+        const paystackRes = await paystack.resolveMobileMoneyAccount(resolvedUserPhone, detectedNet || undefined);
+        if (paystackRes.success && paystackRes.accountName) {
+          verifiedSubscriberName = paystackRes.accountName;
           isHubtelVerified = true;
+        } else {
+          const hubtelRes = await verifyGhanaMobileSubscriber(resolvedUserPhone);
+          if (hubtelRes.success && hubtelRes.subscriberName) {
+            verifiedSubscriberName = hubtelRes.subscriberName;
+            isHubtelVerified = true;
+          }
         }
       } catch (err) {
-        console.warn('Hubtel subscriber verification failed gracefully:', err);
+        console.warn('Subscriber network verification failed gracefully:', err);
       }
     }
 
@@ -1206,28 +1303,52 @@ export async function initializePayment(data: {
 
     const { amount, settlementType } = data;
 
-    if (settlementType === 'PARTIAL') {
-      const fullBill = matchedProp
-        ? matchedProp.totalAmountDue
-        : (user.properties ? user.properties.filter((p: any) => p.status !== 'PAID').reduce((sum: number, p: any) => sum + p.totalAmountDue, 0) : 0);
+    const fullBill = matchedProp
+      ? Number(matchedProp.totalAmountDue || 0)
+      : (user.properties ? user.properties.filter((p: any) => p.status !== 'PAID').reduce((sum: number, p: any) => sum + Number(p.totalAmountDue || 0), 0) : 0);
 
+    let validatedAmount = Number(amount);
+
+    if (settlementType === 'TOTAL') {
+      if (fullBill > 0) {
+        validatedAmount = fullBill;
+      } else {
+        return { success: false, error: 'This property has no outstanding assessment balance to settle.' };
+      }
+    } else if (settlementType === 'ARREARS') {
+      const arrearsDue = Number(matchedProp?.arrears || 0);
+      if (arrearsDue <= 0) {
+        return { success: false, error: 'This property has no outstanding arrears to settle.' };
+      }
+      validatedAmount = arrearsDue;
+    } else if (settlementType === 'CURRENT_FEE') {
+      const currentFeeDue = Number(matchedProp?.currentFee || 0);
+      if (currentFeeDue <= 0) {
+        return { success: false, error: 'This property has no current fiscal fee to settle.' };
+      }
+      validatedAmount = currentFeeDue;
+    } else if (settlementType === 'PARTIAL') {
       if (fullBill > 0) {
         const minAllowed = Number((fullBill * 0.20).toFixed(2));
         const maxAllowed = fullBill;
-        if (amount < minAllowed - 0.01) {
+        if (validatedAmount < minAllowed - 0.01) {
           return { success: false, error: `Partial payment cannot be less than 20% (GH₵ ${minAllowed.toFixed(2)}) of the bill.` };
         }
-        if (amount > maxAllowed + 0.01) {
+        if (validatedAmount > maxAllowed + 0.01) {
           return { success: false, error: `Partial payment cannot exceed the total bill of GH₵ ${maxAllowed.toFixed(2)}.` };
         }
       }
+    }
+
+    if (!validatedAmount || validatedAmount <= 0) {
+      return { success: false, error: 'Invalid settlement payment amount.' };
     }
 
     const transaction = await prisma.transaction.create({
       data: {
         userId: user.id,
         propertyId: primaryPropertyId,
-        amount: amount,
+        amount: validatedAmount,
         reference,
         status: 'PENDING',
         settlementType,
@@ -1348,6 +1469,7 @@ export async function chargeMobileMoneyAction(params: {
   processingFee: number;
   phone: string;
   network: NetworkProvider;
+  payerName?: string;
   targetPropertyIds?: string[];
   accountNumberOverride?: string;
 }) {
@@ -1357,27 +1479,6 @@ export async function chargeMobileMoneyAction(params: {
       const lookupAcc = params.accountNumberOverride || (params.propertyId !== 'ALL' ? params.propertyId : null);
       if (lookupAcc) {
         user = (await resolvePropertyUser(lookupAcc, null)) as any;
-        if (user) {
-          try {
-            const cookieStore = await cookies();
-            const existingToken = cookieStore.get('auth_session')?.value;
-            if (!existingToken) {
-              const sessionToken = `ses_${Math.random().toString(36).substring(2, 12)}_${Date.now()}`;
-              await prisma.session.create({
-                data: { token: sessionToken, userId: user.id },
-              }).catch(() => {});
-              cookieStore.set('auth_session', sessionToken, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: 'lax',
-                maxAge: 60 * 60 * 24 * 365,
-                path: '/',
-              });
-            }
-          } catch {
-            // Non-blocking
-          }
-        }
       }
     }
     if (!user) return { success: false, error: 'User session or property record not found' };
@@ -1448,11 +1549,19 @@ export async function chargeMobileMoneyAction(params: {
       }
     });
 
+    const rawName = (params.payerName || user.name || '').trim();
+    const nameParts = rawName.split(/\s+/).filter(Boolean);
+    const firstName = nameParts[0] || 'Ratepayer';
+    const lastName = nameParts.slice(1).join(' ') || '';
+
     const gateway = new PaymentGateway('PAYSTACK');
     const response = await gateway.getProvider().chargeMobileMoney({
-      email: `${user.phoneNumber}@propertyrate.kkma.gov.gh`,
+      email: `${user.phoneNumber || params.phone}@propertyrate.kkma.gov.gh`,
       amount: params.amount,
       reference,
+      firstName,
+      lastName,
+      phone: params.phone,
       mobile_money: {
         phone: params.phone,
         provider: providerCode
@@ -1462,7 +1571,8 @@ export async function chargeMobileMoneyAction(params: {
         propertyIds: propertyIds.join(','),
         settlementType: params.settlementType,
         subtotal: params.subtotal,
-        processingFee: params.processingFee
+        processingFee: params.processingFee,
+        payerName: rawName || user.name,
       }
     });
 
@@ -1561,10 +1671,10 @@ export async function processPayment(data: {
 
     if (!data.propertyId || data.propertyId === 'ALL') {
       targetPropertyIds = user.properties
-        .filter((p) => p.status !== 'PAID')
-        .map((p) => p.id);
+        .filter((p: any) => p.status !== 'PAID')
+        .map((p: any) => p.id);
     } else {
-      let matchedProp: any = user.properties.find((p) => p.id === data.propertyId || p.accountNumber === data.propertyId);
+      let matchedProp: any = user.properties.find((p: any) => p.id === data.propertyId || p.accountNumber === data.propertyId);
       if (!matchedProp) {
         matchedProp = await prisma.property.findUnique({
           where: data.propertyId.startsWith('prop_') ? { id: data.propertyId } : { accountNumber: data.propertyId }
@@ -1738,160 +1848,7 @@ export async function processPayment(data: {
   }
 }
 
-// ----------------------------------------------------
-// MUNICIPAL REVENUE ADMINISTRATION (MODULE B)
-// ----------------------------------------------------
 
-export async function getAdminOverview() {
-  try {
-    const properties = await prisma.property.findMany({
-      include: {
-        users: true,
-        receipts: true,
-      },
-      orderBy: {
-        accountNumber: 'asc',
-      },
-    });
-
-    let totalBilled = 0;
-    let totalCollected = 0;
-    let totalArrears = 0;
-    let defaultersCount = 0;
-
-    const formatted = properties.map((p) => {
-      totalBilled += p.currentFee + p.previousYearBill;
-      totalArrears += p.arrears;
-
-      const propCollected = p.receipts.reduce((sum: number, r: { amount: number }) => sum + r.amount, 0);
-      totalCollected += propCollected;
-
-      const isDefaulter = p.status !== 'PAID' && p.arrears > 0;
-      if (isDefaulter) defaultersCount++;
-
-      return {
-        id: p.id,
-        accountNumber: p.accountNumber,
-        ownerPhone: p.users && p.users.length > 0 ? p.users[0].phoneNumber : 'N/A',
-        ownerName: p.users && p.users.length > 0 && p.users[0].name ? p.users[0].name : 'Municipal Ratepayer',
-        ownerDigitalAddress: p.ownerDigitalAddress,
-        propertyClassification: p.propertyClassification,
-        billYear: p.billYear,
-        rateableValue: p.rateableValue,
-        rateImposed: p.rateImposed,
-        arrears: p.arrears,
-        currentFee: p.currentFee,
-        totalAmountDue: p.totalAmountDue,
-        status: p.status,
-        isDefaulter,
-      };
-    });
-
-    return {
-      metrics: {
-        totalProperties: properties.length,
-        totalBilledFormatted: `GH₵ ${totalBilled.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-        totalCollectedFormatted: `GH₵ ${totalCollected.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-        totalArrearsFormatted: `GH₵ ${totalArrears.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-        defaultersCount,
-      },
-      properties: formatted,
-    };
-  } catch (error) {
-    console.error('Error fetching admin overview:', error);
-    return null;
-  }
-}
-
-export async function simulateSmsNoticeDispatch(accountNumber: string) {
-  try {
-    const property = await prisma.property.findUnique({
-      where: { accountNumber },
-      include: { users: true },
-    });
-
-    if (!property || !property.users || property.users.length === 0) {
-      return { success: false, error: 'Property Account No. or linked taxpayer not found' };
-    }
-
-    const formattedSms = twilioService.formatBillRolloutMessage({
-      accountNumber: property.accountNumber,
-      ownerName: property.users[0].name || 'Municipal Ratepayer',
-      phoneNumber: property.users[0].phoneNumber,
-      totalAmountDue: property.totalAmountDue,
-      arrears: property.arrears,
-      currentFee: property.currentFee,
-      dueDate: '30-Jun-2025',
-      municipality: property.municipality || 'Kpone-Katamanso (KKMA)',
-      billYear: property.billYear || 2026,
-    });
-
-    return {
-      success: true,
-      recipientPhone: formattedSms.recipientPhone,
-      recipientName: formattedSms.recipientName,
-      messageText: formattedSms.messageText,
-      timestamp: new Date().toISOString(),
-    };
-  } catch (error) {
-    console.error('Error dispatching SMS notice:', error);
-    return { success: false, error: 'Failed to dispatch SMS' };
-  }
-}
-
-export async function runAnnualBillingBatch() {
-  try {
-    const properties = await prisma.property.findMany({
-      include: { users: true }
-    });
-
-    for (const prop of properties) {
-      const newArrears = prop.arrears + (prop.status === 'PAID' ? 0 : prop.currentFee);
-      const newCurrentFee = prop.rateableValue * prop.rateImposed;
-      const newTotalAmountDue = newArrears + newCurrentFee;
-
-      await prisma.property.update({
-        where: { id: prop.id },
-        data: {
-          billYear: prop.billYear + 1,
-          previousYearBill: prop.currentFee,
-          amountPaidLastYear: prop.status === 'PAID' ? prop.currentFee : 0,
-          arrears: newArrears,
-          currentFee: newCurrentFee,
-          totalAmountDue: newTotalAmountDue,
-          status: 'UNPAID',
-        },
-      });
-
-      if (prop.users && prop.users.length > 0) {
-        try {
-          if ((prisma as any).notification?.create) {
-            await (prisma as any).notification.create({
-              data: {
-                userId: prop.users[0].id,
-                title: `FY ${prop.billYear + 1} Annual Rate Assessment Issued`,
-                message: `New rate assessment for account ${prop.accountNumber} has been billed: GH₵ ${newTotalAmountDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}. Statutory payment due by June 30 under Act 936.`,
-                type: 'BILLING_ROLLOUT',
-                isRead: false,
-              }
-            });
-          }
-        } catch (notifErr) {
-          console.error('Non-critical notification error:', notifErr);
-        }
-      }
-    }
-
-    revalidatePath('/dashboard');
-    revalidatePath('/properties');
-    revalidatePath('/notifications');
-
-    return { success: true, count: properties.length };
-  } catch (error) {
-    console.error('Error running batch billing:', error);
-    return { success: false, error: 'Failed to execute batch billing rollout' };
-  }
-}
 
 export interface AppNotification {
   id: string;
@@ -1932,11 +1889,11 @@ export async function getUserNotifications(): Promise<{
       notifications = [initialNotice];
     }
 
-    const isAllSettled = user.properties.length > 0 && user.properties.every((p) => p.status === 'PAID');
+    const isAllSettled = user.properties.length > 0 && user.properties.every((p: any) => p.status === 'PAID');
 
     if (isAllSettled) {
       const unreadRollouts = notifications.filter(
-        (n) => !n.isRead && (n.type === 'BILLING_ROLLOUT' || n.type === 'DEMAND_NOTICE')
+        (n: any) => !n.isRead && (n.type === 'BILLING_ROLLOUT' || n.type === 'DEMAND_NOTICE')
       );
       if (unreadRollouts.length > 0) {
         try {
@@ -1949,7 +1906,7 @@ export async function getUserNotifications(): Promise<{
               },
               data: { isRead: true },
             });
-            notifications = notifications.map((n) =>
+            notifications = notifications.map((n: any) =>
               n.type === 'BILLING_ROLLOUT' || n.type === 'DEMAND_NOTICE' ? { ...n, isRead: true } : n
             );
           }
@@ -1960,7 +1917,7 @@ export async function getUserNotifications(): Promise<{
     }
 
     const now = new Date();
-    const formatted: AppNotification[] = notifications.map((n) => {
+    const formatted: AppNotification[] = notifications.map((n: any) => {
       const diffMs = now.getTime() - new Date(n.createdAt).getTime();
       const diffMins = Math.floor(diffMs / 60000);
       const diffHours = Math.floor(diffMins / 60);
@@ -2004,8 +1961,12 @@ export async function getUserNotifications(): Promise<{
 
 export async function markNotificationAsRead(id: string) {
   try {
-    await prisma.notification.update({
-      where: { id },
+    const user = await getAuthenticatedSession();
+    if (!user) {
+      return { success: false, error: 'Unauthorized' };
+    }
+    await prisma.notification.updateMany({
+      where: { id, userId: user.id },
       data: { isRead: true },
     });
     revalidatePath('/dashboard');
@@ -2096,7 +2057,8 @@ export async function verifyPaymentTransaction(reference: string) {
           reference: transaction.reference,
           receipt: {
             receiptNumber: transaction.receipt.receiptNumber,
-            receiptId: transaction.receipt.id
+            receiptId: transaction.receipt.id,
+            amount: transaction.receipt.amount,
           }
         };
       }
@@ -2118,7 +2080,8 @@ export async function verifyPaymentTransaction(reference: string) {
       reference,
       receipt: transaction?.receipt ? {
         receiptNumber: transaction.receipt.receiptNumber,
-        receiptId: transaction.receipt.id
+        receiptId: transaction.receipt.id,
+        amount: transaction.receipt.amount,
       } : null
     };
   } catch (error) {
@@ -2212,13 +2175,12 @@ export async function getPublicReceiptVerification(receiptNumber: string): Promi
     }
 
     if (!receipt) {
-      // Fallback check against PaidUserRecord
+      // Fallback check against PaidUserRecord (by receipt number or payment reference only)
       const paidRec = await (prisma as any).paidUserRecord.findFirst({
         where: {
           OR: [
             { receiptNumber: cleanCode },
             { reference: cleanCode },
-            { accountNumber: cleanCode },
           ],
         },
       });
@@ -2273,7 +2235,7 @@ export async function getPublicReceiptVerification(receiptNumber: string): Promi
       status: receipt.status,
       datePaidFormatted: dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
       timestamp: dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-      ratepayerName: user?.name || 'Registered Municipal Ratepayer',
+      ratepayerName: user?.name || property?.name || (property as any)?.ownerNameDirect || 'Registered Municipal Ratepayer',
       propertyAccountNumber: property?.accountNumber || 'N/A',
       propertyClassification: property?.propertyClassification || 'RESIDENTIAL',
       digitalAddress: property?.ownerDigitalAddress || 'N/A',
@@ -2404,6 +2366,34 @@ export async function getPropertyBillData(accountNumberOrId?: string): Promise<P
         totalAmountDueFormatted: `GH₵ ${Number(p.totalAmountDue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
         status: p.status,
       }));
+    } else {
+      const phoneToLookup = ownerPhone || targetProp.telephone;
+      if (phoneToLookup) {
+        const cleanDigits = phoneToLookup.replace(/\D/g, '');
+        const normalized10 = cleanDigits.length === 12 && cleanDigits.startsWith('233') ? '0' + cleanDigits.substring(3) : cleanDigits;
+        const matchingProps = await ratepayerDb.property.findMany({
+          where: {
+            OR: [
+              { telephone: phoneToLookup },
+              { telephone: cleanDigits },
+              { telephone: normalized10 },
+              ...(targetProp.ownerId ? [{ ownerId: targetProp.ownerId }] : []),
+            ],
+          },
+          orderBy: { accountNumber: 'asc' },
+        }).catch(() => []);
+
+        if (matchingProps.length > 1) {
+          portfolioProps = matchingProps.map((p: any) => ({
+            id: p.id,
+            accountNumber: p.accountNumber,
+            ownerDigitalAddress: p.ownerDigitalAddress || 'KKMA',
+            totalAmountDue: Number(p.totalAmountDue ?? 0),
+            totalAmountDueFormatted: `GH₵ ${Number(p.totalAmountDue ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+            status: p.status || (Number(p.totalAmountDue ?? 0) <= 0 ? 'PAID' : 'UNPAID'),
+          }));
+        }
+      }
     }
 
     let receipts: Array<{

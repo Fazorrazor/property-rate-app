@@ -1,11 +1,16 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import crypto from 'crypto';
 import { prisma } from '@/lib/db';
 import { SMSGateway } from '@/lib/sms/gateway';
 
 export async function POST(req: Request) {
   try {
-    const secret = process.env.PAYSTACK_SECRET_KEY || '';
+    const secret = process.env.PAYSTACK_SECRET_KEY;
+    if (!secret) {
+      console.error('[Webhook] PAYSTACK_SECRET_KEY is not configured');
+      return NextResponse.json({ error: 'Webhook unconfigured' }, { status: 500 });
+    }
+
     const bodyText = await req.text();
     const signature = req.headers.get('x-paystack-signature');
 
@@ -13,9 +18,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing signature' }, { status: 400 });
     }
 
-    // Verify event signature
+    // Verify event signature with constant-time comparison to prevent timing attacks
     const hash = crypto.createHmac('sha512', secret).update(bodyText).digest('hex');
-    if (hash !== signature) {
+    const hashBuf = Buffer.from(hash, 'utf8');
+    const sigBuf = Buffer.from(signature, 'utf8');
+
+    if (hashBuf.length !== sigBuf.length || !crypto.timingSafeEqual(hashBuf, sigBuf)) {
       return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
     }
 
@@ -92,37 +100,39 @@ export async function POST(req: Request) {
       for (const prop of properties) {
         if (remainingAmount <= 0) break;
 
-        const propPaymentAmount = Math.min(remainingAmount, prop.totalAmountDue);
+        const effectiveGrossDue = (prop.arrears || 0) + (prop.currentFee || 0);
+        const propPaymentAmount = properties.length === 1
+          ? remainingAmount
+          : Math.min(remainingAmount, effectiveGrossDue > 0 ? effectiveGrossDue : (prop.totalAmountDue || remainingAmount));
         if (propPaymentAmount <= 0) continue; // Already fully paid
 
         remainingAmount -= propPaymentAmount;
 
-        let newArrears = prop.arrears;
-        let newCurrentFee = prop.currentFee;
-        let newStatus: 'PAID' | 'PARTIALLY_PAID' | 'UNPAID' = 'PAID';
+        const grossArrears = Number(prop.arrears || 0);
+        const grossCurrentFee = Number(prop.currentFee || (prop as any).current_bill || 0);
+        const grossTotalBill = Number((prop as any).bill_amount || (grossArrears + grossCurrentFee) || 0);
+        const prevCumulativePaid = Number(prop.amountPaidLastYear || (prop as any).amount_paid || 0);
+        const newCumulativePaid = prevCumulativePaid + propPaymentAmount;
+        const newTotalAmountDue = Math.max(0, grossTotalBill - newCumulativePaid);
+        const newStatus: 'PAID' | 'PARTIALLY_PAID' | 'UNPAID' = newTotalAmountDue <= 0 ? 'PAID' : (newCumulativePaid > 0 ? 'PARTIALLY_PAID' : 'UNPAID');
 
-        if (transaction.settlementType === 'ARREARS') {
-          const allocateToArrears = Math.min(propPaymentAmount, prop.arrears);
-          newArrears = Math.max(0, prop.arrears - allocateToArrears);
-          newStatus = newArrears === 0 && newCurrentFee === 0 ? 'PAID' : 'PARTIALLY_PAID';
-        } else if (transaction.settlementType === 'CURRENT_FEE') {
-          const allocateToCurrent = Math.min(propPaymentAmount, prop.currentFee);
-          newCurrentFee = Math.max(0, prop.currentFee - allocateToCurrent);
-          newStatus = newArrears === 0 && newCurrentFee === 0 ? 'PAID' : 'PARTIALLY_PAID';
+        // Calculate exact allocation for THIS specific payment
+        const prevArrearsPaid = Math.min(prevCumulativePaid, grossArrears);
+        const remArrearsBeforeThisPayment = Math.max(0, grossArrears - prevArrearsPaid);
+
+        let thisArrearsPaid = 0;
+        let thisCurrentPaid = 0;
+
+        if (transaction.settlementType === 'CURRENT_FEE') {
+          const prevCurrentPaid = Math.max(0, prevCumulativePaid - prevArrearsPaid);
+          const remCurrentBeforeThis = Math.max(0, grossCurrentFee - prevCurrentPaid);
+          thisCurrentPaid = Math.min(propPaymentAmount, remCurrentBeforeThis);
+          thisArrearsPaid = Math.max(0, propPaymentAmount - thisCurrentPaid);
         } else {
-          // TOTAL or PARTIAL — clear arrears first, then current fee
-          if (propPaymentAmount >= prop.totalAmountDue) {
-            newArrears = 0;
-            newCurrentFee = 0;
-          } else {
-            const afterArrears = propPaymentAmount - prop.arrears;
-            newArrears = afterArrears < 0 ? Math.abs(afterArrears) : 0;
-            newCurrentFee = afterArrears >= 0 ? Math.max(0, prop.currentFee - afterArrears) : prop.currentFee;
-          }
-          newStatus = newArrears + newCurrentFee <= 0 ? 'PAID' : 'PARTIALLY_PAID';
+          // Default: TOTAL, PARTIAL, or ARREARS — clears remaining arrears first, then current fee
+          thisArrearsPaid = Math.min(propPaymentAmount, remArrearsBeforeThisPayment);
+          thisCurrentPaid = Math.max(0, propPaymentAmount - thisArrearsPaid);
         }
-
-        const newTotalAmountDue = newArrears + newCurrentFee;
 
         // Link property to the paying user if not already linked and slots available
         const propUsers = Array.isArray(prop.users) ? prop.users : [];
@@ -132,48 +142,25 @@ export async function POST(req: Request) {
         await prisma.property.update({
           where: { id: prop.id },
           data: {
-            arrears: newArrears,
-            currentFee: newCurrentFee,
             totalAmountDue: newTotalAmountDue,
-            amountPaidLastYear: Number(prop.amountPaidLastYear || (prop as any).amount_paid || 0) + propPaymentAmount,
+            amountPaidLastYear: newCumulativePaid,
             status: newStatus,
             ...(shouldLink && targetUser ? { users: { connect: { id: targetUser.id } } } : {}),
           },
         });
 
-        // 4. Claim next available GCR receipt number from municipal Value Book stock pool
-        let gcrRecord = await prisma.tGCRNr.findFirst({
-          where: { isUsed: false, isDamaged: false },
-          orderBy: { gcrNo: 'asc' },
-        });
-
-        let receiptNumber: string;
-        if (gcrRecord) {
-          receiptNumber = gcrRecord.gcrNo;
-          await prisma.tGCRNr.update({
-            where: { id: gcrRecord.id },
-            data: { isUsed: true, allocatedAt: new Date() },
-          });
-        } else {
-          // Provision in TGCRNr so FeePayment foreign key is strictly satisfied
-          const uniqueSuffix = Math.floor(1000 + Math.random() * 9000);
-          receiptNumber = `GCR-KKMA-${new Date().getFullYear()}-${uniqueSuffix}`;
-          await prisma.tGCRNr.create({
-            data: {
-              gcrNo: receiptNumber,
-              isUsed: true,
-              allocatedAt: new Date(),
-            },
-          }).catch(() => {});
-        }
+        // 4. Generate a Digital Receipt Number (Do not consume physical GCR stock)
+        // Officers will update this with a physical GCR number later in the Admin Portal
+        const uniqueSuffix = Math.floor(100000 + Math.random() * 900000);
+        const receiptNumber = `DIG-KKMA-${new Date().getFullYear()}-${uniqueSuffix}`;
         createdReceiptNumbers.push(receiptNumber);
 
         // 5. Create official FeePayment record stamped with APP_PAYMENT
         await prisma.feePayment.create({
           data: {
             accountNo: prop.accountNumber,
-            arrearsPd: prop.arrears - newArrears,
-            curAmtPd: prop.currentFee - newCurrentFee,
+            arrearsPd: thisArrearsPaid,
+            curAmtPd: thisCurrentPaid,
             amtPaid: propPaymentAmount,
             pmtMode: 'Online App (Paystack)',
             gcrNr: receiptNumber,
@@ -215,8 +202,8 @@ export async function POST(req: Request) {
               accountNumber: prop.accountNumber || (prop as any).account_no || 'N/A',
               propertyId: prop.id,
               amountPaid: propPaymentAmount,
-              arrearsPaid: Math.max(0, prop.arrears - newArrears),
-              currentPaid: Math.max(0, prop.currentFee - newCurrentFee),
+              arrearsPaid: thisArrearsPaid,
+              currentPaid: thisCurrentPaid,
               paymentMethod: data.channel || 'Paystack MoMo',
               reference: transaction.reference,
               receiptNumber: receiptNumber,
@@ -251,27 +238,29 @@ export async function POST(req: Request) {
         console.warn('[Webhook] Notification update skipped:', notifErr);
       }
 
-      // 8. Send SMS confirmation to payer (no web links; physical receipt & office guidance)
+      // 8. Send SMS confirmation to payer in background (non-blocking)
       const smsPhone = transaction.user?.phoneNumber || targetPhone;
-      if (smsPhone) {
-        const primaryReceipt = createdReceiptNumbers[0] || `GCR-KKMA-${new Date().getFullYear()}-${transaction.reference.substring(0, 4).toUpperCase()}`;
+      if (smsPhone && createdReceiptNumbers.length > 0) {
+        const primaryReceipt = createdReceiptNumbers[0];
+        const receiptUrl = `https://property-rate-app.vercel.app/receipts/verify?code=${encodeURIComponent(primaryReceipt)}`;
+        const confirmationMsg = `KKMA Rate Payment Confirmed\nGH\u20b5 ${amountPaid.toFixed(2)} received.\n\nView and download your digital receipt here:\n${receiptUrl}\n\nCall 0243756235 for assistance.`;
 
-        const confirmationMsg = `KKMA Rate Payment Confirmed\nGH\u20b5 ${amountPaid.toFixed(2)} received.\n\nOfficial Receipt: ${primaryReceipt}\nPayment Ref: ${transaction.reference}\n\nAn official receipt will be issued to you. If not received, kindly visit the Assembly Revenue Office for your physical copy or call 0243756235 for assistance.\n\nKeep this SMS as proof of payment.`;
-
-        const smsGateway = new SMSGateway('ARKESEL');
-        try {
-          const smsResult = await smsGateway.getProvider().sendSMS(
-            smsPhone,
-            confirmationMsg
-          );
-          if (smsResult.success) {
-            console.log(`[Webhook] SMS confirmation dispatched via KKMA to ${smsPhone} (ID: ${smsResult.messageId})`);
-          } else {
-            console.error(`[Webhook] SMS confirmation failed for ${smsPhone}:`, smsResult.error);
+        after(async () => {
+          const smsGateway = new SMSGateway('ARKESEL');
+          try {
+            const smsResult = await smsGateway.getProvider().sendSMS(
+              smsPhone,
+              confirmationMsg
+            );
+            if (smsResult.success) {
+              console.log(`[Webhook] Background SMS confirmation dispatched via KKMA to ${smsPhone} (ID: ${smsResult.messageId})`);
+            } else {
+              console.error(`[Webhook] Background SMS confirmation failed for ${smsPhone}:`, smsResult.error);
+            }
+          } catch (smsErr: any) {
+            console.error('[Webhook] Background SMS dispatch exception:', smsErr);
           }
-        } catch (smsErr: any) {
-          console.error('[Webhook] SMS dispatch exception:', smsErr);
-        }
+        });
       }
 
       console.log(`[Webhook] charge.success processed — ref: ${reference}, receipts: ${createdReceiptNumbers.join(', ')}`);

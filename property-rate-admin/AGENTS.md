@@ -67,10 +67,21 @@ For every UI format, update, addition, or component created in both the Citizen 
 - You MUST STOP and ask for the user's 'go ahead' or explicit approval BEFORE you write any code or modify any files.
 - Treat every request as an interactive diagnostic session where compromise and alignment are required before action is taken.
 
+## FAST SURGICAL INVESTIGATION & ZERO-BLOAT DIAGNOSTICS
+- **Zero Speculative Rabbit Holes**: Never wander through unrelated database tables, schema files, SQL clients, or surrounding modules when diagnosing an issue.
+- **Direct Context Pinpointing**: Use the exact phrases, headers, or field labels from the user's screenshot or prompt to search and jump directly to the exact rendering line in ONE step.
+- **Inspect Formula at Site of Failure**: Inspect only the immediate calculation feeding the reported value. Identify the discrepancy on the spot and answer concisely without reading hundreds of lines of peripheral code.
+- **Direct Vercel Deployment Standard**: Deploy all verified changes directly to Vercel production (`npx vercel --prod --yes`) without pushing to GitHub until explicitly instructed by the user.
+
 ## ANTI-AI CODE BLOAT, OVER-ENGINEERING & YAGNI GOVERNANCE
 - **Anti-Over-Abstraction / YAGNI ("You Aren't Gonna Need It")**: Under no circumstances spin up brand-new helper functions, wrappers, utility classes, or speculative layers to solve simple 2-line inline fixes. Solve problems directly and idiomatically at the site of failure.
-- **Eliminate Hallucinated Boilerplate**: Avoid verbose, multi-tiered boilerplate patterns where a simple, native TypeScript or React expression (e.g. `useMemo`, native array operations, standard hooks) suffices.
+- **Architectural Reuse (Zero Duplication)**: Never generate brand-new helper methods (e.g. formatters, date parsers, HTTP wrappers) when one already exists in the codebase. Always inspect and reuse existing project utilities and database abstractions.
+- **No "Copy-Paste" Pattern Proliferation**: Do not duplicate blocks of repetitive code for slightly different use cases. Consolidate into reusable, parameterized components or native idioms.
+- **Zero Unnecessary Dependencies**: Strictly reject importing external packages or libraries for minor tasks solvable via standard modern language features (native array methods, standard regex, native `Date`, `Intl`).
+- **Eliminate Hallucinated Boilerplate**: Avoid verbose, defensive boilerplate (multi-layered `try-catch`, redundant null-checks, or unnecessary wrapper methods) where standard TypeScript types and native operations suffice.
 - **Contextual Economy & Surgical Precision**: Maintain architectural continuity across sessions. Do not patch bugs by blindly piling new functions or layers on top of old ones. Always simplify, prune, and consolidate existing logic instead of accumulating dead code.
+- **Pre-Commit Dead Code Purging**: Proactively remove orphaned variables, unused functions, obsolete state parameters, and redundant wrapper abstractions on every single modification.
+
 ## MANDATORY UI/UX & ZERO-LATENCY INTERFACE STANDARDS
 All user and administrator interfaces must strictly adhere to these 4 foundational operational laws:
 

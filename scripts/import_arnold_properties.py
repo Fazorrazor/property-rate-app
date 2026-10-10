@@ -9,7 +9,7 @@ import urllib.error
 import xml.etree.ElementTree as ET
 
 SUPABASE_URL = "https://jzezuitkenrfkzrkphiz.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp6ZXp1aXRrZW5yZmt6cmtwaGl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgyODA4NjEsImV4cCI6MjEwMzg1Njg2MX0.65s4OvVtgkrLpngsF9e6UwkWJIX4G1ydyuu1zzsEQSw"
+SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", os.environ.get("NEXT_PUBLIC_SUPABASE_ANON_KEY", ""))
 EXCEL_PATH = os.path.join(os.path.dirname(__file__), "..", "docs", "DB", "proprties_arnold.xlsx")
 
 def clean_phone(raw_phone):
@@ -157,10 +157,11 @@ def main():
 
         current_bill = clean_float(c.get("R"), 0.0)
         arrears = clean_float(c.get("U"), 0.0)
-        bill_amount = clean_float(c.get("S"), arrears + current_bill)
         amount_paid = clean_float(c.get("T"), 0.0)
         previous_year_bill = clean_float(c.get("Q"), 0.0)
-        outstanding_amt = clean_float(c.get("V"), bill_amount)
+        # Standard municipal balance formula: Gross Bill = arrears + current_bill, Net Remaining = max(0, Gross Bill - amount_paid)
+        bill_amount = round(arrears + current_bill, 2)
+        outstanding_amt = max(0.0, round(bill_amount - amount_paid, 2))
 
         raw_rv = clean_float(c.get("O"), 0.0)
         if raw_rv > 0:

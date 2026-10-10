@@ -21,6 +21,11 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - Navigation tabs must use clean typographic links with subtle underline indicators or left border accents, never rounded pill containers.
 - All monetary amounts must strictly use Ghanaian Cedi (`GH₵`), with no dollar signs (`$`) anywhere in the application.
 
+## MANDATORY UI COPY: PLAIN, FRIENDLY LANGUAGE (ZERO JARGON)
+- **Strictly Prohibit "Parcel" / "Parcels"**: Under NO circumstances use the word "parcel" or "parcels" in any user-facing text, tables, modals, badges, or buttons. Always use plain, friendly language: **"Property"**, **"Properties"**, or **"Property Account"**.
+- **Strictly Prohibit "Dossier"**: Under NO circumstances use the word "dossier" in user-facing copy. Always use plain, friendly terms: **"Ratepayer Profile"**, **"Owner Profile"**, or **"Property Details"**.
+- **Net Municipal Amounts Standard**: In the Paid Ratepayers and collections views, the primary amount displayed must strictly be the actual net municipal payment credited to the account, excluding third-party gateway convenience charges or card processing fees. Never display inflated totals with actual amounts tucked underneath.
+
 ## STRICT REQUIREMENT: DYNAMIC RESPONSIVE LAYOUTS (NO HARDCODING)
 - **Under NO circumstances use hardcoded or arbitrary magic numbers (like `w-[92%]`, `pb-[104px]`, etc.) to force elements into alignment.**
 - All structural UI elements (cards, containers, wrappers) must rely on fluid layout systems—specifically dynamic Flexbox or CSS Grid behaviors (e.g., `flex-1`, `w-full`, `items-stretch`, `min-h-0`).
@@ -72,11 +77,20 @@ For every UI format, update, addition, or component created in both the Citizen 
 - You MUST STOP and ask for the user's 'go ahead' or explicit approval BEFORE you write any code or modify any files.
 - Treat every request as an interactive diagnostic session where compromise and alignment are required before action is taken.
 
+## FAST SURGICAL INVESTIGATION & ZERO-BLOAT DIAGNOSTICS
+- **Zero Speculative Rabbit Holes**: Never wander through unrelated database tables, schema files, SQL clients, or surrounding modules when diagnosing an issue.
+- **Direct Context Pinpointing**: Use the exact phrases, headers, or field labels from the user's screenshot or prompt to search and jump directly to the exact rendering line in ONE step.
+- **Inspect Formula at Site of Failure**: Inspect only the immediate calculation feeding the reported value. Identify the discrepancy on the spot and answer concisely without reading hundreds of lines of peripheral code.
+- **Direct Vercel Deployment Standard**: Deploy all verified changes directly to Vercel production (`npx vercel --prod --yes`) without pushing to GitHub until explicitly instructed by the user.
+
 ## ANTI-AI CODE BLOAT, OVER-ENGINEERING & YAGNI GOVERNANCE
 - **Anti-Over-Abstraction / YAGNI ("You Aren't Gonna Need It")**: Under no circumstances spin up brand-new helper functions, wrappers, utility classes, or speculative layers to solve simple 2-line inline fixes. Solve problems directly and idiomatically at the site of failure.
-- **Eliminate Hallucinated Boilerplate**: Avoid verbose, multi-tiered boilerplate patterns where a simple, native TypeScript or React expression (e.g. `useMemo`, native array operations, standard hooks) suffices.
+- **Architectural Reuse (Zero Duplication)**: Never generate brand-new helper methods (e.g. formatters, date parsers, HTTP wrappers) when one already exists in the codebase. Always inspect and reuse existing project utilities and database abstractions.
+- **No "Copy-Paste" Pattern Proliferation**: Do not duplicate blocks of repetitive code for slightly different use cases. Consolidate into reusable, parameterized components or native idioms.
+- **Zero Unnecessary Dependencies**: Strictly reject importing external packages or libraries for minor tasks solvable via standard modern language features (native array methods, standard regex, native `Date`, `Intl`).
+- **Eliminate Hallucinated Boilerplate**: Avoid verbose, defensive boilerplate (multi-layered `try-catch`, redundant null-checks, or unnecessary wrapper methods) where standard TypeScript types and native operations suffice.
 - **Contextual Economy & Surgical Precision**: Maintain architectural continuity across sessions. Do not patch bugs by blindly piling new functions or layers on top of old ones. Always simplify, prune, and consolidate existing logic instead of accumulating dead code.
-- **Dead Code Purging**: Proactively remove orphaned variables, unused functions, obsolete state parameters, and redundant wrapper abstractions on every modification.
+- **Pre-Commit Dead Code Purging**: Proactively remove orphaned variables, unused functions, obsolete state parameters, and redundant wrapper abstractions on every single modification.
 
 ## MANDATORY UI/UX & ZERO-LATENCY INTERFACE STANDARDS
 All user and administrator interfaces must strictly adhere to these 4 foundational operational laws:
@@ -85,6 +99,7 @@ All user and administrator interfaces must strictly adhere to these 4 foundation
 2. **Perceived Performance / Zero-Latency UX**: Techniques designed to make an application feel faster to the user by manipulating timing, instant visual feedback, and smooth transitions, even if the underlying network latency remains the same.
 3. **Immediate Feedback Loop**: A core usability principle stating that an interactive system must always acknowledge user input instantly (typically within <100ms) to prevent double-clicks or confusion about whether an action registered.
 4. **Global Component Standardization**: Enforcing a single design system element (specifically the unified authentic Apple activity indicator `AppleSpinner`) across all application platforms (User App vs. Admin Portal) to eliminate disparate, ad-hoc, or generic loader icons and maintain 100% visual consistency.
+5. **Zero-Flash Initial Hydration & State Persistence**: When views support persisted state or session restoration (such as account lookups, statement reports, or filtered views), the initial empty screen MUST NEVER flash before the loading screen on page refresh or initial mount. Server components must forward query parameters (`initialAccountNo`) to client components on Frame 0, and client components must synchronously initialize loading states to immediately render the authentic full-page `AppleSpinner` without intermediate flashes.
 
 ## ADVANCED SOFTWARE ARCHITECTURE & MASTER DESIGN PATTERNS
 All implementations across both the Citizen App and the Admin Portal must adhere to these 7 architectural pillars:

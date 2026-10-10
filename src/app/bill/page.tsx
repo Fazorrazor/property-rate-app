@@ -160,6 +160,70 @@ function BillViewerContent() {
       <div className="px-4 py-4 space-y-4">
         {activeTab === "BILL" ? (
           <>
+            {/* Multi-Property Portfolio Switcher */}
+            {billData.portfolioProperties && billData.portfolioProperties.length > 1 && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between px-1">
+                  <p className="text-[11px] font-semibold text-on-surface-muted uppercase tracking-wider">
+                    Ratepayer Portfolio ({billData.portfolioProperties.length} Properties)
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => router.push("/checkout?propertyId=ALL")}
+                    className="text-xs text-[#007AFF] hover:underline font-semibold cursor-pointer"
+                  >
+                    Pay Full Portfolio &rarr;
+                  </button>
+                </div>
+
+                <div className="bg-surface rounded-xl border border-border-light/70 overflow-hidden divide-y divide-border-light/60">
+                  {billData.portfolioProperties.map((prop) => {
+                    const isSelected = prop.accountNumber === billData.accountNumber;
+                    const isPropPaid = prop.status === "PAID" || prop.totalAmountDue <= 0;
+                    return (
+                      <button
+                        key={prop.id}
+                        type="button"
+                        onClick={() => {
+                          if (!isSelected) {
+                            router.push(`/bill?accountNumber=${encodeURIComponent(prop.accountNumber)}`);
+                          }
+                        }}
+                        className={`w-full p-3 text-left transition-colors cursor-pointer flex items-center justify-between ${
+                          isSelected ? "bg-[#007AFF]/5 border-l-2 border-[#007AFF]" : "hover:bg-surface-subtle"
+                        }`}
+                      >
+                        <div className="min-w-0 pr-2">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`font-mono text-xs ${isSelected ? "font-bold text-foreground" : "font-medium text-foreground"}`}>
+                              {prop.accountNumber}
+                            </span>
+                            {isSelected && (
+                              <span className="text-[10px] text-[#007AFF] font-semibold">
+                                • Active View
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-on-surface-muted truncate mt-0.5">
+                            {prop.ownerDigitalAddress}
+                          </p>
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <span className="text-xs font-semibold text-foreground tabular-nums block">
+                            {prop.totalAmountDueFormatted}
+                          </span>
+                          <span className={`text-[10px] font-medium ${isPropPaid ? "text-[#188038]" : "text-[#C5221F]"}`}>
+                            {isPropPaid ? "• Settled" : "• Due Dec 31"}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Primary CTA if unpaid */}
             {!isPaid && (
               <button

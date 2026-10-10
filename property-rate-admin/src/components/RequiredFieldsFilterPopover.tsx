@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { SlidersHorizontal, ChevronDown, Search, X, Check } from "lucide-react";
 
 export interface FieldCriteria {
   key: string;
   label: string;
-  category: "Contact" | "Profile" | "Location" | "Identification" | "Financial" | "Classification";
+  category: string;
 }
 
 export const AVAILABLE_FIELD_CRITERIA: FieldCriteria[] = [
@@ -31,7 +32,8 @@ interface RequiredFieldsFilterPopoverProps {
   onChange: (fields: string[]) => void;
   buttonLabel?: string;
   align?: "left" | "right";
-  recommendedPreset?: string[];
+  availableCriteria?: FieldCriteria[];
+  title?: string;
 }
 
 export function RequiredFieldsFilterPopover({
@@ -39,31 +41,69 @@ export function RequiredFieldsFilterPopover({
   onChange,
   buttonLabel = "Fields Filter",
   align = "right",
-  recommendedPreset = ["telephone", "name", "ownerDigitalAddress"],
+  availableCriteria,
+  title = "Required Field Criteria",
 }: RequiredFieldsFilterPopoverProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [draftFields, setDraftFields] = useState<string[]>(requiredFields);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left?: number; right?: number } | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 640);
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile, { passive: true });
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   const computePosition = () => {
-    if (!buttonRef.current) return;
+    if (!buttonRef.current || window.innerWidth < 640) return;
     const rect = buttonRef.current.getBoundingClientRect();
     const viewportWidth = window.innerWidth;
-    if (align === 'right') {
-      const rightFromEdge = viewportWidth - rect.right;
-      setDropdownPos({ top: rect.bottom + 6, right: rightFromEdge });
-    } else {
-      setDropdownPos({ top: rect.bottom + 6, left: rect.left });
+    const viewportHeight = window.innerHeight;
+    const popoverHeight = 360;
+    const popoverWidth = Math.min(380, viewportWidth - 32);
+
+    let top = rect.bottom + 6;
+    if (top + popoverHeight > viewportHeight && rect.top - 6 - popoverHeight > 10) {
+      top = rect.top - 6 - popoverHeight;
     }
+
+    let left: number | undefined = undefined;
+    let right: number | undefined = undefined;
+
+    if (align === 'right') {
+      const rightFromEdge = Math.max(12, viewportWidth - rect.right);
+      // Ensure the left edge of popover doesn't go off-screen to the left
+      if (viewportWidth - rightFromEdge - popoverWidth < 12) {
+        left = 12;
+      } else {
+        right = rightFromEdge;
+      }
+    } else {
+      left = Math.max(12, Math.min(viewportWidth - popoverWidth - 12, rect.left));
+    }
+
+    setDropdownPos({ top, left, right });
   };
 
   useEffect(() => {
     setDraftFields(requiredFields);
   }, [requiredFields]);
+
+  useEffect(() => {
+    if (isOpen) {
+      computePosition();
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -77,29 +117,39 @@ export function RequiredFieldsFilterPopover({
         setIsOpen(false);
       }
     };
-    const handleScrollOrResize = () => {
-      if (isOpen) setIsOpen(false);
+    const handleScroll = (e: Event) => {
+      if (!isOpen) return;
+      // Do not close when scrolling inside the popover list or container
+      if (containerRef.current && e.target && containerRef.current.contains(e.target as Node)) {
+        return;
+      }
+      computePosition();
+    };
+    const handleResize = () => {
+      if (isOpen) computePosition();
     };
     document.addEventListener("mousedown", handleClickOutside);
-    window.addEventListener("scroll", handleScrollOrResize, true);
-    window.addEventListener("resize", handleScrollOrResize);
+    window.addEventListener("scroll", handleScroll, { passive: true, capture: true });
+    window.addEventListener("resize", handleResize, { passive: true });
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
-      window.removeEventListener("scroll", handleScrollOrResize, true);
-      window.removeEventListener("resize", handleScrollOrResize);
+      window.removeEventListener("scroll", handleScroll, true);
+      window.removeEventListener("resize", handleResize);
     };
   }, [isOpen]);
 
+  const allCriteria = availableCriteria && availableCriteria.length > 0 ? availableCriteria : AVAILABLE_FIELD_CRITERIA;
+
   const filteredFields = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return AVAILABLE_FIELD_CRITERIA;
-    return AVAILABLE_FIELD_CRITERIA.filter(
+    if (!q) return allCriteria;
+    return allCriteria.filter(
       (f) =>
         f.label.toLowerCase().includes(q) ||
-        f.category.toLowerCase().includes(q) ||
+        (f.category && f.category.toLowerCase().includes(q)) ||
         f.key.toLowerCase().includes(q)
     );
-  }, [searchQuery]);
+  }, [searchQuery, allCriteria]);
 
   const handleToggleField = (key: string) => {
     setDraftFields((prev) =>
@@ -108,15 +158,11 @@ export function RequiredFieldsFilterPopover({
   };
 
   const handleSelectAll = () => {
-    setDraftFields(AVAILABLE_FIELD_CRITERIA.map((f) => f.key));
+    setDraftFields(allCriteria.map((f) => f.key));
   };
 
   const handleClearAll = () => {
     setDraftFields([]);
-  };
-
-  const handleSetRecommended = () => {
-    setDraftFields(recommendedPreset);
   };
 
   const handleApply = () => {
@@ -150,23 +196,45 @@ export function RequiredFieldsFilterPopover({
         <ChevronDown className={`w-3 h-3 transition-transform ${isOpen ? "rotate-180" : ""}`} />
       </button>
 
-      {isOpen && dropdownPos && (
-        <div
-          ref={containerRef}
-          style={{
-            position: 'fixed',
-            top: dropdownPos.top,
-            ...(dropdownPos.right !== undefined ? { right: dropdownPos.right } : { left: dropdownPos.left }),
-            width: Math.min(380, window.innerWidth - 32),
-            zIndex: 9999,
-          }}
-          className="rounded-xl border border-[#E5E5EA] bg-white/95 backdrop-blur-xl shadow-xl p-3 flex flex-col font-sans max-h-[360px] overflow-hidden"
-        >
+      {isOpen && mounted && typeof document !== "undefined" && (dropdownPos || isMobile) && createPortal(
+        <>
+          {/* Mobile Dimmed Backdrop */}
+          {isMobile && (
+            <div
+              className="fixed inset-0 bg-black/40 backdrop-blur-xs z-[9998]"
+              onClick={() => setIsOpen(false)}
+              aria-hidden="true"
+            />
+          )}
+
+          <div
+            ref={containerRef}
+            style={
+              isMobile
+                ? {
+                    position: 'fixed',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    width: 'calc(100vw - 32px)',
+                    maxWidth: 380,
+                    zIndex: 9999,
+                  }
+                : {
+                    position: 'fixed',
+                    top: dropdownPos?.top ?? 60,
+                    ...(dropdownPos?.right !== undefined ? { right: dropdownPos.right } : { left: dropdownPos?.left ?? 12 }),
+                    width: Math.min(380, typeof window !== "undefined" ? window.innerWidth - 32 : 380),
+                    zIndex: 9999,
+                  }
+            }
+            className="rounded-2xl border border-[#E5E5EA] bg-white shadow-2xl p-3.5 flex flex-col font-sans max-h-[85vh] sm:max-h-[360px] overflow-hidden"
+          >
           <div className="flex items-center justify-between border-b border-[#E5E5EA] pb-2 shrink-0">
             <div className="flex items-center gap-1.5">
               <SlidersHorizontal className="w-3.5 h-3.5 text-[#007AFF]" />
-              <span className="text-xs font-bold text-[#1C1C1E]">Required Field Criteria</span>
-              <span className="text-[10px] text-[#6C6C70]">({AVAILABLE_FIELD_CRITERIA.length} fields)</span>
+              <span className="text-xs font-bold text-[#1C1C1E]">{title}</span>
+              <span className="text-[10px] text-[#6C6C70]">({allCriteria.length} fields)</span>
             </div>
             <button
               type="button"
@@ -209,27 +277,28 @@ export function RequiredFieldsFilterPopover({
                 Clear
               </button>
             </div>
-            <button
-              type="button"
-              onClick={handleSetRecommended}
-              className="text-[#34C759] hover:underline font-semibold cursor-pointer flex items-center gap-1"
-            >
-              <span>Recommended Preset</span>
-            </button>
           </div>
 
           <div className="flex-1 min-h-[140px] overflow-y-auto divide-y divide-[#E5E5EA] rounded-lg border border-[#E5E5EA] bg-[#F2F2F7]/50">
             {filteredFields.map((field) => {
               const isChecked = draftFields.includes(field.key);
               return (
-                <label
+                <div
                   key={field.key}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => handleToggleField(field.key)}
-                  className={`px-2.5 py-1.5 flex items-center justify-between text-xs cursor-pointer hover:bg-white transition-colors ${
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      handleToggleField(field.key);
+                    }
+                  }}
+                  className={`px-2.5 py-1.5 flex items-center justify-between text-xs cursor-pointer hover:bg-white transition-colors select-none ${
                     isChecked ? "bg-[#007AFF]/8 font-medium text-[#007AFF]" : "text-[#1C1C1E]"
                   }`}
                 >
-                  <div className="flex items-center gap-2 min-w-0 pr-2">
+                  <div className="flex items-center gap-2 min-w-0 flex-1 pr-1">
                     <div
                       className={`w-3.5 h-3.5 rounded shrink-0 flex items-center justify-center border transition-colors ${
                         isChecked
@@ -243,10 +312,7 @@ export function RequiredFieldsFilterPopover({
                       {field.label}
                     </span>
                   </div>
-                  <span className="text-[9px] text-[#6C6C70] uppercase tracking-wide shrink-0">
-                    {field.category}
-                  </span>
-                </label>
+                </div>
               );
             })}
           </div>
@@ -271,7 +337,9 @@ export function RequiredFieldsFilterPopover({
             </div>
           </div>
         </div>
-      )}
-    </div>
-  );
+      </>,
+      document.body
+    )}
+  </div>
+);
 }

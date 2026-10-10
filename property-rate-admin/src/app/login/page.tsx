@@ -17,7 +17,7 @@ export default async function AdminLoginPage() {
   }
 
   return (
-    <main className="h-screen max-h-screen bg-[#F2F2F7] flex flex-col justify-center items-center p-3 sm:p-4 font-sans select-none relative overflow-hidden">
+    <main className="h-dvh max-h-dvh bg-[#F2F2F7] flex flex-col justify-center items-center p-3 sm:p-4 font-sans select-none relative overflow-hidden">
       <div className="w-full max-w-sm sm:max-w-md my-auto flex flex-col justify-center relative z-10 max-h-full overflow-y-auto py-2">
         {/* Top Municipal Crest & Identification */}
         <div className="text-center mb-3 sm:mb-4 shrink-0">

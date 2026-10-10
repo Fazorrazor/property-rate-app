@@ -11,6 +11,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 // =========================================================================
@@ -215,6 +216,8 @@ model FeePayment {
   property              Property?    @relation(fields: [propertyId], references: [id])
   transaction           Transaction? @relation(fields: [transactionId], references: [id])
   gcrRecord             TGCRNr       @relation(fields: [gcrNr], references: [gcrNo])
+
+  @@index([accountNo, datePaid])
 }
 
 model Receipt {
@@ -396,6 +399,8 @@ model Bill {
   billDate       DateTime  @default(now())
   printed        Boolean   @default(false)
   property       Property? @relation(fields: [accountNo], references: [accountNumber])
+
+  @@index([accountNo, billYear])
 }
 
 model BillSetting {
@@ -684,16 +689,18 @@ model SystemSetting {
 // Tracks background SMS dispatch jobs — status polling enables live UI progress
 // =========================================================================
 model SmsRolloutJob {
-  id             String   @id @default(uuid())
-  status         String   @default("QUEUED")  // QUEUED | RUNNING | DONE | FAILED
-  totalCount     Int      @default(0)
-  sentCount      Int      @default(0)
-  failedCount    Int      @default(0)
-  accountNumbers String[]
-  template       String?
-  mode           String   @default("LIVE")
-  adminId        String
-  errorMessage   String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                   String   @id @default(uuid())
+  status               String   @default("QUEUED")  // QUEUED | RUNNING | DONE | FAILED
+  totalCount           Int      @default(0)
+  sentCount            Int      @default(0)
+  failedCount          Int      @default(0)
+  accountNumbers       String[]
+  sentAccountNumbers   String[] @default([])
+  failedAccountNumbers String[] @default([])
+  template             String?
+  mode                 String   @default("LIVE")
+  adminId              String
+  errorMessage         String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 }

@@ -1,24 +1,48 @@
-import { supabase } from './supabase';
+import { supabaseAdmin as supabase } from './supabase';
 
 export function mapPropertyRow(p: any) {
   if (!p) return null;
   const arrears = Number(p.arrears || 0);
   const currentFee = Number(p.current_bill !== undefined ? p.current_bill : p.currentFee || 0);
   const amountPaidLastYear = Number(p.amount_paid !== undefined ? p.amount_paid : p.amountPaidLastYear || 0);
-  // Prefer the DB-computed outstanding_amt column; fall back to derived arithmetic
+  
+  // Gross bill is the total assessment (arrears + current fee)
+  const grossBill = Number((arrears + currentFee).toFixed(2));
+  // Net remaining balance: gross bill minus verified payments, bound at zero
+  const netRemaining = Math.max(0, Number((grossBill - amountPaidLastYear).toFixed(2)));
+
   const totalAmountDue = Number(
-    p.outstanding_amt !== undefined && p.outstanding_amt !== null
-      ? p.outstanding_amt
-      : p.totalAmountDue !== undefined
-        ? p.totalAmountDue
-        : arrears + currentFee
+    p.outstanding_amt !== undefined && p.outstanding_amt !== null && Number(p.outstanding_amt) >= 0
+      ? Number(p.outstanding_amt)
+      : netRemaining
+  );
+
+  const initialArrears = Number(
+    p.initial_arrears !== undefined && p.initial_arrears !== null
+      ? p.initial_arrears
+      : (p.initialArrears !== undefined && p.initialArrears !== null ? p.initialArrears : arrears)
+  );
+  const totalPaidCycle = Number(
+    p.total_paid_cycle !== undefined && p.total_paid_cycle !== null
+      ? p.total_paid_cycle
+      : (p.totalPaidCycle !== undefined && p.totalPaidCycle !== null ? p.totalPaidCycle : amountPaidLastYear)
+  );
+  const currentArrears = Number(
+    p.current_arrears !== undefined && p.current_arrears !== null
+      ? p.current_arrears
+      : (p.currentArrears !== undefined && p.currentArrears !== null ? p.currentArrears : Math.max(0, initialArrears - totalPaidCycle))
+  );
+  const cumulativeArrears = Number(
+    p.cumulative_arrears !== undefined && p.cumulative_arrears !== null
+      ? p.cumulative_arrears
+      : (p.cumulativeArrears !== undefined && p.cumulativeArrears !== null ? p.cumulativeArrears : initialArrears)
   );
 
   let status: 'PAID' | 'PARTIALLY_PAID' | 'UNPAID' = p.status;
   if (!status) {
     if (totalAmountDue <= 0) {
       status = 'PAID';
-    } else if (amountPaidLastYear > 0) {
+    } else if (amountPaidLastYear > 0 || totalPaidCycle > 0) {
       status = 'PARTIALLY_PAID';
     } else {
       status = 'UNPAID';
@@ -41,6 +65,15 @@ export function mapPropertyRow(p: any) {
     currentFee,
     amountPaidLastYear,
     arrears,
+    initialArrears,
+    currentArrears,
+    totalPaidCycle,
+    cumulativeArrears,
+    initial_arrears: initialArrears,
+    current_arrears: currentArrears,
+    total_paid_cycle: totalPaidCycle,
+    cumulative_arrears: cumulativeArrears,
+    billAmount: grossBill,
     totalAmountDue,
     status,
     billImageUrl: p.bill_image_url || p.billImageUrl || null,
@@ -73,13 +106,30 @@ function preparePropertyWritePayload(data: any) {
     row.amount_paid = cleanData.amountPaidLastYear;
     delete row.amountPaidLastYear;
   }
-  if (cleanData.totalAmountDue !== undefined) {
-    row.outstanding_amt = cleanData.totalAmountDue;
-    delete row.totalAmountDue;
+  if (cleanData.initialArrears !== undefined) {
+    row.initial_arrears = cleanData.initialArrears;
+    delete row.initialArrears;
   }
-  if (cleanData.outstanding_amt !== undefined) {
-    row.outstanding_amt = cleanData.outstanding_amt;
+  if (cleanData.currentArrears !== undefined) {
+    row.current_arrears = cleanData.currentArrears;
+    delete row.currentArrears;
   }
+  if (cleanData.totalPaidCycle !== undefined) {
+    row.total_paid_cycle = cleanData.totalPaidCycle;
+    delete row.totalPaidCycle;
+  }
+  if (cleanData.cumulativeArrears !== undefined) {
+    row.cumulative_arrears = cleanData.cumulativeArrears;
+    delete row.cumulativeArrears;
+  }
+  
+  // Realign bill_amount and outstanding_amt consistently
+  const cBill = Number(row.current_bill !== undefined ? row.current_bill : (cleanData.currentFee || 0));
+  const arr = Number(row.current_arrears !== undefined ? row.current_arrears : (row.arrears !== undefined ? row.arrears : 0));
+  const pd = Number(row.total_paid_cycle !== undefined ? row.total_paid_cycle : (row.amount_paid !== undefined ? row.amount_paid : (cleanData.amountPaidLastYear || 0)));
+  row.bill_amount = Number((arr + cBill).toFixed(2));
+  row.outstanding_amt = Math.max(0, Number((arr + cBill - (row.total_paid_cycle !== undefined ? 0 : pd)).toFixed(2)));
+  delete row.totalAmountDue;
 
   // Remove columns that do not exist on the PostgreSQL Property table
   delete row.status;
@@ -99,7 +149,9 @@ export async function resolvePropertySearchIds(searchStr: string): Promise<strin
   const tokens = q.split(/\s+/).filter(Boolean);
   let finalMatchingPropIds: Set<string> | null = null;
 
-  for (const token of tokens) {
+  for (const rawToken of tokens) {
+    const token = rawToken.replace(/[%_]/g, '\\$&').replace(/[,\(\)]/g, ' ').trim();
+    if (!token) continue;
     const [matchedUsersRes, matchedOwnersRes, matchedReceiptsRes, matchedPropsRes] = await Promise.all([
       supabase.from('User').select('id').or(`name.ilike.%${token}%,phoneNumber.ilike.%${token}%`).limit(5000),
       supabase.from('PropertyOwner').select('ownerId').or(`name.ilike.%${token}%,tel.ilike.%${token}%,mobileNumber.ilike.%${token}%,address.ilike.%${token}%,streetAddress.ilike.%${token}%,corporationPartnership.ilike.%${token}%,email.ilike.%${token}%`).limit(5000),
@@ -159,7 +211,9 @@ async function resolveUserSearchIds(searchStr: string): Promise<string[] | null>
   const tokens = q.split(/\s+/).filter(Boolean);
   let finalMatchingUserIds: Set<string> | null = null;
 
-  for (const token of tokens) {
+  for (const rawToken of tokens) {
+    const token = rawToken.replace(/[%_]/g, '\\$&').replace(/[,\(\)]/g, ' ').trim();
+    if (!token) continue;
     const [matchedUsersRes, matchedPropsRes] = await Promise.all([
       supabase.from('User').select('id').or(`name.ilike.%${token}%,phoneNumber.ilike.%${token}%`).limit(5000),
       supabase.from('Property').select('id').or(`account_no.ilike.%${token}%,valuationNo.ilike.%${token}%,ownerDigitalAddress.ilike.%${token}%,physicalAddress.ilike.%${token}%`).limit(5000)
@@ -243,6 +297,65 @@ export function applyRequiredFieldsFilter(query: any, requiredFields?: string[])
   return query;
 }
 
+async function applyPropertyQueryFilters(baseQuery: any, whereClause?: any): Promise<{ query: any; isZeroMatch: boolean }> {
+  let query = baseQuery;
+  if (!whereClause) return { query, isZeroMatch: false };
+
+  if (whereClause.status && whereClause.status !== 'ALL') {
+    if (whereClause.status === 'UNPAID') {
+      query = query.or('outstanding_amt.gt.0,and(outstanding_amt.is.null,or(arrears.gt.0,current_bill.gt.0))');
+    } else if (whereClause.status === 'DEFAULTER') {
+      query = query.gt('arrears', 0).gt('outstanding_amt', 0);
+    } else if (whereClause.status === 'PAID') {
+      query = query.eq('outstanding_amt', 0);
+    } else if (whereClause.status === 'OVERPAID') {
+      query = query.lt('outstanding_amt', 0);
+    } else if (whereClause.status === 'PARTIALLY_PAID') {
+      query = query.gt('amount_paid', 0).gt('outstanding_amt', 0);
+    } else if (typeof whereClause.status === 'object' && whereClause.status.not === 'PAID') {
+      query = query.or('outstanding_amt.gt.0,and(outstanding_amt.is.null,or(arrears.gt.0,current_bill.gt.0))');
+    }
+  }
+
+  if (whereClause.totalAmountDue && typeof whereClause.totalAmountDue === 'object' && whereClause.totalAmountDue.gt !== undefined) {
+    query = query.or('outstanding_amt.gt.0,and(outstanding_amt.is.null,or(arrears.gt.0,current_bill.gt.0))');
+  }
+
+  if (whereClause.arrears && typeof whereClause.arrears === 'object' && whereClause.arrears.gt !== undefined) {
+    query = query.gt('arrears', whereClause.arrears.gt);
+  }
+
+  if (whereClause.accountNumber) {
+    if (whereClause.accountNumber.in) {
+      query = query.in('account_no', whereClause.accountNumber.in);
+    } else {
+      query = query.eq('account_no', whereClause.accountNumber);
+    }
+  }
+
+  if (whereClause.propertyClassification && whereClause.propertyClassification !== 'ALL') {
+    query = query.eq('property_cat', whereClause.propertyClassification);
+  }
+
+  if (whereClause.municipality && whereClause.municipality !== 'ALL') {
+    query = query.eq('municipality', whereClause.municipality);
+  }
+
+  if (whereClause.requiredFields) {
+    query = applyRequiredFieldsFilter(query, whereClause.requiredFields);
+  }
+
+  if (whereClause.search) {
+    const matchedIds = await resolvePropertySearchIds(String(whereClause.search));
+    if (matchedIds !== null) {
+      if (matchedIds.length === 0) return { query, isZeroMatch: true };
+      query = query.in('id', matchedIds);
+    }
+  }
+
+  return { query, isZeroMatch: false };
+}
+
 export const adminDb = {
   adminUser: {
     async findUnique(args: { where: { username?: string; id?: string } }) {
@@ -285,10 +398,14 @@ export const adminDb = {
         ]);
 
         const directPropIds = (linksRes.data || []).map((l: any) => l.A);
+        const ownerIds = (ownersRes.data || []).map((o: any) => o.ownerId).filter(Boolean);
 
         const propQueries: any[] = [];
         if (directPropIds.length > 0) {
           propQueries.push(supabase.from('Property').select('*').in('id', directPropIds));
+        }
+        if (ownerIds.length > 0) {
+          propQueries.push(supabase.from('Property').select('*').in('ownerId', ownerIds));
         }
         if (data.phoneNumber) {
           propQueries.push(supabase.from('Property').select('*').eq('telephone', data.phoneNumber));
@@ -399,7 +516,7 @@ export const adminDb = {
       if (args?.include?.receipts) {
         const { data: allReceipts } = await supabase
           .from('Receipt')
-          .select('id, receiptNumber, amount, datePaid, userId, propertyId, gcrNumber')
+          .select('id, receiptNumber, amount, datePaid, userId, propertyId, settlementType, paymentMethod')
           .in('userId', userIds);
 
         const receiptsByUserId = (allReceipts || []).reduce((acc: any, r: any) => {
@@ -630,13 +747,20 @@ export const adminDb = {
       }
 
       if (args?.include?.receipts && propIds.length > 0) {
-        const propChunks = chunkArray(propIds, 80);
+        const allLookupIds = Array.from(
+          new Set([
+            ...propIds,
+            ...data.map((p: any) => p.accountNumber || p.account_no).filter(Boolean),
+          ])
+        );
+        const propChunks = chunkArray(allLookupIds, 80);
         const receiptResults = await Promise.all(
           propChunks.map((chunk) =>
             supabase
               .from('Receipt')
-              .select('id, receiptNumber, amount, datePaid, propertyId, gcrNumber, settlementType')
+              .select('id, receiptNumber, amount, datePaid, propertyId, settlementType, paymentMethod')
               .in('propertyId', chunk)
+              .order('datePaid', { ascending: false })
           )
         );
         const allReceipts = receiptResults.flatMap((r) => r.data || []);
@@ -647,7 +771,8 @@ export const adminDb = {
         }, {});
 
         for (const prop of data) {
-          prop.receipts = receiptsByPropId[prop.id] || [];
+          const acc = prop.accountNumber || prop.account_no;
+          prop.receipts = (receiptsByPropId[prop.id] || (acc ? receiptsByPropId[acc] : null) || []);
         }
       }
 
@@ -829,92 +954,21 @@ export const adminDb = {
     },
 
     async count(args?: { where?: any }) {
-      let query = supabase.from('Property').select('*', { count: 'exact', head: true });
-      if (args?.where) {
-        if (args.where.status && args.where.status !== 'ALL') {
-          if (args.where.status === 'UNPAID') {
-            query = query.or('outstanding_amt.gt.0,and(outstanding_amt.is.null,or(arrears.gt.0,current_bill.gt.0))');
-          } else if (args.where.status === 'DEFAULTER') {
-            query = query.gt('arrears', 0).gt('outstanding_amt', 0);
-          } else if (args.where.status === 'PAID') {
-            query = query.eq('outstanding_amt', 0);
-          } else if (args.where.status === 'OVERPAID') {
-            query = query.lt('outstanding_amt', 0);
-          } else if (args.where.status === 'PARTIALLY_PAID') {
-            query = query.gt('amount_paid', 0).gt('outstanding_amt', 0);
-          } else if (typeof args.where.status === 'object' && args.where.status.not === 'PAID') {
-            query = query.or('outstanding_amt.gt.0,and(outstanding_amt.is.null,or(arrears.gt.0,current_bill.gt.0))');
-          }
-        }
-        if (args.where.totalAmountDue && typeof args.where.totalAmountDue === 'object' && args.where.totalAmountDue.gt !== undefined) {
-          query = query.or('arrears.gt.0,current_bill.gt.0');
-        }
-        if (args.where.arrears && typeof args.where.arrears === 'object' && args.where.arrears.gt !== undefined) {
-          query = query.gt('arrears', args.where.arrears.gt);
-        }
-        if (args.where.propertyClassification) {
-          query = query.eq('property_cat', args.where.propertyClassification);
-        }
-        if (args.where.accountNumber) {
-          if (args.where.accountNumber.in) {
-            query = query.in('account_no', args.where.accountNumber.in);
-          } else {
-            query = query.eq('account_no', args.where.accountNumber);
-          }
-        }
-        if (args.where.municipality) query = query.eq('municipality', args.where.municipality);
-        if (args.where.requiredFields) {
-          query = applyRequiredFieldsFilter(query, args.where.requiredFields);
-        }
-        if (args.where.search) {
-          const matchedIds = await resolvePropertySearchIds(String(args.where.search));
-          if (matchedIds !== null) {
-            if (matchedIds.length === 0) return 0;
-            query = query.in('id', matchedIds);
-          }
-        }
-      }
+      const { query, isZeroMatch } = await applyPropertyQueryFilters(
+        supabase.from('Property').select('*', { count: 'exact', head: true }),
+        args?.where
+      );
+      if (isZeroMatch) return 0;
       const { count, error } = await query;
-      if (error) return 0;
-      return count || 0;
+      return error ? 0 : (count || 0);
     },
 
     async aggregate(args?: { where?: any; _sum?: any }) {
-      let query = supabase.from('Property').select('arrears, current_bill');
-      if (args?.where) {
-        if (args.where.status && args.where.status !== 'ALL') {
-          if (args.where.status === 'UNPAID') {
-            query = query.or('outstanding_amt.gt.0,and(outstanding_amt.is.null,or(arrears.gt.0,current_bill.gt.0))');
-          } else if (args.where.status === 'DEFAULTER') {
-            query = query.gt('arrears', 0).gt('outstanding_amt', 0);
-          } else if (args.where.status === 'PAID') {
-            query = query.eq('outstanding_amt', 0);
-          } else if (args.where.status === 'OVERPAID') {
-            query = query.lt('outstanding_amt', 0);
-          } else if (args.where.status === 'PARTIALLY_PAID') {
-            query = query.gt('amount_paid', 0).gt('outstanding_amt', 0);
-          } else if (typeof args.where.status === 'object' && args.where.status.not === 'PAID') {
-            query = query.or('outstanding_amt.gt.0,and(outstanding_amt.is.null,or(arrears.gt.0,current_bill.gt.0))');
-          }
-        }
-        if (args.where.propertyClassification && args.where.propertyClassification !== 'ALL') {
-          query = query.eq('property_cat', args.where.propertyClassification);
-        }
-        if (args.where.municipality && args.where.municipality !== 'ALL') {
-          query = query.eq('municipality', args.where.municipality);
-        }
-        if (args.where.requiredFields) {
-          query = applyRequiredFieldsFilter(query, args.where.requiredFields);
-        }
-        if (args.where.search) {
-          const matchedIds = await resolvePropertySearchIds(String(args.where.search));
-          if (matchedIds !== null) {
-            if (matchedIds.length === 0) return { _sum: { arrears: 0, currentFee: 0, totalAmountDue: 0 } };
-            query = query.in('id', matchedIds);
-          }
-        }
-      }
-
+      const { query, isZeroMatch } = await applyPropertyQueryFilters(
+        supabase.from('Property').select('arrears, current_bill, outstanding_amt'),
+        args?.where
+      );
+      if (isZeroMatch) return { _sum: { arrears: 0, currentFee: 0, totalAmountDue: 0 } };
       const { data, error } = await query;
       if (error || !data) return { _sum: { arrears: 0, currentFee: 0, totalAmountDue: 0 } };
 
@@ -922,10 +976,15 @@ export const adminDb = {
         (acc: any, curr: any) => {
           const arr = Number(curr.arrears || 0);
           const currFee = Number(curr.current_bill || 0);
+          const due = Number(
+            curr.outstanding_amt !== undefined && curr.outstanding_amt !== null
+              ? curr.outstanding_amt
+              : arr + currFee
+          );
           return {
             arrears: acc.arrears + arr,
             currentFee: acc.currentFee + currFee,
-            totalAmountDue: acc.totalAmountDue + arr + currFee,
+            totalAmountDue: acc.totalAmountDue + due,
           };
         },
         { arrears: 0, currentFee: 0, totalAmountDue: 0 }
@@ -1086,8 +1145,8 @@ export const adminDb = {
         if (args?.where?.action) query = query.eq('action', args.where.action);
         if (args?.where?.entityType) query = query.eq('entityType', args.where.entityType);
         if (args?.where?.search) {
-          const s = args.where.search;
-          query = query.or(`action.ilike.%${s}%,details.ilike.%${s}%,entityType.ilike.%${s}%`);
+          const s = String(args.where.search).replace(/[%_]/g, '\\$&').replace(/[,\(\)]/g, ' ').trim();
+          if (s) query = query.or(`action.ilike.%${s}%,details.ilike.%${s}%,entityType.ilike.%${s}%`);
         }
         if (args?.orderBy?.createdAt) {
           query = query.order('createdAt', { ascending: args.orderBy.createdAt === 'asc' });
@@ -1115,8 +1174,8 @@ export const adminDb = {
         if (args?.where?.action) query = query.eq('action', args.where.action);
         if (args?.where?.entityType) query = query.eq('entityType', args.where.entityType);
         if (args?.where?.search) {
-          const s = args.where.search;
-          query = query.or(`action.ilike.%${s}%,details.ilike.%${s}%,entityType.ilike.%${s}%`);
+          const s = String(args.where.search).replace(/[%_]/g, '\\$&').replace(/[,\(\)]/g, ' ').trim();
+          if (s) query = query.or(`action.ilike.%${s}%,details.ilike.%${s}%,entityType.ilike.%${s}%`);
         }
         const { count, error } = await query;
         if (error) return 0;
@@ -1229,6 +1288,8 @@ export const adminDb = {
         sentCount: args.data.sentCount || 0,
         failedCount: args.data.failedCount || 0,
         accountNumbers: args.data.accountNumbers || [],
+        sentAccountNumbers: args.data.sentAccountNumbers || [],
+        failedAccountNumbers: args.data.failedAccountNumbers || [],
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -1279,6 +1340,20 @@ export const adminDb = {
         return null;
       }
     },
+    async findMany(args?: { orderBy?: any; take?: number }) {
+      try {
+        let query = supabase.from('SmsRolloutJob').select('*');
+        query = query.order('createdAt', { ascending: false });
+        if (args?.take) {
+          query = query.limit(args.take);
+        }
+        const { data, error } = await query;
+        if (error || !data) return [];
+        return data;
+      } catch (e) {
+        return [];
+      }
+    },
   },
 
   accessGrant: {
@@ -1320,6 +1395,87 @@ export const adminDb = {
         if (args.where.token) query = query.eq('token', args.where.token);
         const { data, error } = await query.select().single();
         if (error) return null;
+        return data;
+      } catch (e) {
+        return null;
+      }
+    },
+  },
+
+  feePayment: {
+    async findMany(args?: { where?: any; orderBy?: any; take?: number; skip?: number }) {
+      try {
+        let query = supabase.from('FeePayment').select('*');
+        if (args?.where) {
+          if (args.where.userId) query = query.eq('userId', args.where.userId);
+          if (args.where.propertyId) query = query.eq('propertyId', args.where.propertyId);
+          if (args.where.accountNo) {
+            if (args.where.accountNo.in && Array.isArray(args.where.accountNo.in)) {
+              query = query.in('accountNo', args.where.accountNo.in);
+            } else {
+              query = query.eq('accountNo', args.where.accountNo);
+            }
+          }
+          if (args.where.gcrNr) query = query.eq('gcrNr', args.where.gcrNr);
+          if (args.where.OR && Array.isArray(args.where.OR)) {
+            const parts: string[] = [];
+            for (const orCond of args.where.OR) {
+              if (orCond.userId) parts.push(`userId.eq.${orCond.userId}`);
+              if (orCond.accountNo?.in && Array.isArray(orCond.accountNo.in)) {
+                for (const acc of orCond.accountNo.in) {
+                  parts.push(`accountNo.eq.${acc}`);
+                }
+              }
+            }
+            if (parts.length > 0) {
+              query = query.or(parts.join(','));
+            }
+          }
+        }
+        if (args?.orderBy?.datePaid) {
+          query = query.order('datePaid', { ascending: args.orderBy.datePaid === 'asc' });
+        } else {
+          query = query.order('datePaid', { ascending: false });
+        }
+        if (args?.take) query = query.limit(args.take);
+        const { data, error } = await query;
+        if (error || !data) return [];
+        return data;
+      } catch (e) {
+        return [];
+      }
+    },
+  },
+
+  transaction: {
+    async findMany(args?: { where?: any; orderBy?: any; take?: number; skip?: number }) {
+      try {
+        let query = supabase.from('Transaction').select('*');
+        if (args?.where) {
+          if (args.where.userId) query = query.eq('userId', args.where.userId);
+          if (args.where.propertyId) query = query.eq('propertyId', args.where.propertyId);
+          if (args.where.reference) query = query.eq('reference', args.where.reference);
+        }
+        if (args?.orderBy?.createdAt) {
+          query = query.order('createdAt', { ascending: args.orderBy.createdAt === 'asc' });
+        } else {
+          query = query.order('createdAt', { ascending: false });
+        }
+        if (args?.take) query = query.limit(args.take);
+        const { data, error } = await query;
+        if (error || !data) return [];
+        return data;
+      } catch (e) {
+        return [];
+      }
+    },
+    async findUnique(args: { where: { id?: string; reference?: string } }) {
+      try {
+        let query = supabase.from('Transaction').select('*');
+        if (args.where.id) query = query.eq('id', args.where.id);
+        if (args.where.reference) query = query.eq('reference', args.where.reference);
+        const { data, error } = await query.maybeSingle();
+        if (error || !data) return null;
         return data;
       } catch (e) {
         return null;

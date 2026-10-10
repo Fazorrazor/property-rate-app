@@ -1,4 +1,3 @@
-import React from "react";
 import {
   Building2,
   Users,
@@ -13,7 +12,7 @@ import {
 
 export function AdminDashboardSkeleton() {
   return (
-    <div className="min-h-screen w-full bg-[#F2F2F7] text-[#1C1C1E] flex flex-col lg:flex-row font-sans relative select-none">
+    <div className="min-h-dvh w-full bg-[#F2F2F7] text-[#1C1C1E] flex flex-col lg:flex-row font-sans relative select-none">
       {/* 1. Static Sidebar Shell (Never Skeletonized) */}
       <aside className="w-56 xl:w-60 bg-white border-r border-[#E5E5EA] shadow-2xs flex-col shrink-0 hidden lg:flex font-sans z-30">
         {/* Assembly Brand Header */}
@@ -45,13 +44,9 @@ export function AdminDashboardSkeleton() {
 
         {/* Navigation Tabs (Fully rendered with icons and labels) */}
         <nav className="flex flex-col flex-1 px-3 py-3 gap-0.5 overflow-y-auto">
-          <div className="px-2 pt-1 pb-1 text-[10px] font-semibold tracking-wider text-[#6C6C70] uppercase font-mono">
-            Revenue Modules
-          </div>
-
           {[
-            { label: "Cadastre & Property Roll", icon: Building2, active: true },
-            { label: "Ratepayer Portfolios", icon: Users, active: false },
+            { label: "Ratepayer Portfolios", icon: Users, active: true },
+            { label: "Cadastre & Property Roll", icon: Building2, active: false },
             { label: "SMS Bill Rollout Engine", icon: MessageSquare, active: false },
             { label: "Treasury Reconciliation", icon: Landmark, active: false },
             { label: "System Audit Trail", icon: ShieldCheck, active: false },
@@ -103,7 +98,7 @@ export function AdminDashboardSkeleton() {
       </aside>
 
       {/* 2. Main Content Workspace */}
-      <div className="flex-1 flex flex-col min-w-0 min-h-screen lg:h-screen lg:overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 min-h-dvh lg:h-dvh lg:overflow-hidden">
         {/* Mobile Header Shell */}
         <header className="bg-white/80 border-b border-[#E5E5EA] px-4 h-13 flex items-center justify-between shrink-0 lg:hidden z-20">
           <div className="flex items-center gap-2">
@@ -217,10 +212,6 @@ export function AdminDashboardSkeleton() {
                   <div className="apple-btn-secondary h-8 px-3 rounded-lg font-medium text-xs flex items-center gap-1.5 text-[#007AFF] opacity-80 pointer-events-none">
                     <UploadCloud className="w-3.5 h-3.5 text-[#007AFF]" />
                     <span>Import CSV</span>
-                  </div>
-                  <div className="apple-btn-secondary h-8 px-3 rounded-lg font-medium text-xs flex items-center gap-1.5 opacity-80 pointer-events-none">
-                    <Download className="w-3.5 h-3.5" />
-                    <span>Export Cadastre CSV</span>
                   </div>
                 </div>
               </div>

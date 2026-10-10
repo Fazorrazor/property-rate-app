@@ -1,4 +1,4 @@
-import { IPaymentProvider, InitializationParams, InitializationResponse, VerificationResponse, ChargeParams, ChargeResponse } from './types';
+import { IPaymentProvider, InitializationParams, InitializationResponse, VerificationResponse, ChargeParams, ChargeResponse, ResolveAccountResponse } from './types';
 
 export class PaystackProvider implements IPaymentProvider {
   private secretKey: string;
@@ -9,6 +9,9 @@ export class PaystackProvider implements IPaymentProvider {
   }
 
   private async fetchPaystack(endpoint: string, options: RequestInit = {}) {
+    if (!this.secretKey) {
+      throw new Error('PAYSTACK_SECRET_KEY is not configured in environment variables.');
+    }
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       ...options,
       headers: {
@@ -57,6 +60,33 @@ export class PaystackProvider implements IPaymentProvider {
 
   async chargeMobileMoney(params: ChargeParams): Promise<ChargeResponse> {
     try {
+      // If customer name details are provided, sync with Paystack customer records
+      if (params.firstName || params.lastName) {
+        try {
+          const custRes = await this.fetchPaystack('/customer', {
+            method: 'POST',
+            body: JSON.stringify({
+              email: params.email,
+              first_name: params.firstName,
+              last_name: params.lastName,
+              phone: params.phone || params.mobile_money.phone,
+            }),
+          });
+          if (custRes.status === 200 && custRes.data?.data?.customer_code) {
+            await this.fetchPaystack(`/customer/${custRes.data.data.customer_code}`, {
+              method: 'PUT',
+              body: JSON.stringify({
+                first_name: params.firstName,
+                last_name: params.lastName,
+                phone: params.phone || params.mobile_money.phone,
+              }),
+            }).catch(() => {});
+          }
+        } catch (syncErr) {
+          console.warn('Paystack customer profile sync non-blocking error:', syncErr);
+        }
+      }
+
       const { status, data } = await this.fetchPaystack('/charge', {
         method: 'POST',
         body: JSON.stringify({
@@ -64,7 +94,12 @@ export class PaystackProvider implements IPaymentProvider {
           amount: Math.round(params.amount * 100),
           reference: params.reference,
           mobile_money: params.mobile_money,
-          metadata: params.metadata,
+          metadata: {
+            ...params.metadata,
+            first_name: params.firstName,
+            last_name: params.lastName,
+            customer_name: [params.firstName, params.lastName].filter(Boolean).join(' '),
+          },
         }),
       });
 
@@ -209,4 +244,45 @@ export class PaystackProvider implements IPaymentProvider {
       return { success: false, error: error.message };
     }
   }
+
+  async resolveMobileMoneyAccount(phoneNumber: string, network?: string): Promise<ResolveAccountResponse> {
+    try {
+      const cleanDigits = phoneNumber.replace(/\D/g, '');
+      const accountNumber =
+        cleanDigits.length === 12 && cleanDigits.startsWith('233')
+          ? '0' + cleanDigits.substring(3)
+          : cleanDigits;
+
+      let bankCode = 'MTN';
+      const netUpper = (network || '').toUpperCase();
+      if (netUpper === 'TELECEL' || netUpper === 'VODAFONE' || netUpper === 'VOD') {
+        bankCode = 'VOD';
+      } else if (netUpper === 'AIRTELTIGO' || netUpper === 'AT' || netUpper === 'ATL') {
+        bankCode = 'ATL';
+      }
+
+      const { status, data } = await this.fetchPaystack(
+        `/bank/resolve?account_number=${encodeURIComponent(accountNumber)}&bank_code=${encodeURIComponent(bankCode)}`,
+        { method: 'GET' }
+      );
+
+      if (status === 200 && data.status && data.data?.account_name) {
+        return {
+          success: true,
+          accountName: data.data.account_name,
+          accountNumber: data.data.account_number,
+          bankId: data.data.bank_id,
+        };
+      }
+
+      return {
+        success: false,
+        error: data.message || 'Could not resolve mobile money account',
+      };
+    } catch (error: any) {
+      console.error('Paystack mobile money resolve error:', error);
+      return { success: false, error: error.message };
+    }
+  }
 }
+

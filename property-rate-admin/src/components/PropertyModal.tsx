@@ -99,7 +99,7 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 font-sans">
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-4 font-sans">
           {/* Smooth Fading Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -340,7 +340,7 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
                       value={adminPassword}
                       onChange={(e) => setAdminPassword(e.target.value)}
                       className="w-full text-xs p-2.5 pr-9 border border-[#E5E5EA] rounded-lg bg-white text-[#1C1C1E] placeholder:text-[#8E8E93] focus:outline-none focus:ring-2 focus:ring-[#007AFF]/20 focus:border-[#007AFF]"
-                      placeholder="Enter administrator password (e.g. admin123)"
+                      placeholder="Enter administrator authorization password"
                     />
                     <button
                       type="button"

@@ -335,7 +335,7 @@ export function exportCadastreCsv(
 
     const portfolioCount = Math.max(1, linked.length);
     const isMultiProperty = portfolioCount > 1;
-    const hierarchyStatus = isMultiProperty ? "MULTI-HOLDING MEMBER" : "STANDALONE PARCEL";
+    const hierarchyStatus = isMultiProperty ? "MULTI-HOLDING MEMBER" : "STANDALONE PROPERTY";
 
     const otherAccounts = linked
       .filter((other) => other.accountNumber !== p.accountNumber)
@@ -378,7 +378,7 @@ export function exportCadastreCsv(
     '""',
     '""',
     '""',
-    `"${properties.length} Parcels"`,
+    `"${properties.length} Properties"`,
     '""',
     '""',
     '""',
@@ -612,7 +612,7 @@ export function exportRatepayerDossierCsv(
 
   const cleanName = (dossier.user.name || "Ratepayer").replace(/[^a-zA-Z0-9]/g, "_");
   const dateStr = new Date().toISOString().split("T")[0];
-  downloadCsvFile(`KKMA_Dossier_${cleanName}_${dateStr}.csv`, sections.join("\r\n"));
+  downloadCsvFile(`KKMA_Profile_${cleanName}_${dateStr}.csv`, sections.join("\r\n"));
 }
 
 /**
@@ -620,7 +620,7 @@ export function exportRatepayerDossierCsv(
  */
 export function exportPaidUsersCsv(
   records: AdminPaidUserRecord[],
-  filterType: "ALL" | "LIVE" | "TEST" = "ALL",
+  filterType: "ALL" | "LIVE" | "ABANDONED" | "TEST" = "ALL",
   officerName = "System Administrator"
 ) {
   const totalCollected = records.reduce((sum, r) => sum + r.amountPaid, 0);
@@ -628,13 +628,15 @@ export function exportPaidUsersCsv(
   const filterLabel =
     filterType === "LIVE"
       ? "Live Ratepayer Payments Only"
+      : filterType === "ABANDONED"
+      ? "Abandoned Checkout Transactions Only"
       : filterType === "TEST"
       ? "Sandbox Test Accounts Only"
       : "Complete Paid Ratepayers Directory (Live & Test)";
 
   const headerBanner = buildCorporateHeader({
     reportTitle: "PAID RATEPAYERS DIRECTORY & COLLECTIONS REGISTRY",
-    subtitle: "Official Municipal Rate Collections Registry & Reconciled Ratepayer Dossiers",
+    subtitle: "Official Municipal Rate Collections Registry & Reconciled Ratepayer Profiles",
     filterScope: filterLabel,
     generatedBy: officerName,
     recordCount: records.length,

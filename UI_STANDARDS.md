@@ -99,3 +99,34 @@ The most successful and enduring designs are based on a deep understanding of ho
 
 - All administrator views must mirror Google Enterprise / Google Cloud Console design principles: high data density, clean master-detail side sheets, tabular figure alignments, and comprehensive audit history.
 - The admin portal provides direct database connection for ratepayer dossiers, showing full multi-property portfolios, billing histories, payment receipt archives, and communication timelines.
+
+---
+
+## 6. Zero-Flash Initial Hydration & State Persistence Standard
+
+- **Strict Requirement**: When any view or component supports persisted state or session restoration (such as account lookups, statement views, or filtered reports via URL query parameters or `localStorage`), the initial empty screen MUST NEVER flash before the loading screen on page refresh or initial mount.
+- **Server-to-Client Prop Forwarding**: Next.js Server Components (`page.tsx`) must read `searchParams` on the server and forward target identifiers (such as `initialAccountNo`) directly to client components on Frame 0.
+- **Synchronous Loading State Resolution**: Client components must resolve target identifiers synchronously on mount/hydration (checking props, URL parameters, or local storage) and initialize their loading states (`isLoading... = Boolean(targetId)`) to `true` on Frame 0.
+- **Seamless Loading Experience**: If an account or target entity is being restored, the component must immediately render the authentic full-page loading state (`AppleSpinner`), smoothly transitioning directly into the populated data view without any intermediate flashes of empty states or placeholder containers.
+
+### Anti-Pattern (FORBIDDEN):
+```tsx
+// ❌ WRONG: Initializes loading to false, parses URL/storage only in useEffect
+const [isLoading, setIsLoading] = useState(false); // Frame 0 flashes empty placeholder!
+useEffect(() => {
+  const acc = new URLSearchParams(window.location.search).get('account');
+  if (acc) { setIsLoading(true); fetchData(acc); }
+}, []);
+```
+
+### Compliant Pattern (MANDATORY):
+```tsx
+// ✅ CORRECT: Resolves target synchronously on Frame 0 and renders full-page AppleSpinner immediately
+const [initialAcc] = useState(() => getInitialAccount(props.initialAccountNo));
+const [isLoading, setIsLoading] = useState(() => Boolean(initialAcc)); // Frame 0 immediately shows AppleSpinner
+useEffect(() => {
+  if (initialAcc) { fetchData(initialAcc); }
+}, []);
+```
+
+

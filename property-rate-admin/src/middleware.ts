@@ -11,7 +11,7 @@ export function middleware(request: NextRequest) {
 
   // If trying to access protected route without session
   if (!isAuthPath && !adminSession) {
-    return NextResponse.redirect(new URL('/login?expired=true', request.url));
+    return NextResponse.redirect(new URL('/login', request.url));
   }
 
   // If already authenticated and accessing login without bypass flag

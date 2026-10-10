@@ -1,16 +1,20 @@
-import { supabase } from './supabase';
+import { supabaseAdmin as supabase } from './supabase';
 
 export function mapPropertyRow(p: any) {
   if (!p) return null;
   const arrears = Number(p.arrears || 0);
   const currentFee = Number(p.current_bill !== undefined ? p.current_bill : p.currentFee || 0);
   const amountPaidLastYear = Number(p.amount_paid !== undefined ? p.amount_paid : p.amountPaidLastYear || 0);
+  
+  // Gross bill is the total assessment (arrears + current fee)
+  const grossBill = Number((arrears + currentFee).toFixed(2));
+  // Net remaining balance: gross bill minus verified payments, bound at zero
+  const netRemaining = Math.max(0, Number((grossBill - amountPaidLastYear).toFixed(2)));
+
   const totalAmountDue = Number(
-    p.outstanding_amt !== undefined && p.outstanding_amt !== null
-      ? p.outstanding_amt
-      : p.totalAmountDue !== undefined
-        ? p.totalAmountDue
-        : arrears + currentFee
+    p.outstanding_amt !== undefined && p.outstanding_amt !== null && Number(p.outstanding_amt) >= 0
+      ? Number(p.outstanding_amt)
+      : netRemaining
   );
 
   let status: 'PAID' | 'PARTIALLY_PAID' | 'UNPAID' = p.status;
@@ -34,6 +38,7 @@ export function mapPropertyRow(p: any) {
     currentFee,
     amountPaidLastYear,
     arrears,
+    billAmount: grossBill,
     totalAmountDue,
     status,
     billImageUrl: p.bill_image_url || p.billImageUrl || null,
@@ -64,13 +69,15 @@ function preparePropertyWritePayload(data: any) {
     row.amount_paid = cleanData.amountPaidLastYear;
     delete row.amountPaidLastYear;
   }
-  if (cleanData.totalAmountDue !== undefined) {
-    row.outstanding_amt = cleanData.totalAmountDue;
-    delete row.totalAmountDue;
-  }
-  if (cleanData.outstanding_amt !== undefined) {
-    row.outstanding_amt = cleanData.outstanding_amt;
-  }
+  
+  // Realign bill_amount and outstanding_amt consistently
+  const cBill = Number(row.current_bill !== undefined ? row.current_bill : (cleanData.currentFee || 0));
+  const arr = Number(row.arrears !== undefined ? row.arrears : 0);
+  const pd = Number(row.amount_paid !== undefined ? row.amount_paid : (cleanData.amountPaidLastYear || 0));
+  row.bill_amount = Number((arr + cBill).toFixed(2));
+  row.outstanding_amt = Math.max(0, Number((arr + cBill - pd).toFixed(2)));
+  delete row.totalAmountDue;
+
   if (cleanData.billImageUrl !== undefined) {
     row.bill_image_url = cleanData.billImageUrl;
     delete row.billImageUrl;
@@ -328,7 +335,7 @@ export const ratepayerDb = {
         const propIds = data.map((p: any) => p.id);
         const { data: allReceipts } = await supabase
           .from('Receipt')
-          .select('id, receiptNumber, amount, datePaid, propertyId, gcrNumber, settlementType')
+          .select('id, receiptNumber, amount, datePaid, propertyId, settlementType, paymentMethod')
           .in('propertyId', propIds);
 
         const receiptsByPropId = (allReceipts || []).reduce((acc: any, r: any) => {

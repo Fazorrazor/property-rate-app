@@ -244,6 +244,11 @@ export class ArkeselProvider implements ISMSProvider {
           formattedPhone,
         };
       }
+      const sanitizedMessage = message
+        .replace(/•/g, '-')
+        .replace(/GH₵/g, 'GHS')
+        .replace(/₵/g, 'GHS');
+
       const response = await fetch(
         'https://sms.arkesel.com/api/v2/sms/send',
         {
@@ -254,7 +259,7 @@ export class ArkeselProvider implements ISMSProvider {
           },
           body: JSON.stringify({
             sender: this.senderId,
-            message,
+            message: sanitizedMessage,
             recipients: [formattedPhone],
           }),
         }

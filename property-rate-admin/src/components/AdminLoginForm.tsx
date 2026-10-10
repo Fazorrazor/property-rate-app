@@ -17,11 +17,7 @@ export default function AdminLoginForm() {
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      if (params.get('expired') === 'true') {
-        setStatus('error');
-        setErrorMessage('Session expired. Please sign in again.');
-        setErrorTooltip('Please sign in to access your municipal administrative console.');
-      } else if (params.get('superseded') === 'true') {
+      if (params.get('superseded') === 'true') {
         setStatus('error');
         setErrorMessage('Signed out: account active on another device.');
         setErrorTooltip('Single-session protection automatically ends earlier sessions when you sign in elsewhere.');

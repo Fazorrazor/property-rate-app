@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, UploadCloud, FileText, AlertTriangle, CheckCircle2, Eye, EyeOff } from "lucide-react";
+import { X, UploadCloud, FileText, AlertTriangle, Eye, EyeOff } from "lucide-react";
 import { AppleSpinner } from "./ui/AppleSpinner";
 import { importCadastreCsvBatch } from "@/app/actions";
 
@@ -252,7 +252,7 @@ export function CsvImportModal({ isOpen, onClose, onSuccess }: CsvImportModalPro
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="font-semibold text-[#1C1C1E]">
-                      Parsed Preview (First 5 of {parsedRows.length} parcels)
+                      Parsed Preview (First 5 of {parsedRows.length} properties)
                     </span>
                     <span className="text-[11px] text-[#34C759] font-medium">
                       &bull; Schema Headers Matched
@@ -357,10 +357,10 @@ export function CsvImportModal({ isOpen, onClose, onSuccess }: CsvImportModalPro
                 {isProcessing ? (
                   <>
                     <AppleSpinner size="xs" className="text-white" />
-                    <span>Ingesting Parcels...</span>
+                    <span>Importing Properties...</span>
                   </>
                 ) : (
-                  <span>Import {parsedRows.length > 0 ? `${parsedRows.length} Parcels` : "Cadastre Roll"}</span>
+                  <span>Import {parsedRows.length > 0 ? `${parsedRows.length} Properties` : "Property Register"}</span>
                 )}
               </button>
             </div>

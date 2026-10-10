@@ -76,6 +76,15 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  // Validate incoming webhook key if gateway secret is configured
+  const expectedSecret = process.env.USSD_AUTH_SECRET;
+  if (expectedSecret) {
+    const authHeader = req.headers.get('x-ussd-auth-key') || req.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
+    if (!authHeader || authHeader !== expectedSecret) {
+      return NextResponse.json({ error: 'Unauthorized USSD gateway request' }, { status: 401 });
+    }
+  }
+
   cleanupExpiredSessions();
 
   try {

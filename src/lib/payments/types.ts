@@ -33,6 +33,17 @@ export interface ChargeParams {
     provider: 'mtn' | 'vod' | 'tgo';
   };
   metadata?: any;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+}
+
+export interface ResolveAccountResponse {
+  success: boolean;
+  accountName?: string;
+  accountNumber?: string;
+  bankId?: number;
+  error?: string;
 }
 
 export interface ChargeResponse {
@@ -49,4 +60,6 @@ export interface IPaymentProvider {
   verifyTransaction(reference: string): Promise<VerificationResponse>;
   submitOtp(reference: string, otp: string): Promise<ChargeResponse>;
   resendOtp(reference: string): Promise<ChargeResponse>;
+  resolveMobileMoneyAccount?(phoneNumber: string, network?: string): Promise<ResolveAccountResponse>;
 }
+
