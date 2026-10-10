@@ -20,6 +20,11 @@ jobs:
       PAYSTACK_PUBLIC_KEY: "pk_test_sample"
       PAYSTACK_SECRET_KEY: "sk_test_sample"
       NEXT_PUBLIC_APP_URL: "http://localhost:3000"
+      NEXT_PUBLIC_SUPABASE_URL: "https://placeholder.supabase.co"
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "placeholder-anon-key-for-ci-build"
+      SUPABASE_SERVICE_ROLE_KEY: "placeholder-service-key-for-ci-build"
+      ADMIN_AUTH_SECRET: "ci-test-admin-auth-secret-32-chars-long"
+      USSD_AUTH_SECRET: "ci-test-ussd-auth-secret"
 
     steps:
       - name: Checkout Code
