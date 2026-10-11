@@ -183,6 +183,11 @@ export function OfficerStatementView({
   const [searchResults, setSearchResults] = useState<PropertyBillAccountSummary[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isAccountConfirmed, setIsAccountConfirmed] = useState(Boolean(resolvedInitialAcc));
+  const [isMultiMatchModalOpen, setIsMultiMatchModalOpen] = useState(false);
+  const [multiMatchResults, setMultiMatchResults] = useState<PropertyBillAccountSummary[]>([]);
+  const [multiMatchSearchTerm, setMultiMatchSearchTerm] = useState("");
+  const [accountSearchMessage, setAccountSearchMessage] = useState<string | null>(null);
 
   // Active statement state
   const [activeAccountNo, setActiveAccountNo] = useState<string | null>(resolvedInitialAcc || null);
@@ -249,6 +254,8 @@ export function OfficerStatementView({
     handleSectionChange("STATEMENT");
     setAccountNumberInput(accNo);
     setSearchQuery(accNo);
+    setIsAccountConfirmed(true);
+    setAccountSearchMessage(null);
     fetchStatement(accNo, false);
   };
 
@@ -414,6 +421,9 @@ export function OfficerStatementView({
     setStatementData(null);
     setAccountNumberInput("");
     setSearchQuery("");
+    setIsAccountConfirmed(false);
+    setAccountSearchMessage(null);
+    setIsMultiMatchModalOpen(false);
     setActiveAccountNo(null);
     setStartDate("");
     setEndDate("");
@@ -459,6 +469,7 @@ export function OfficerStatementView({
           const accToFetch = savedAcc.trim();
           setAccountNumberInput(accToFetch);
           setSearchQuery(accToFetch);
+          setIsAccountConfirmed(true);
           fetchStatement(accToFetch);
         }
       } catch {
@@ -660,15 +671,70 @@ export function OfficerStatementView({
     if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
     setAccountNumberInput(acc.accountNumber);
     setSearchQuery(acc.accountNumber);
+    setIsAccountConfirmed(true);
+    setAccountSearchMessage(null);
     setSearchResults([]);
     setIsDropdownOpen(false);
+    setIsMultiMatchModalOpen(false);
     setTimeout(() => {
       isSelectingRef.current = false;
     }, 400);
   };
 
+  const handleAccountSearchEnter = async (e?: React.KeyboardEvent | React.FormEvent) => {
+    if (e && "key" in e && e.key !== "Enter") return;
+    if (e && "preventDefault" in e) e.preventDefault();
+
+    const query = accountNumberInput.trim();
+    if (!query) return;
+
+    if (isAccountConfirmed) {
+      handleViewStatementSubmit();
+      return;
+    }
+
+    setIsSearching(true);
+    setAccountSearchMessage(null);
+    setIsDropdownOpen(false);
+
+    try {
+      const normalizedKey = query.toLowerCase();
+      let accounts: PropertyBillAccountSummary[] = [];
+
+      if (searchCacheRef.current.has(normalizedKey)) {
+        accounts = searchCacheRef.current.get(normalizedKey)!;
+      } else {
+        const res = await searchPropertyBillAccounts({ searchQuery: query, pageSize: 30 });
+        if (res.success && res.accounts) {
+          accounts = res.accounts;
+          searchCacheRef.current.set(normalizedKey, accounts);
+        }
+      }
+
+      if (accounts.length === 0) {
+        setAccountSearchMessage(`No property accounts found matching "${query}".`);
+        setIsAccountConfirmed(false);
+      } else if (accounts.length === 1) {
+        handleSelectAccount(accounts[0]);
+      } else {
+        setMultiMatchResults(accounts);
+        setMultiMatchSearchTerm(query);
+        setIsMultiMatchModalOpen(true);
+      }
+    } catch (err) {
+      console.error("Account search error:", err);
+      setAccountSearchMessage("Error looking up accounts. Please try again.");
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
   const handleViewStatementSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (!isAccountConfirmed) {
+      handleAccountSearchEnter(e);
+      return;
+    }
     const cleanAccount = accountNumberInput.trim();
     if (!cleanAccount) return;
     setIsDropdownOpen(false);
@@ -719,7 +785,7 @@ export function OfficerStatementView({
 
   // Dedicated Year Preset Filter Actions
   const applyFiscalYearFilter = (year: number) => {
-    if (!accountNumberInput.trim()) return;
+    if (!isAccountConfirmed) return;
     const sIso = `${year}-01-01`;
     const eIso = `${year}-12-31`;
     setStartDate(sIso);
@@ -734,7 +800,7 @@ export function OfficerStatementView({
   };
 
   const applyMultiYearFilter = (startYr: number, endYr: number) => {
-    if (!accountNumberInput.trim()) return;
+    if (!isAccountConfirmed) return;
     const sIso = `${startYr}-01-01`;
     const eIso = `${endYr}-12-31`;
     setStartDate(sIso);
@@ -749,7 +815,7 @@ export function OfficerStatementView({
   };
 
   const applyAllRecordsFilter = () => {
-    if (!accountNumberInput.trim()) return;
+    if (!isAccountConfirmed) return;
     setStartDate("");
     setEndDate("");
     setStartDateText("");
@@ -877,13 +943,13 @@ export function OfficerStatementView({
 
     // If account number is present and dates have been selected, seamlessly load the statement
     const cleanAccount = accountNumberInput.trim();
-    if (cleanAccount && finalStart) {
+    if (cleanAccount && finalStart && isAccountConfirmed) {
       fetchStatement(cleanAccount);
     }
   };
 
   const openPeriodModal = () => {
-    if (!accountNumberInput.trim()) return;
+    if (!isAccountConfirmed) return;
     setTempStartDate(startDate);
     setTempEndDate(endDate);
     setModalStartText(startDate ? formatIsoToDisplay(startDate) : "");
@@ -1166,6 +1232,14 @@ export function OfficerStatementView({
                         onChange={(e) => {
                           setAccountNumberInput(e.target.value);
                           setSearchQuery(e.target.value);
+                          setIsAccountConfirmed(false);
+                          setAccountSearchMessage(null);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleAccountSearchEnter(e);
+                          }
                         }}
                         onFocus={() => {
                           if (searchResults.length > 0) setIsDropdownOpen(true);
@@ -1175,9 +1249,15 @@ export function OfficerStatementView({
                             setIsDropdownOpen(false);
                           }, 180);
                         }}
-                        placeholder="e.g. PR-03-000932"
+                        placeholder="Search account no, ratepayer name, or phone..."
                         className="w-full pl-10 pr-3 h-[44px] text-[14px] text-[#1D1D1F] bg-white border border-[#D2D2D7] rounded-[10px] shadow-[0px_1px_3px_0px_rgba(29,29,31,0.02)] focus:outline-none focus:border-[#007AFF] focus:ring-2 focus:ring-[#007AFF]/20 transition-all font-sans placeholder:text-[#8E8E93]"
                       />
+
+                      {accountSearchMessage && (
+                        <p className="text-[12px] text-[#FF3B30] font-medium mt-1 absolute -bottom-5 left-1 z-30">
+                          {accountSearchMessage}
+                        </p>
+                      )}
 
                       {/* Autocomplete Dropdown */}
                       <AnimatePresence>
@@ -1230,23 +1310,23 @@ export function OfficerStatementView({
                       {/* Start Date Box */}
                       <div
                         className={`relative flex items-center flex-1 h-[44px] rounded-[10px] border transition-all ${
-                          accountNumberInput.trim()
+                          isAccountConfirmed
                             ? "bg-white border-[#D2D2D7] focus-within:border-[#007AFF] focus-within:ring-2 focus-within:ring-[#007AFF]/20"
                             : "bg-[#F5F5F7] border-[#E8E8ED] cursor-not-allowed opacity-75"
                         }`}
                       >
                         <button
                           type="button"
-                          disabled={!accountNumberInput.trim()}
+                          disabled={!isAccountConfirmed}
                           onClick={openPeriodModal}
                           className="pl-3.5 pr-1.5 text-[#8E8E93] hover:text-[#007AFF] transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
-                          title={accountNumberInput.trim() ? "Open calendar picker" : "Select an account first"}
+                          title={isAccountConfirmed ? "Open calendar picker" : "Select an account first"}
                         >
                           <Calendar className="w-4 h-4" />
                         </button>
                         <input
                           type="text"
-                          disabled={!accountNumberInput.trim()}
+                          disabled={!isAccountConfirmed}
                           value={startDateText}
                           onChange={(e) => setStartDateText(e.target.value)}
                           onBlur={handleStartDateBlur}
@@ -1255,7 +1335,7 @@ export function OfficerStatementView({
                           }}
                           placeholder="01-Jan-2025"
                           className="w-full pr-3 py-1.5 text-[14px] font-medium text-[#1D1D1F] bg-transparent outline-none font-sans placeholder:text-[#8E8E93] disabled:cursor-not-allowed"
-                          title={accountNumberInput.trim() ? "Type start date (e.g. 01-Jan-2025)" : "Select an account first"}
+                          title={isAccountConfirmed ? "Type start date (e.g. 01-Jan-2025)" : "Select an account first"}
                         />
                       </div>
 
@@ -1265,23 +1345,23 @@ export function OfficerStatementView({
                       {/* End Date Box */}
                       <div
                         className={`relative flex items-center flex-1 h-[44px] rounded-[10px] border transition-all ${
-                          accountNumberInput.trim()
+                          isAccountConfirmed
                             ? "bg-white border-[#D2D2D7] focus-within:border-[#007AFF] focus-within:ring-2 focus-within:ring-[#007AFF]/20"
                             : "bg-[#F5F5F7] border-[#E8E8ED] cursor-not-allowed opacity-75"
                         }`}
                       >
                         <button
                           type="button"
-                          disabled={!accountNumberInput.trim()}
+                          disabled={!isAccountConfirmed}
                           onClick={openPeriodModal}
                           className="pl-3.5 pr-1.5 text-[#8E8E93] hover:text-[#007AFF] transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
-                          title={accountNumberInput.trim() ? "Open calendar picker" : "Select an account first"}
+                          title={isAccountConfirmed ? "Open calendar picker" : "Select an account first"}
                         >
                           <Calendar className="w-4 h-4" />
                         </button>
                         <input
                           type="text"
-                          disabled={!accountNumberInput.trim()}
+                          disabled={!isAccountConfirmed}
                           value={endDateText}
                           onChange={(e) => setEndDateText(e.target.value)}
                           onBlur={handleEndDateBlur}
@@ -1290,7 +1370,7 @@ export function OfficerStatementView({
                           }}
                           placeholder="31-Dec-2026"
                           className="w-full pr-3 py-1.5 text-[14px] font-medium text-[#1D1D1F] bg-transparent outline-none font-sans placeholder:text-[#8E8E93] disabled:cursor-not-allowed"
-                          title={accountNumberInput.trim() ? "Type end date (e.g. 31-Dec-2026)" : "Select an account first"}
+                          title={isAccountConfirmed ? "Type end date (e.g. 31-Dec-2026)" : "Select an account first"}
                         />
                       </div>
                     </div>
@@ -1299,12 +1379,13 @@ export function OfficerStatementView({
                     <div className="shrink-0 w-[156px]">
                       <button
                         type="submit"
-                        disabled={!accountNumberInput.trim() || isLoadingStatement}
+                        disabled={!isAccountConfirmed || isLoadingStatement}
                         className={`w-full h-[44px] rounded-[10px] text-[15px] font-semibold transition-all duration-200 flex items-center justify-center gap-1.5 ${
-                          accountNumberInput.trim() && !isLoadingStatement
+                          isAccountConfirmed && !isLoadingStatement
                             ? "bg-[#007AFF] text-white hover:bg-[#0066D6] shadow-[0px_2px_8px_0px_rgba(0,122,255,0.35)] active:scale-[0.98] ring-1 ring-[#007AFF]/20 cursor-pointer"
                             : "bg-[#E8E8ED] border border-[#D2D2D7] text-[#8E8E93] cursor-not-allowed shadow-none"
                         }`}
+                        title={!isAccountConfirmed ? "Select an account to view statement" : "View Statement"}
                       >
                         {isLoadingStatement ? (
                           <>
@@ -1322,7 +1403,7 @@ export function OfficerStatementView({
                   <div className="flex items-center justify-center gap-2 pt-1 w-full">
                     {FISCAL_YEARS.map((yr) => {
                       const isActive = startDate === `${yr}-01-01` && endDate === `${yr}-12-31`;
-                      const isEnabled = Boolean(accountNumberInput.trim());
+                      const isEnabled = Boolean(isAccountConfirmed);
                       return (
                         <button
                           key={yr}
@@ -1344,10 +1425,10 @@ export function OfficerStatementView({
 
                     <button
                       type="button"
-                      disabled={!accountNumberInput.trim()}
+                      disabled={!isAccountConfirmed}
                       onClick={() => applyMultiYearFilter(2024, 2026)}
                       className={`px-3.5 h-[32px] rounded-[8px] text-[13px] font-medium transition-all shrink-0 border ${
-                        !accountNumberInput.trim()
+                        !isAccountConfirmed
                           ? "bg-[#E8E8ED] border-[#E8E8ED] text-[#626267] cursor-not-allowed"
                           : startDate === "2024-01-01" && endDate === "2026-12-31"
                           ? "bg-[#007AFF] border-[#007AFF] text-white font-semibold shadow-[0px_1px_4px_0px_rgba(0,122,255,0.35)] cursor-pointer"
@@ -1359,10 +1440,10 @@ export function OfficerStatementView({
 
                     <button
                       type="button"
-                      disabled={!accountNumberInput.trim()}
+                      disabled={!isAccountConfirmed}
                       onClick={applyAllRecordsFilter}
                       className={`px-3.5 h-[32px] rounded-[8px] text-[13px] font-medium transition-all shrink-0 border ${
-                        !accountNumberInput.trim()
+                        !isAccountConfirmed
                           ? "bg-[#E8E8ED] border-[#E8E8ED] text-[#626267] cursor-not-allowed"
                           : !startDate && !endDate && statementData
                           ? "bg-[#007AFF] border-[#007AFF] text-white font-semibold shadow-[0px_1px_4px_0px_rgba(0,122,255,0.35)] cursor-pointer"
@@ -1390,6 +1471,14 @@ export function OfficerStatementView({
                 onChange={(e) => {
                   setAccountNumberInput(e.target.value);
                   setSearchQuery(e.target.value);
+                  setIsAccountConfirmed(false);
+                  setAccountSearchMessage(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleAccountSearchEnter(e);
+                  }
                 }}
                 onFocus={() => {
                   if (searchResults.length > 0) setIsDropdownOpen(true);
@@ -1399,12 +1488,16 @@ export function OfficerStatementView({
                     setIsDropdownOpen(false);
                   }, 180);
                 }}
-                placeholder="e.g. PR-03-000932"
+                placeholder="Search account no, ratepayer name, or phone..."
                 className="w-full pl-3 pr-9 h-[44px] text-[14px] text-[#1D1D1F] bg-white border border-[#D2D2D7] rounded-[10px] shadow-[0px_1px_2px_0px_rgba(29,29,31,0.02)] focus:outline-none focus:border-[#007AFF] focus:ring-2 focus:ring-[#007AFF]/20 transition-all font-sans placeholder:text-[#8E8E93]"
               />
               <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-[#8E8E93]">
                 {isSearching ? <AppleSpinner size="sm" /> : <Search className="w-3.5 h-3.5" />}
               </div>
+
+              {accountSearchMessage && (
+                <p className="text-[12px] text-[#FF3B30] font-medium mt-1">{accountSearchMessage}</p>
+              )}
 
               {/* Autocomplete Dropdown */}
               <AnimatePresence>
@@ -1457,12 +1550,13 @@ export function OfficerStatementView({
           <button
             type="button"
             onClick={() => handleViewStatementSubmit()}
-            disabled={!accountNumberInput.trim() || isLoadingStatement}
+            disabled={!isAccountConfirmed || isLoadingStatement}
             className={`w-full h-[46px] rounded-[10px] text-[15px] font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${
-              accountNumberInput.trim() && !isLoadingStatement
+              isAccountConfirmed && !isLoadingStatement
                 ? "bg-[#007AFF] text-white hover:bg-[#0066D6] shadow-[0px_2px_8px_0px_rgba(0,122,255,0.35)] active:scale-[0.98] ring-1 ring-[#007AFF]/20 cursor-pointer"
                 : "bg-[#E8E8ED] border border-[#D2D2D7] text-[#8E8E93] cursor-not-allowed shadow-none"
             }`}
+            title={!isAccountConfirmed ? "Select an account to view statement" : "View Statement"}
           >
             {isLoadingStatement ? (
               <>
@@ -1479,7 +1573,7 @@ export function OfficerStatementView({
             <div className="flex items-center justify-between">
               <span className="text-[12px] font-semibold text-[#1D1D1F]">Statement period</span>
               <span className="text-[11px] text-[#8E8E93]">
-                {!accountNumberInput.trim() ? "Enter account to enable" : "Filter options"}
+                {!isAccountConfirmed ? "Select account to enable" : "Filter options"}
               </span>
             </div>
 
@@ -1494,14 +1588,14 @@ export function OfficerStatementView({
                   <span className="text-[10px] font-medium text-[#8E8E93]">START DATE</span>
                   <div
                     className={`relative flex items-center h-[38px] rounded-[8px] border px-2 transition-all ${
-                      accountNumberInput.trim()
+                      isAccountConfirmed
                         ? "bg-white border-[#D2D2D7]"
                         : "bg-[#F5F5F7] border-[#E8E8ED] cursor-not-allowed"
                     }`}
                   >
                     <input
                       type="text"
-                      disabled={!accountNumberInput.trim()}
+                      disabled={!isAccountConfirmed}
                       value={startDateText}
                       onChange={(e) => setStartDateText(e.target.value)}
                       onBlur={handleStartDateBlur}
@@ -1510,7 +1604,7 @@ export function OfficerStatementView({
                     />
                     <button
                       type="button"
-                      disabled={!accountNumberInput.trim()}
+                      disabled={!isAccountConfirmed}
                       onClick={openPeriodModal}
                       className="absolute right-1.5 text-[#8E8E93] hover:text-[#007AFF]"
                     >
@@ -1526,14 +1620,14 @@ export function OfficerStatementView({
                   <span className="text-[10px] font-medium text-[#8E8E93]">END DATE</span>
                   <div
                     className={`relative flex items-center h-[38px] rounded-[8px] border px-2 transition-all ${
-                      accountNumberInput.trim()
+                      isAccountConfirmed
                         ? "bg-white border-[#D2D2D7]"
                         : "bg-[#F5F5F7] border-[#E8E8ED] cursor-not-allowed"
                     }`}
                   >
                     <input
                       type="text"
-                      disabled={!accountNumberInput.trim()}
+                      disabled={!isAccountConfirmed}
                       value={endDateText}
                       onChange={(e) => setEndDateText(e.target.value)}
                       onBlur={handleEndDateBlur}
@@ -1542,7 +1636,7 @@ export function OfficerStatementView({
                     />
                     <button
                       type="button"
-                      disabled={!accountNumberInput.trim()}
+                      disabled={!isAccountConfirmed}
                       onClick={openPeriodModal}
                       className="absolute right-1.5 text-[#8E8E93] hover:text-[#007AFF]"
                     >
@@ -1561,7 +1655,7 @@ export function OfficerStatementView({
               <div className="grid grid-cols-4 gap-1.5">
                 {FISCAL_YEARS.slice(0, 4).map((yr) => {
                   const isActive = startDate === `${yr}-01-01` && endDate === `${yr}-12-31`;
-                  const isEnabled = Boolean(accountNumberInput.trim());
+                  const isEnabled = Boolean(isAccountConfirmed);
                   return (
                     <button
                       key={yr}
@@ -1585,10 +1679,10 @@ export function OfficerStatementView({
               <div className="grid grid-cols-3 gap-1.5">
                 <button
                   type="button"
-                  disabled={!accountNumberInput.trim()}
+                  disabled={!isAccountConfirmed}
                   onClick={() => applyFiscalYearFilter(2022)}
                   className={`h-[36px] rounded-lg text-[12px] font-medium transition-all flex items-center justify-center border ${
-                    !accountNumberInput.trim()
+                    !isAccountConfirmed
                       ? "bg-[#E8E8ED] border-[#E8E8ED] text-[#626267] cursor-not-allowed"
                       : startDate === "2022-01-01" && endDate === "2022-12-31"
                       ? "bg-[#007AFF] border-[#007AFF] text-white font-semibold shadow-[0px_1px_4px_0px_rgba(0,122,255,0.35)] cursor-pointer"
@@ -1600,10 +1694,10 @@ export function OfficerStatementView({
 
                 <button
                   type="button"
-                  disabled={!accountNumberInput.trim()}
+                  disabled={!isAccountConfirmed}
                   onClick={() => applyMultiYearFilter(2024, 2026)}
                   className={`h-[36px] rounded-lg text-[12px] font-medium transition-all flex items-center justify-center border ${
-                    !accountNumberInput.trim()
+                    !isAccountConfirmed
                       ? "bg-[#E8E8ED] border-[#E8E8ED] text-[#626267] cursor-not-allowed"
                       : startDate === "2024-01-01" && endDate === "2026-12-31"
                       ? "bg-[#007AFF] border-[#007AFF] text-white font-semibold shadow-[0px_1px_4px_0px_rgba(0,122,255,0.35)] cursor-pointer"
@@ -1615,10 +1709,10 @@ export function OfficerStatementView({
 
                 <button
                   type="button"
-                  disabled={!accountNumberInput.trim()}
+                  disabled={!isAccountConfirmed}
                   onClick={applyAllRecordsFilter}
                   className={`h-[36px] rounded-lg text-[12px] font-medium transition-all flex items-center justify-center border ${
-                    !accountNumberInput.trim()
+                    !isAccountConfirmed
                       ? "bg-[#E8E8ED] border-[#E8E8ED] text-[#626267] cursor-not-allowed"
                       : !startDate && !endDate && statementData
                       ? "bg-[#007AFF] border-[#007AFF] text-white font-semibold shadow-[0px_1px_4px_0px_rgba(0,122,255,0.35)] cursor-pointer"
@@ -2279,6 +2373,104 @@ export function OfficerStatementView({
                     Done
                   </button>
                 </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Multiple Matching Accounts Disambiguation Modal */}
+      <AnimatePresence>
+        {isMultiMatchModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMultiMatchModalOpen(false)}
+              className="absolute inset-0 bg-black/40 backdrop-blur-xs"
+            />
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }}
+              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+              className="relative w-full max-w-xl bg-white rounded-2xl shadow-2xl border border-[#E8E8ED] overflow-hidden flex flex-col max-h-[85vh] z-10 font-sans"
+            >
+              {/* Header */}
+              <div className="px-5 py-4 border-b border-[#E8E8ED] flex items-center justify-between bg-[#FAFAFC]">
+                <div>
+                  <h3 className="text-[16px] font-semibold text-[#1D1D1F]">
+                    Select Property Account
+                  </h3>
+                  <p className="text-[12px] text-[#6E6E73] mt-0.5">
+                    Found {multiMatchResults.length} accounts matching &ldquo;{multiMatchSearchTerm}&rdquo;
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsMultiMatchModalOpen(false)}
+                  className="w-8 h-8 rounded-full bg-[#E8E8ED] hover:bg-[#D2D2D7] text-[#6E6E73] hover:text-[#1D1D1F] flex items-center justify-center transition-colors cursor-pointer"
+                  title="Close"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* List of Accounts */}
+              <div className="flex-1 overflow-y-auto divide-y divide-[#F5F5F7] p-2">
+                {multiMatchResults.map((acc) => (
+                  <button
+                    key={acc.accountNumber}
+                    type="button"
+                    onClick={() => handleSelectAccount(acc)}
+                    className="w-full px-4 py-3 text-left rounded-xl hover:bg-[#F5F5F7] transition-all flex items-center justify-between gap-4 group cursor-pointer active:scale-[0.99]"
+                  >
+                    <div className="flex flex-col gap-0.5 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[14px] font-semibold font-mono text-[#1D1D1F] group-hover:text-[#007AFF] transition-colors">
+                          {acc.accountNumber}
+                        </span>
+                        {acc.propertyCategory && (
+                          <span className="text-[11px] text-[#8E8E93] uppercase font-sans">
+                            &bull; {acc.propertyCategory}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[13px] font-medium text-[#1D1D1F] truncate">
+                        {acc.name || "Unnamed Ratepayer"}
+                      </div>
+                      <div className="text-[11px] text-[#6E6E73] flex items-center gap-2 truncate">
+                        <span>{acc.electoralArea || "KKMA"}</span>
+                        {acc.houseNo && <span>&bull; House: {acc.houseNo}</span>}
+                        {acc.telephone && <span>&bull; Tel: {acc.telephone}</span>}
+                      </div>
+                    </div>
+
+                    <div className="text-right shrink-0">
+                      <div className="text-[10px] font-semibold text-[#8E8E93] uppercase tracking-wider">
+                        Outstanding
+                      </div>
+                      <div className="text-[13px] font-mono font-semibold text-[#1D1D1F]">
+                        {formatGhc(acc.outstandingAmount)}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {/* Footer */}
+              <div className="px-5 py-3 border-t border-[#E8E8ED] bg-[#FAFAFC] flex items-center justify-between">
+                <span className="text-[12px] text-[#8E8E93]">
+                  Click an account to select and view statement
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsMultiMatchModalOpen(false)}
+                  className="px-4 py-1.5 rounded-lg text-[13px] font-medium text-[#6E6E73] hover:text-[#1D1D1F] hover:bg-[#E8E8ED] transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
               </div>
             </motion.div>
           </div>
