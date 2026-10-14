@@ -61,6 +61,17 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
     setError('');
   }, [property, isOpen]);
 
+  // Lock background viewport scrolling when property modal is active
+  useEffect(() => {
+    if (isOpen) {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
+    }
+  }, [isOpen]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!adminPassword) {
@@ -99,7 +110,7 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-4 font-sans">
+        <div className="fixed inset-0 z-[10000] flex items-end sm:items-center justify-center p-0 sm:p-4 font-sans pointer-events-auto">
           {/* Smooth Fading Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -161,6 +172,7 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
                       spellCheck={false}
                       data-lpignore="true"
                       data-1p-ignore="true"
+                      data-bwignore="true"
                       data-form-type="other"
                       value={formData.accountNumber}
                       onChange={(e) => setFormData({ ...formData, accountNumber: e.target.value })}
@@ -195,6 +207,7 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
                       spellCheck={false}
                       data-lpignore="true"
                       data-1p-ignore="true"
+                      data-bwignore="true"
                       data-form-type="other"
                       value={formData.ownerName}
                       onChange={(e) => setFormData({ ...formData, ownerName: e.target.value })}
@@ -214,6 +227,7 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
                       spellCheck={false}
                       data-lpignore="true"
                       data-1p-ignore="true"
+                      data-bwignore="true"
                       data-form-type="other"
                       value={formData.ownerPhone}
                       onChange={(e) => setFormData({ ...formData, ownerPhone: e.target.value })}
@@ -235,6 +249,7 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
                       spellCheck={false}
                       data-lpignore="true"
                       data-1p-ignore="true"
+                      data-bwignore="true"
                       data-form-type="other"
                       value={formData.ownerDigitalAddress}
                       onChange={(e) => setFormData({ ...formData, ownerDigitalAddress: e.target.value })}
@@ -253,6 +268,7 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
                       spellCheck={false}
                       data-lpignore="true"
                       data-1p-ignore="true"
+                      data-bwignore="true"
                       data-form-type="other"
                       value={formData.physicalAddress}
                       onChange={(e) => setFormData({ ...formData, physicalAddress: e.target.value })}
@@ -289,8 +305,12 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
                         step="0.01"
                         name="cadastre_rateable_value"
                         autoComplete="off"
+                        autoCorrect="off"
+                        autoCapitalize="off"
+                        spellCheck={false}
                         data-lpignore="true"
                         data-1p-ignore="true"
+                        data-bwignore="true"
                         data-form-type="other"
                         value={formData.rateableValue}
                         onChange={(e) => setFormData({ ...formData, rateableValue: e.target.value })}
@@ -306,8 +326,12 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
                         step="0.00001"
                         name="cadastre_rate_imposed"
                         autoComplete="off"
+                        autoCorrect="off"
+                        autoCapitalize="off"
+                        spellCheck={false}
                         data-lpignore="true"
                         data-1p-ignore="true"
+                        data-bwignore="true"
                         data-form-type="other"
                         value={formData.rateImposed}
                         onChange={(e) => setFormData({ ...formData, rateImposed: e.target.value })}
@@ -334,8 +358,12 @@ export function PropertyModal({ isOpen, onClose, property, onSuccess }: Property
                       type={showPassword ? "text" : "password"}
                       name="cadastre_admin_authorization_key"
                       autoComplete="new-password"
+                      autoCorrect="off"
+                      autoCapitalize="off"
+                      spellCheck={false}
                       data-lpignore="true"
                       data-1p-ignore="true"
+                      data-bwignore="true"
                       data-form-type="other"
                       value={adminPassword}
                       onChange={(e) => setAdminPassword(e.target.value)}

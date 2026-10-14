@@ -79,31 +79,52 @@ function sanitizeBaseUrl(url?: string): string {
 }
 
 // ── Hidden test-account filter ────────────────────────────────────────────────
-// These accounts belong to internal testers and must NEVER appear in any admin
-// table, metric, or collection view.
+// These accounts belong to internal testers (Heinz, Ignatius Amoah, Desmond, Pablo)
+// and must NEVER appear in live production deployments on Vercel, but remain
+// fully visible in local development environments.
+function isLiveProductionDeployment(): boolean {
+    if (process.env.VERCEL_ENV === 'production') return true;
+    if (process.env.VERCEL === '1' && process.env.NODE_ENV === 'production') return true;
+    return false;
+}
+
 const HIDDEN_TEST_ACCOUNT_NUMBERS = [
     'KKDA03001001', 'KKDA03001002', 'KKDA03001005', 'KKDA03001015', 'KKDA03991001',
     'KKDA03991002',
     'KKDA244044647',
     'KKDA59667434',
+    '4894b5db-12ec-4ad1-a4cf-e2fb089c4aac',
 ];
 const HIDDEN_TEST_PHONES = ['0209067556', '0206882328', '0244044647', '0551908713'];
 const HIDDEN_TEST_NAMES  = ['heinz', 'demond', 'desmond', 'ignatius amoah', 'pablo'];
 
-/** Returns true when a record belongs to a known internal test account. */
+/** Returns true when a record belongs to an internal test account on live production. */
 function isHiddenTestAccount(record: {
     name?: string | null;
     accountNumber?: string | null;
     account_no?: string | null;
     telephone?: string | null;
     phoneNumber?: string | null;
+    propertyId?: string | null;
+    email?: string | null;
 }): boolean {
-    const name    = (record.name || '').toLowerCase().trim();
-    const acct    = (record.accountNumber || record.account_no || '').trim();
-    const phone   = (record.telephone || record.phoneNumber || '').replace(/\D/g, '').slice(-9);
-    if (HIDDEN_TEST_ACCOUNT_NUMBERS.includes(acct)) return true;
-    if (HIDDEN_TEST_PHONES.some(p => p.replace(/\D/g, '').slice(-9) === phone && phone.length >= 9)) return true;
-    if (HIDDEN_TEST_NAMES.some(n => name.includes(n))) return true;
+    if (!isLiveProductionDeployment()) return false;
+
+    const acct = (record.accountNumber || record.account_no || '').trim().toUpperCase();
+    const propId = (record.propertyId || '').trim();
+    if (acct && HIDDEN_TEST_ACCOUNT_NUMBERS.some(a => a.toUpperCase() === acct)) return true;
+    if (propId && HIDDEN_TEST_ACCOUNT_NUMBERS.some(a => a.toLowerCase() === propId.toLowerCase())) return true;
+
+    const phone = (record.telephone || record.phoneNumber || record.email || '').replace(/\D/g, '').slice(-9);
+    if (phone && phone.length >= 9 && HIDDEN_TEST_PHONES.some(p => p.replace(/\D/g, '').slice(-9) === phone)) return true;
+
+    const name = (record.name || '').toLowerCase().trim();
+    if (name) {
+        if (name === 'heinz' || name === 'pablo' || name === 'ignatius amoah' || name === 'desmond' || name === 'demond') {
+            return true;
+        }
+        if (name.includes('ignatius amoah')) return true;
+    }
     return false;
 }
 // ─────────────────────────────────────────────────────────────────────────────
@@ -531,11 +552,21 @@ export async function adminLogin(username: string, passwordHash: string, remembe
         const rawPayload = `${admin.id}:${sessionToken}:${Date.now()}`;
         const signedCookie = createSignedSessionCookie(rawPayload);
 
+        const sessionLifetimeSeconds = 7 * 60; // Strict 7-minute session ceiling
+        const expiryTimestamp = Date.now() + sessionLifetimeSeconds * 1000;
+
         const cookieStore = await cookies();
         cookieStore.set('admin_session', signedCookie, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
-            maxAge: rememberMe ? 365 * 24 * 60 * 60 : 24 * 60 * 60,
+            maxAge: sessionLifetimeSeconds,
+            path: '/',
+            sameSite: 'lax'
+        });
+        cookieStore.set('admin_session_expires_at', expiryTimestamp.toString(), {
+            httpOnly: false,
+            secure: process.env.NODE_ENV === 'production',
+            maxAge: sessionLifetimeSeconds,
             path: '/',
             sameSite: 'lax'
         });
@@ -569,6 +600,7 @@ export async function adminLogout() {
         }
     }
     cookieStore.delete('admin_session');
+    try { cookieStore.delete('admin_session_expires_at'); } catch {}
     revalidatePath('/');
 }
 
@@ -618,18 +650,20 @@ export async function getAdminOverview(
             tableWhereClause.requiredFields = requiredFields;
         }
 
-        // Exclude internal test accounts from all table and metric views
-        const testAccountExclusion = {
-            accountNumber: { notIn: HIDDEN_TEST_ACCOUNT_NUMBERS },
-            owner: {
-                AND: [
-                    { name:        { notIn: ['Heinz', 'Pablo'] } },
-                    { phoneNumber: { notIn: HIDDEN_TEST_PHONES } },
-                ],
-            },
-        };
-        Object.assign(tableWhereClause,  testAccountExclusion);
-        Object.assign(globalWhereClause, testAccountExclusion);
+        // Exclude internal test accounts from live production table and metric views
+        if (isLiveProductionDeployment()) {
+            const testAccountExclusion = {
+                accountNumber: { notIn: HIDDEN_TEST_ACCOUNT_NUMBERS },
+                owner: {
+                    AND: [
+                        { name:        { notIn: ['Heinz', 'Pablo', 'Ignatius Amoah', 'Desmond'] } },
+                        { phoneNumber: { notIn: HIDDEN_TEST_PHONES } },
+                    ],
+                },
+            };
+            Object.assign(tableWhereClause,  testAccountExclusion);
+            Object.assign(globalWhereClause, testAccountExclusion);
+        }
 
         let totalFilteredProps = 0;
         let globalPropsCount = 0;
@@ -741,7 +775,7 @@ export async function getAdminOverview(
                 };
             });
 
-            const billDateObj = new Date(p.billDate || Date.now());
+            const billDateObj = p.billYear ? new Date(p.billYear, 0, 15) : new Date(p.billDate || Date.now());
             const deadlineObj = new Date(p.settlementDeadline || Date.now());
             const primaryUser = p.users?.[0];
             // Prioritise direct Property.name / Property.telephone (legacy fields confirmed in live DB)
@@ -838,15 +872,17 @@ export async function getRatepayersList(query = '', page = 1, limit = 50, requir
         if (query && query.trim()) {
             whereClause.search = query.trim();
         }
-        // Exclude internal test accounts
-        whereClause.phoneNumber = { notIn: HIDDEN_TEST_PHONES };
-        whereClause.name        = { notIn: ['Heinz', 'Pablo', 'Ignatius Amoah', 'Demond', 'Desmond'] };
+        // Exclude internal test accounts only on live production deployments
+        if (isLiveProductionDeployment()) {
+            whereClause.phoneNumber = { notIn: HIDDEN_TEST_PHONES };
+            whereClause.name        = { notIn: ['Heinz', 'Pablo', 'Ignatius Amoah', 'Demond', 'Desmond'] };
+        }
 
         const users = await prisma.user.findMany({
             where: whereClause,
             include: {
                 properties: {
-                    where: { accountNumber: { notIn: HIDDEN_TEST_ACCOUNT_NUMBERS } },
+                    ...(isLiveProductionDeployment() ? { where: { accountNumber: { notIn: HIDDEN_TEST_ACCOUNT_NUMBERS } } } : {}),
                 },
             },
             orderBy: { createdAt: 'desc' },
@@ -981,6 +1017,10 @@ export async function getRatepayerHistory(userId: string): Promise<RatepayerHist
         }
 
         if (!user) return null;
+
+        if (isLiveProductionDeployment() && isHiddenTestAccount({ name: user.name, phoneNumber: user.phoneNumber })) {
+            return null;
+        }
 
         const accNos = (user.properties || []).map((p: any) => p.accountNumber).filter(Boolean);
 
@@ -1144,7 +1184,7 @@ export async function getRatepayerHistory(userId: string): Promise<RatepayerHist
 
         const properties: AdminProperty[] = (user.properties || []).map((p: any) => {
             const isDefaulter = p.status !== 'PAID' && p.arrears > 0;
-            const billDateObj = new Date(p.billDate || Date.now());
+            const billDateObj = p.billYear ? new Date(p.billYear, 0, 15) : new Date(p.billDate || Date.now());
             const deadlineObj = new Date(p.settlementDeadline || Date.now());
 
             const propReceipts = (p.receipts && p.receipts.length > 0)
@@ -1713,7 +1753,7 @@ export async function searchSmsRolloutAccounts(params: {
             const ownerName = p.ownerNameDirect || p.owner?.name || primaryUser?.name || 'Municipal Ratepayer';
             const ownerPhone = p.ownerPhoneDirect || p.owner?.tel || p.owner?.mobileNumber || primaryUser?.phoneNumber || 'N/A';
 
-            const billDateObj = new Date(p.billDate || Date.now());
+            const billDateObj = p.billYear ? new Date(p.billYear, 0, 15) : new Date(p.billDate || Date.now());
             const deadlineObj = new Date(p.settlementDeadline || Date.now());
             const rateableValue = Number(p.rateableValue || 0);
             const rateImposed = Number(p.rateImposed || 0);
@@ -1998,7 +2038,7 @@ export async function getSmsRolloutAudience(params: {
                 primaryUser?.phoneNumber ||
                 '—';
 
-            const billDateObj = new Date(p.billDate || Date.now());
+            const billDateObj = p.billYear ? new Date(p.billYear, 0, 15) : new Date(p.billDate || Date.now());
             const deadlineObj = new Date(p.settlementDeadline || Date.now());
 
             const rateableValue = Number(p.rateableValue || 0);
@@ -3957,13 +3997,25 @@ export async function getPaidUsersList(
                 items = items.filter((t: any) => {
                     if (t.domain === 'test') return false;
 
+                    // In local development, show all accounts (including internal test users)
+                    if (!isLiveProductionDeployment()) return true;
+
                     const rawProp = t.metadata?.propertyIds || t.metadata?.accountNumber || t.metadata?.account_no || '';
                     const cleanAccountNo = rawProp.replace(/^prop_/, '').trim();
-                    if (HIDDEN_TEST_ACCOUNT_NUMBERS.includes(cleanAccountNo)) return false;
+                    const cust = t.customer || {};
+                    const meta = t.metadata || {};
 
-                    // Also filter by customer phone number
-                    const rawPhone = (t.customer?.phone || '').replace(/\D/g, '').slice(-9);
-                    if (rawPhone && HIDDEN_TEST_PHONES.some(p => p.replace(/\D/g, '').slice(-9) === rawPhone)) return false;
+                    const payerName = meta.payerName || meta.customer_name || `${cust.first_name || ''} ${cust.last_name || ''}`.trim() || cust.email || '';
+                    const phone = cust.phone || (cust.email?.includes('@') ? cust.email.split('@')[0] : '') || meta.payerPhone || '';
+
+                    if (isHiddenTestAccount({
+                        accountNumber: cleanAccountNo,
+                        propertyId: rawProp,
+                        name: payerName,
+                        phoneNumber: phone,
+                    })) {
+                        return false;
+                    }
 
                     return true;
                 });
@@ -4195,7 +4247,9 @@ export async function getPaidUsersList(
                         };
                     });
 
-                    const totalCount = json.meta?.total || records.length;
+                    const totalCount = (json.meta && json.meta.pageCount && json.meta.pageCount <= 1)
+                        ? records.length
+                        : (json.meta?.total || records.length);
                     return { records, total: totalCount, totalAmount };
                 }
         } catch (fetchErr) {
@@ -4887,11 +4941,13 @@ export async function getDatabaseTableRecords({
     // Apply pagination range
     query = query.range(from, to);
 
-    // Exclude internal test accounts per table type
-    if (tableName === 'Property') {
-      query = query.not('account_no', 'in', `(${HIDDEN_TEST_ACCOUNT_NUMBERS.join(',')})`);
-    } else if (tableName === 'User' || tableName === 'PaidUserRecord') {
-      query = query.not('phoneNumber', 'in', `(${HIDDEN_TEST_PHONES.join(',')})`);
+    // Exclude internal test accounts per table type only on live production
+    if (isLiveProductionDeployment()) {
+      if (tableName === 'Property') {
+        query = query.not('account_no', 'in', `(${HIDDEN_TEST_ACCOUNT_NUMBERS.join(',')})`);
+      } else if (tableName === 'User' || tableName === 'PaidUserRecord') {
+        query = query.not('phoneNumber', 'in', `(${HIDDEN_TEST_PHONES.join(',')})`);
+      }
     }
 
     const { data, count, error } = await query;
@@ -4980,18 +5036,34 @@ export async function searchPropertyBillAccounts({
       }
     }
 
+    // Exclude internal test accounts on live production deployments
+    if (isLiveProductionDeployment()) {
+      query = query.not('account_no', 'in', `(${HIDDEN_TEST_ACCOUNT_NUMBERS.join(',')})`);
+      query = query.not('telephone', 'in', `(${HIDDEN_TEST_PHONES.join(',')})`);
+    }
+
     query = query.order('account_no', { ascending: true }).range(from, to);
 
-    const { data: properties, count, error } = await query;
+    const { data: rawProperties, count, error } = await query;
     if (error) {
       console.error('[searchPropertyBillAccounts] Error:', error);
       return { success: false, error: error.message };
     }
 
-    const total = isAutocomplete ? (properties?.length ?? 0) : (count ?? 0);
+    const properties = isLiveProductionDeployment()
+      ? (rawProperties || []).filter(
+          (p) => !isHiddenTestAccount({
+            account_no: p.account_no,
+            telephone: p.telephone,
+            name: p.name,
+          })
+        )
+      : (rawProperties || []);
+
+    const total = isAutocomplete ? properties.length : (count ?? properties.length);
     const totalPages = Math.max(1, Math.ceil(total / limit));
 
-    if (!properties || properties.length === 0) {
+    if (properties.length === 0) {
       return {
         success: true,
         accounts: [],
@@ -5002,11 +5074,11 @@ export async function searchPropertyBillAccounts({
       };
     }
 
-    // Fetch bill years for the returned properties
+    // Fetch bill years for the returned properties - strictly using authoritative billYear column
     const accList = properties.map((p) => p.account_no).filter(Boolean);
     const { data: billsData } = await supabase
       .from('Bill')
-      .select('accountNo, billYear, billDate')
+      .select('accountNo, billYear')
       .in('accountNo', accList);
 
     const billYearsMap = new Map<string, Set<number>>();
@@ -5015,8 +5087,8 @@ export async function searchPropertyBillAccounts({
         if (!billYearsMap.has(b.accountNo)) {
           billYearsMap.set(b.accountNo, new Set());
         }
-        const yr = b.billDate ? new Date(b.billDate).getFullYear() : Number(b.billYear);
-        if (yr) {
+        const yr = Number(b.billYear);
+        if (yr && !isNaN(yr)) {
           billYearsMap.get(b.accountNo)!.add(yr);
         }
       }
@@ -5110,6 +5182,10 @@ export async function getAccountBillHistoryDetail(accountNo: string): Promise<Ge
       return { success: false, error: 'Account number is required.' };
     }
 
+    if (isLiveProductionDeployment() && isHiddenTestAccount({ accountNumber: cleanAcc })) {
+      return { success: false, error: 'Property billing account not found.' };
+    }
+
     // Fetch Property, Bill history, and Payment receipts concurrently in parallel
     const [propRes, billsRes, paymentsRes] = await Promise.all([
       supabase
@@ -5132,6 +5208,15 @@ export async function getAccountBillHistoryDetail(accountNo: string): Promise<Ge
     const { data: propData, error: propErr } = propRes;
     const { data: billsData, error: billsErr } = billsRes;
     const { data: paymentsData, error: pmtErr } = paymentsRes;
+
+    if (propData && isLiveProductionDeployment() && isHiddenTestAccount({
+      accountNumber: propData.account_no,
+      name: propData.name,
+      telephone: propData.telephone,
+      propertyId: propData.id,
+    })) {
+      return { success: false, error: 'Property billing account not found.' };
+    }
 
     if (propErr) {
       console.error('[getAccountBillHistoryDetail] Property error:', propErr);
@@ -5283,8 +5368,8 @@ export async function getAccountPaymentsList(accountNo: string): Promise<{
       };
     }
 
-    // Concurrently fetch FeePayment records, digital Receipt records, and PaidUserRecord records
-    const [feePaymentsRes, receiptsRes, paidUserRes] = await Promise.all([
+    // Concurrently fetch FeePayment records, digital Receipt records, PaidUserRecord records, and Property biodata
+    const [feePaymentsRes, receiptsRes, paidUserRes, propertyRes] = await Promise.all([
       supabase
         .from('FeePayment')
         .select('*')
@@ -5300,11 +5385,18 @@ export async function getAccountPaymentsList(accountNo: string): Promise<{
         .select('*')
         .eq('accountNumber', cleanAcc)
         .order('paidAt', { ascending: false }),
+      supabase
+        .from('Property')
+        .select('account_no, name, telephone')
+        .eq('account_no', cleanAcc)
+        .maybeSingle(),
     ]);
 
     const feePayments = feePaymentsRes.data || [];
     const rawReceipts = receiptsRes?.data || [];
     const paidUserRecords = paidUserRes?.data || [];
+    const defaultAccountPhone = propertyRes?.data?.telephone || undefined;
+    const defaultAccountName = propertyRes?.data?.name || undefined;
 
     // Map of receipts by receiptNumber for metadata enrichment
     const receiptsMap = new Map<string, any>();
@@ -5380,8 +5472,8 @@ export async function getAccountPaymentsList(accountNo: string): Promise<{
         transactionReference: fp.transactionId || pu?.reference || rec?.transactionId || undefined,
         collectorName: fp.collectorsCollectorId || rec?.collectorName || (isOnline ? 'PAYSTACK_GATEWAY' : 'TREASURY_OFFICER'),
         cashierName: fp.cashiersCashierId || rec?.cashierName || (isOnline ? 'PAYSTACK_GATEWAY' : 'TREASURY_CASHIER'),
-        payerName: pu?.userName || rec?.payerName || undefined,
-        payerPhone: pu?.phoneNumber || rec?.paymentPhoneNumber || undefined,
+        payerName: pu?.userName || rec?.payerName || defaultAccountName || undefined,
+        payerPhone: pu?.phoneNumber || rec?.paymentPhoneNumber || defaultAccountPhone || undefined,
         isPhysicalIssued: Boolean(rec?.isPhysicalIssued || (!gcrNo.startsWith('DIG-') && !gcrNo.includes('-TXN-'))),
         status: fp.status || rec?.status || 'PAID',
         receiptId: rec?.id || undefined,
@@ -5439,8 +5531,8 @@ export async function getAccountPaymentsList(accountNo: string): Promise<{
         transactionReference: r.transactionId || pu?.reference || undefined,
         collectorName: r.collectorName || (isOnline ? 'PAYSTACK_GATEWAY' : 'TREASURY_OFFICER'),
         cashierName: r.cashierName || (isOnline ? 'PAYSTACK_GATEWAY' : 'TREASURY_CASHIER'),
-        payerName: pu?.userName || r.payerName || undefined,
-        payerPhone: pu?.phoneNumber || r.paymentPhoneNumber || undefined,
+        payerName: pu?.userName || r.payerName || defaultAccountName || undefined,
+        payerPhone: pu?.phoneNumber || r.paymentPhoneNumber || defaultAccountPhone || undefined,
         isPhysicalIssued: Boolean(r.isPhysicalIssued || (!rNum.startsWith('DIG-') && !rNum.includes('-TXN-'))),
         status: r.status || 'PAID',
         receiptId: r.id,
@@ -5773,6 +5865,245 @@ export async function updatePaymentReceiptNumber(params: {
   } catch (err: any) {
     console.error('[updatePaymentReceiptNumber] Error:', err);
     return { success: false, error: err.message || 'Failed to update receipt number.' };
+  }
+}
+
+export interface UpdatePropertyBiodataParams {
+  accountNo: string;
+  name?: string;
+  telephone?: string | null;
+  ownerDigitalAddress?: string | null;
+  houseNo?: string | null;
+  streetName?: string | null;
+  electoralArea?: string | null;
+  tin?: string | null;
+  propertyCategory?: string | null;
+}
+
+export async function updatePropertyBiodata(params: UpdatePropertyBiodataParams): Promise<{
+  success: boolean;
+  error?: string;
+  account?: PropertyBillAccountSummary;
+}> {
+  try {
+    const admin = await requireAdminSession();
+    if (!admin || !admin.isActive) {
+      return { success: false, error: 'Unauthorized. Active session required.' };
+    }
+
+    const cleanAcc = (params.accountNo || '').trim();
+    if (!cleanAcc) {
+      return { success: false, error: 'Account number is required.' };
+    }
+
+    const updateData: Record<string, any> = {};
+    if (params.name !== undefined) updateData.name = (params.name || '').trim();
+    if (params.telephone !== undefined) updateData.telephone = params.telephone ? params.telephone.trim() : null;
+    if (params.ownerDigitalAddress !== undefined) updateData.ownerDigitalAddress = params.ownerDigitalAddress ? params.ownerDigitalAddress.trim().toUpperCase() : null;
+    if (params.houseNo !== undefined) updateData.houseNo = params.houseNo ? params.houseNo.trim() : null;
+    if (params.streetName !== undefined) updateData.streetName = params.streetName ? params.streetName.trim() : null;
+    if (params.electoralArea !== undefined) updateData.electoral_area = params.electoralArea ? params.electoralArea.trim() : null;
+    if (params.tin !== undefined) updateData.tin = params.tin ? params.tin.trim().toUpperCase() : null;
+    if (params.propertyCategory !== undefined) updateData.property_cat = params.propertyCategory ? params.propertyCategory.trim() : null;
+
+    const { data: updated, error } = await supabase
+      .from('Property')
+      .update(updateData)
+      .eq('account_no', cleanAcc)
+      .select('account_no, name, telephone, ownerDigitalAddress, houseNo, electoral_area, property_cat, rateableValue, current_bill, arrears, outstanding_amt')
+      .single();
+
+    if (error) {
+      console.error('[updatePropertyBiodata] DB Error:', error);
+      return { success: false, error: error.message };
+    }
+
+    try {
+      await adminDb.auditLog.create({
+        data: {
+          action: 'UPDATE_RATEPAYER_BIODATA',
+          entityType: 'Property',
+          entityId: cleanAcc,
+          details: `Updated biodata for account ${cleanAcc} by ${admin.name || admin.username}`,
+          adminId: admin.id,
+        },
+      });
+    } catch (audErr) {
+      console.warn('[updatePropertyBiodata] Audit warning:', audErr);
+    }
+
+    const accountSummary: PropertyBillAccountSummary = {
+      accountNumber: updated.account_no,
+      name: updated.name || '',
+      telephone: updated.telephone || null,
+      ownerDigitalAddress: updated.ownerDigitalAddress || null,
+      houseNo: updated.houseNo || null,
+      electoralArea: updated.electoral_area || null,
+      propertyCategory: updated.property_cat || null,
+      rateableValue: Number(updated.rateableValue || 0),
+      currentBill: Number(updated.current_bill || 0),
+      arrears: Number(updated.arrears || 0),
+      outstandingAmount: Number(updated.outstanding_amt || 0),
+      recordedYears: [],
+      billsCount: 0,
+    };
+
+    return {
+      success: true,
+      account: accountSummary,
+    };
+  } catch (err: any) {
+    console.error('[updatePropertyBiodata] Unexpected error:', err);
+    return { success: false, error: err.message || 'Failed to update ratepayer biodata.' };
+  }
+}
+
+export async function sendInPersonPaymentConfirmationSms(params: {
+  accountNumber: string;
+  ratepayerName: string;
+  amount: number;
+  receiptNumber: string;
+  remainingBalance: number;
+  recipientPhone: string;
+  customMessage?: string;
+}): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  try {
+    const admin = await requireAdminSession();
+    if (!admin) {
+      return { success: false, error: 'Unauthorized. Active session required.' };
+    }
+
+    const cleanAcc = (params.accountNumber || '').trim();
+    const cleanReceiptNo = (params.receiptNumber || '').trim();
+    let rawPhone = (params.recipientPhone || '').trim();
+
+    let liveRemainingBalance = Number(params.remainingBalance ?? 0);
+    if (cleanAcc) {
+      try {
+        const prop = await adminDb.property.findUnique({ where: { accountNumber: cleanAcc } });
+        if (prop) {
+          if (!rawPhone) {
+            rawPhone = (prop.telephone || prop.ownerPhoneDirect || '').trim();
+          }
+          if (typeof prop.totalAmountDue === 'number') {
+            liveRemainingBalance = prop.totalAmountDue;
+          } else if (typeof prop.outstanding_amt === 'number') {
+            liveRemainingBalance = prop.outstanding_amt;
+          }
+        }
+      } catch (propErr) {
+        console.warn('[sendInPersonPaymentConfirmationSms] Property lookup notice:', propErr);
+      }
+    }
+
+    if (!rawPhone) {
+      return { success: false, error: 'Recipient phone number is required.' };
+    }
+
+    // Standardize phone format (Ghana E.164 +233)
+    let phone = rawPhone.replace(/\s+/g, '');
+    if (phone.startsWith('0') && phone.length === 10) {
+      phone = '+233' + phone.substring(1);
+    } else if (!phone.startsWith('+')) {
+      if (phone.startsWith('233') && phone.length === 12) {
+        phone = '+' + phone;
+      }
+    }
+
+    // Official Municipal SMS Template without URL links
+    const messageText = params.customMessage?.trim() || 
+      `KKMA Official Payment Confirmation\nDear ${params.ratepayerName || 'Ratepayer'}, payment of GH₵ ${params.amount.toFixed(2)} for Property #${cleanAcc} is credited.\nOfficial GCR: ${cleanReceiptNo}\nRemaining Balance: GH₵ ${liveRemainingBalance.toFixed(2)}\nThank you for paying your municipal property rate.`;
+
+    const provider = getActiveSmsProvider();
+    const res = await provider.sendSMS(phone, messageText);
+
+    try {
+      await adminDb.auditLog.create({
+        data: {
+          action: 'DISPATCH_PAYMENT_CONFIRMATION_SMS',
+          entityType: 'Receipt',
+          entityId: cleanAcc,
+          details: `Dispatched payment confirmation SMS for ${cleanAcc} (GCR #${cleanReceiptNo}) to ${phone} by ${admin.name || admin.username}`,
+          adminId: admin.id,
+        },
+      });
+    } catch (audErr) {
+      console.warn('[sendInPersonPaymentConfirmationSms] Audit log notice:', audErr);
+    }
+
+    return {
+      success: res.success,
+      messageId: res.messageId,
+      error: res.error,
+    };
+  } catch (err: any) {
+    console.error('[sendInPersonPaymentConfirmationSms] Error:', err);
+    return { success: false, error: err.message || 'Failed to dispatch confirmation SMS.' };
+  }
+}
+
+export async function getReceiptSmsStatus(receiptNumber: string): Promise<{
+  sent: boolean;
+  sentAt?: string;
+}> {
+  try {
+    const cleanNo = (receiptNumber || '').trim();
+    if (!cleanNo) return { sent: false };
+
+    const { data } = await supabase
+      .from('AuditLog')
+      .select('createdAt, details')
+      .eq('action', 'DISPATCH_PAYMENT_CONFIRMATION_SMS')
+      .ilike('details', `%${cleanNo}%`)
+      .order('createdAt', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (data) {
+      return {
+        sent: true,
+        sentAt: data.createdAt,
+      };
+    }
+    return { sent: false };
+  } catch (err) {
+    console.error('[getReceiptSmsStatus] Error:', err);
+    return { sent: false };
+  }
+}
+
+export async function getAccountTelephone(accountNo: string): Promise<string> {
+  try {
+    const cleanAcc = (accountNo || '').trim();
+    if (!cleanAcc) return '';
+    const { data } = await supabase
+      .from('Property')
+      .select('telephone')
+      .eq('account_no', cleanAcc)
+      .maybeSingle();
+    return data?.telephone || '';
+  } catch (err) {
+    console.error('[getAccountTelephone] Error:', err);
+    return '';
+  }
+}
+
+export async function getAccountRemainingBalance(accountNo: string): Promise<number> {
+  try {
+    const cleanAcc = (accountNo || '').trim();
+    if (!cleanAcc) return 0;
+    const { data } = await supabase
+      .from('Property')
+      .select('outstanding_amt, totalAmountDue')
+      .eq('account_no', cleanAcc)
+      .maybeSingle();
+    if (!data) return 0;
+    return typeof data.outstanding_amt === 'number'
+      ? data.outstanding_amt
+      : (typeof data.totalAmountDue === 'number' ? data.totalAmountDue : 0);
+  } catch (err) {
+    console.error('[getAccountRemainingBalance] Error:', err);
+    return 0;
   }
 }
 

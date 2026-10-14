@@ -72,7 +72,7 @@ export function buildCorporateHeader(metadata: CsvReportMetadata): string[] {
 
   const lines: string[] = [
     '"===================================================================================================="',
-    '"KPONE-KATAMANSO MUNICIPAL ASSEMBLY (KKMA) - REVENUE GOVERNANCE SYSTEM"',
+    '"HEINZ INTEGRATED SYSTEMS LIMITED - REVENUE GOVERNANCE SYSTEM"',
     `"REPORT: ${metadata.reportTitle.toUpperCase()}"`,
     `"GENERATED AT: ${timestampUtc} | OFFICER: ${officer}"`,
     `"SCOPE / ACTIVE FILTERS: ${scope}"`,

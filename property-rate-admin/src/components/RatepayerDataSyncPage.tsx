@@ -677,6 +677,14 @@ export function RatepayerDataSyncPage({
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="pl-8 pr-3 py-1.5 text-xs bg-white border border-[#E5E5EA] rounded-lg focus:outline-none focus:border-[#007AFF] w-48 sm:w-64"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
+                    data-lpignore="true"
+                    data-1p-ignore="true"
+                    data-bwignore="true"
+                    data-form-type="other"
                   />
                 </div>
 
@@ -943,6 +951,14 @@ export function RatepayerDataSyncPage({
                   value={securityPassword}
                   onChange={(e) => setSecurityPassword(e.target.value)}
                   className="w-full px-3 py-2 text-xs border border-[#E5E5EA] rounded-lg focus:outline-none focus:border-[#007AFF]"
+                  autoComplete="new-password"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  data-bwignore="true"
+                  data-form-type="other"
                 />
                 <span className="text-[10px] text-[#8E8E93] block">
                   Confirms officer authorization to commit bulk financial modifications.

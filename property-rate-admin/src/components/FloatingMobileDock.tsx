@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Building2,
   Users,
@@ -69,6 +69,17 @@ export function FloatingMobileDock({
   const hasSecondaryAlert = Boolean(
     hasActiveAlert && secondaryTabs.some((t) => t.key === "SMS_CENTER" || t.key === "AUDIT_LOGS")
   );
+
+  // Lock background viewport scrolling when more sheet is active
+  useEffect(() => {
+    if (isMoreOpen) {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
+    }
+  }, [isMoreOpen]);
 
   return (
     <div className="lg:hidden">
@@ -185,7 +196,7 @@ export function FloatingMobileDock({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.18, ease: "easeOut" }}
-              className="fixed inset-0 bg-black/35 backdrop-blur-xs z-50 lg:hidden"
+              className="fixed inset-0 bg-black/35 backdrop-blur-xs z-[10000] lg:hidden pointer-events-auto"
               onClick={() => setIsMoreOpen(false)}
               aria-hidden="true"
             />
@@ -194,7 +205,7 @@ export function FloatingMobileDock({
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", stiffness: 420, damping: 32 }}
-              className="fixed bottom-0 inset-x-0 bg-white rounded-t-2xl z-50 lg:hidden border-t border-[#E5E5EA] shadow-2xl p-4 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] max-w-lg mx-auto will-change-transform"
+              className="fixed bottom-0 inset-x-0 bg-white rounded-t-2xl z-[10000] lg:hidden border-t border-[#E5E5EA] shadow-2xl p-4 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] max-w-lg mx-auto will-change-transform pointer-events-auto"
               role="dialog"
               aria-modal="true"
               aria-label="More Navigation Options"

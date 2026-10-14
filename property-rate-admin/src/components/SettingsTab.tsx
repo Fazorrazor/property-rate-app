@@ -535,6 +535,14 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
                         onChange={(e) => setPropertySearchQuery(e.target.value)}
                         placeholder="Filter by account or address..."
                         className="w-full h-8 pl-8 pr-3 rounded-lg border border-[#E5E5EA] text-xs bg-[#F9FAFB] text-[#1C1C1E] placeholder:text-[#8E8E93] focus:bg-white focus:outline-none focus:border-[#007AFF] transition-all"
+                        autoComplete="off"
+                        autoCorrect="off"
+                        autoCapitalize="off"
+                        spellCheck={false}
+                        data-lpignore="true"
+                        data-1p-ignore="true"
+                        data-bwignore="true"
+                        data-form-type="other"
                       />
                     </div>
                   </div>
@@ -624,6 +632,14 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
                           value={currentArrearsStr}
                           onChange={(e) => handleBalanceChange(selectedProperty.accountNumber, "arrears", e.target.value)}
                           className="w-full sm:w-64 h-9 px-3 rounded-lg border border-[#E5E5EA] text-xs font-mono text-[#1C1C1E] bg-[#F9FAFB] focus:bg-white focus:outline-none focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] transition-all"
+                          autoComplete="off"
+                          autoCorrect="off"
+                          autoCapitalize="off"
+                          spellCheck={false}
+                          data-lpignore="true"
+                          data-1p-ignore="true"
+                          data-bwignore="true"
+                          data-form-type="other"
                         />
                       </div>
                     </div>
@@ -647,6 +663,14 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
                           value={currentBillStr}
                           onChange={(e) => handleBalanceChange(selectedProperty.accountNumber, "currentBill", e.target.value)}
                           className="w-full sm:w-64 h-9 px-3 rounded-lg border border-[#E5E5EA] text-xs font-mono text-[#1C1C1E] bg-[#F9FAFB] focus:bg-white focus:outline-none focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] transition-all"
+                          autoComplete="off"
+                          autoCorrect="off"
+                          autoCapitalize="off"
+                          spellCheck={false}
+                          data-lpignore="true"
+                          data-1p-ignore="true"
+                          data-bwignore="true"
+                          data-form-type="other"
                         />
                       </div>
                     </div>
@@ -845,6 +869,14 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
                           onChange={(e) => setApiKey(e.target.value)}
                           placeholder="Arkesel / Twilio API Key"
                           className="w-full h-9 pl-3 pr-9 border border-[#E5E5EA] rounded-lg text-xs font-mono bg-[#F9FAFB] text-[#1C1C1E] focus:bg-white focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] focus:outline-none transition-colors"
+                          autoComplete="new-password"
+                          autoCorrect="off"
+                          autoCapitalize="off"
+                          spellCheck={false}
+                          data-lpignore="true"
+                          data-1p-ignore="true"
+                          data-bwignore="true"
+                          data-form-type="other"
                         />
                         <button
                           type="button"
@@ -874,6 +906,14 @@ export function SettingsTab({ onNotify }: SettingsTabProps) {
                           onChange={(e) => setSenderId(e.target.value.toUpperCase())}
                           placeholder="KKMA"
                           className="w-full h-9 px-3 border border-[#E5E5EA] rounded-lg text-xs font-mono font-semibold tracking-wider bg-[#F9FAFB] text-[#1C1C1E] focus:bg-white focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] focus:outline-none transition-colors"
+                          autoComplete="off"
+                          autoCorrect="off"
+                          autoCapitalize="characters"
+                          spellCheck={false}
+                          data-lpignore="true"
+                          data-1p-ignore="true"
+                          data-bwignore="true"
+                          data-form-type="other"
                         />
                       </div>
                     </div>

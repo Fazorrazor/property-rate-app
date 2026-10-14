@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, UploadCloud, FileText, AlertTriangle, Eye, EyeOff } from "lucide-react";
 import { AppleSpinner } from "./ui/AppleSpinner";
@@ -22,6 +22,17 @@ export function CsvImportModal({ isOpen, onClose, onSuccess }: CsvImportModalPro
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Lock background viewport scrolling when CSV import modal is active
+  useEffect(() => {
+    if (isOpen) {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
+    }
+  }, [isOpen]);
 
   const parseCsvText = (text: string) => {
     const lines = text.split(/\r\n|\n/).map((l) => l.trim()).filter(Boolean);
@@ -143,7 +154,7 @@ export function CsvImportModal({ isOpen, onClose, onSuccess }: CsvImportModalPro
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 font-sans">
+        <div className="fixed inset-0 z-[10000] flex items-end sm:items-center justify-center p-0 sm:p-4 font-sans pointer-events-auto">
           {/* Smooth Fading Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -318,8 +329,12 @@ export function CsvImportModal({ isOpen, onClose, onSuccess }: CsvImportModalPro
                       type={showPassword ? "text" : "password"}
                       name="csv_import_admin_security_key"
                       autoComplete="new-password"
+                      autoCorrect="off"
+                      autoCapitalize="off"
+                      spellCheck={false}
                       data-lpignore="true"
                       data-1p-ignore="true"
+                      data-bwignore="true"
                       data-form-type="other"
                       placeholder="Enter administrator password"
                       value={adminPassword}

@@ -111,7 +111,14 @@ export function parseAndVerifySignedSessionCookie(cookieValue: string): {
       return { valid: false, adminId: null, sessionToken: null };
     }
 
-    const [adminId, sessionToken] = rawPayload.split(':');
+    const [adminId, sessionToken, loginTimestampStr] = rawPayload.split(':');
+    if (loginTimestampStr) {
+      const loginTimestamp = parseInt(loginTimestampStr, 10);
+      const MAX_SESSION_LIFETIME_MS = 7 * 60 * 1000; // Strict 7-minute hard ceiling
+      if (!isNaN(loginTimestamp) && (Date.now() - loginTimestamp > MAX_SESSION_LIFETIME_MS)) {
+        return { valid: false, adminId: null, sessionToken: null };
+      }
+    }
     return { valid: true, adminId: adminId || null, sessionToken: sessionToken || null };
   }
 

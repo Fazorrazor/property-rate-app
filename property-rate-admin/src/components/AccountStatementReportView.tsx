@@ -3,15 +3,17 @@
 import React, { useState, useEffect, useMemo } from "react";
 import {
   ArrowLeft,
+  ChevronLeft,
   SlidersHorizontal,
   Printer,
   Download,
   Building2,
   FileText,
   AlertCircle,
+  ArrowUpRight,
 } from "lucide-react";
 import { getAccountBillHistoryDetail, GetAccountBillHistoryDetailResponse } from "@/app/actions";
-import { formatGhc, formatDateGb } from "@/lib/formatters";
+import { formatGhc, formatDateGb, formatDateSlash } from "@/lib/formatters";
 import { AppleSpinner } from "@/components/ui/AppleSpinner";
 
 interface AccountStatementReportViewProps {
@@ -89,11 +91,9 @@ export function AccountStatementReportView({
       dr: number;
     }[] = [];
 
-    // Sort bills chronologically ascending
+    // Sort bills chronologically ascending by authoritative fiscal BillYear
     const sortedBills = [...(data.bills || [])].sort((a, b) => {
-      const tA = a.billDate ? new Date(a.billDate).getTime() : Number(a.billYear || 0);
-      const tB = b.billDate ? new Date(b.billDate).getTime() : Number(b.billYear || 0);
-      return tA - tB;
+      return Number(a.billYear || 0) - Number(b.billYear || 0);
     });
 
     // Authoritative annual rate
@@ -119,16 +119,12 @@ export function AccountStatementReportView({
     const preExistingArrears = Math.max(0, Number((totalArrears - priorBillsSum).toFixed(2)));
 
     if (preExistingArrears > 0 && earliestBill) {
-      const earliestYear = earliestBill.billDate
-        ? new Date(earliestBill.billDate).getFullYear()
-        : Number(earliestBill.billYear || 2024);
-      const bfDate = earliestBill.billDate
-        ? new Date(new Date(earliestBill.billDate).getTime() - 86400000)
-        : new Date(earliestYear, 0, 1);
+      const earliestYear = Number(earliestBill.billYear || 2023);
+      const bfDate = new Date(earliestYear, 0, 1);
 
       rawRows.push({
         year: earliestYear,
-        dateStr: formatDateGb(bfDate),
+        dateStr: formatDateSlash(bfDate),
         timestamp: bfDate.getTime(),
         item: "Balance Brought Forward (Arrears)",
         cr: 0,
@@ -136,19 +132,19 @@ export function AccountStatementReportView({
       });
     }
 
-    // Add Bills (Debits)
+    // Add Bills (Debits) - Anchored strictly to BillYear from master Bill data
     for (const b of sortedBills) {
-      const bDate = b.billDate ? new Date(b.billDate) : new Date(Number(b.billYear || 2026), 0, 1);
+      const invoiceYear = Number(b.billYear) || 2026;
+      const bDate = new Date(invoiceYear, 0, 15);
       const ts = bDate.getTime();
       const rawDebit = Number(b.ratePA || 0);
       const amount = rawDebit > 0 ? rawDebit : (propAnnualRate > 0 ? propAnnualRate : 0);
-      const invoiceYear = b.billDate ? bDate.getFullYear() : (Number(b.billYear) || 2026);
 
       rawRows.push({
         year: invoiceYear,
-        dateStr: formatDateGb(bDate),
+        dateStr: formatDateSlash(bDate),
         timestamp: ts,
-        item: "Bill Invoice",
+        item: "Bill",
         cr: 0,
         dr: amount,
       });
@@ -162,9 +158,9 @@ export function AccountStatementReportView({
 
       rawRows.push({
         year: pDate.getFullYear(),
-        dateStr: formatDateGb(pDate),
+        dateStr: formatDateSlash(pDate),
         timestamp: ts,
-        item: p.gcrNr ? `Payment · GCR ${p.gcrNr}` : `Payment · ${p.pmtMode || "Cash"}`,
+        item: p.gcrNr ? `GCR ${p.gcrNr}` : (p.id ? `GCR ${p.id}` : `Payment · ${p.pmtMode || "Cash"}`),
         cr: amount,
         dr: 0,
       });
@@ -173,29 +169,56 @@ export function AccountStatementReportView({
     // Sort chronologically ascending
     rawRows.sort((a, b) => a.timestamp - b.timestamp);
 
-    // Compute running balance
-    let currentBalance = 0;
-    let tCr = 0;
-    let tDr = 0;
-    const computedLedger: StatementLedgerRow[] = [];
+    // Compute running balance with period-aware opening balance
+    let priorBalance = 0;
+    const inRangeRows: typeof rawRows = [];
 
     for (const r of rawRows) {
-      currentBalance = currentBalance + r.dr - r.cr;
-      // Filter by user selected date range if applicable
-      if (r.timestamp >= startTs && r.timestamp <= endTs) {
-        tCr += r.cr;
-        tDr += r.dr;
-        computedLedger.push({
-          ...r,
-          runningBalance: currentBalance,
-        });
+      if (startTs > 0 && r.timestamp < startTs) {
+        priorBalance = Number((priorBalance + r.dr - r.cr).toFixed(2));
+      } else if (r.timestamp <= endTs) {
+        inRangeRows.push(r);
       }
     }
 
+    const computedLedger: StatementLedgerRow[] = [];
+    let currentBalance = priorBalance;
+    let tCr = 0;
+    let tDr = 0;
+
+    // If start date filter is active and there's a prior accumulated balance,
+    // inject opening Balance Brought Forward row for this statement period
+    if (startTs > 0 && priorBalance !== 0) {
+      const sDateObj = new Date(startTs);
+      computedLedger.push({
+        year: sDateObj.getFullYear(),
+        dateStr: formatDateSlash(sDateObj),
+        timestamp: startTs - 1,
+        item: "Balance Brought Forward",
+        cr: priorBalance < 0 ? Math.abs(priorBalance) : 0,
+        dr: priorBalance > 0 ? priorBalance : 0,
+        runningBalance: currentBalance,
+      });
+      if (priorBalance > 0) tDr += priorBalance;
+      if (priorBalance < 0) tCr += Math.abs(priorBalance);
+    }
+
+    for (const r of inRangeRows) {
+      currentBalance = Number((currentBalance + r.dr - r.cr).toFixed(2));
+      tCr += r.cr;
+      tDr += r.dr;
+      computedLedger.push({
+        ...r,
+        runningBalance: currentBalance,
+      });
+    }
+
     // If date range is specified, format friendly label
-    const startFmt = startDate ? formatDateGb(startDate) : "1 Jan 2022";
+    const startFmt = startDate ? formatDateGb(startDate) : "All Records";
     const endFmt = endDate ? formatDateGb(endDate) : formatDateGb(new Date());
-    const rangeLabel = `${startFmt} – ${endFmt} · All amounts in GH₵`;
+    const rangeLabel = startDate
+      ? `${startFmt} – ${endFmt} · All amounts in GH₵`
+      : `All Recorded Fiscal Years · All amounts in GH₵`;
 
     return {
       ledgerRows: computedLedger,
@@ -260,10 +283,11 @@ export function AccountStatementReportView({
           <button
             type="button"
             onClick={onBack}
-            className="flex items-center gap-1 text-[#007AFF] hover:underline font-medium focus:outline-none"
+            className="flex items-center gap-1 text-[#007AFF] hover:underline font-semibold focus:outline-none"
+            title="Back"
           >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Reports</span>
+            <ChevronLeft className="w-4 h-4 stroke-[2.5]" />
+            <span>Back</span>
           </button>
           <span className="text-[#98989D]">/</span>
           <span className="text-[#1D1D1F] font-semibold">Account Statement</span>
@@ -297,9 +321,9 @@ export function AccountStatementReportView({
               <button
                 type="button"
                 onClick={onBack}
-                className="px-4 py-2 bg-[#F2F2F5] text-xs font-medium rounded-lg text-[#1D1D1F]"
+                className="px-4 py-2 bg-[#F2F2F5] text-xs font-semibold rounded-lg text-[#1D1D1F] hover:bg-[#E5E5EA] transition-colors"
               >
-                Return to Dashboard
+                Back
               </button>
               <button
                 type="button"
@@ -317,7 +341,7 @@ export function AccountStatementReportView({
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 pb-6 border-b border-[#F2F2F5]">
               <div>
                 <h1 className="text-[20px] md:text-[22px] font-semibold text-[#1D1D1F] tracking-tight">
-                  Kpone-Katamanso Municipal Assembly - Account Statement
+                  HEINZ INTEGRATED SYSTEMS LIMITED - Account Statement
                 </h1>
                 <p className="text-xs text-[#737378] mt-1 font-medium">
                   {dateRangeLabel}
@@ -377,11 +401,10 @@ export function AccountStatementReportView({
 
             {/* Transactions Ledger Table */}
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-[13px]">
+              <table className="w-full text-left border-collapse text-[13px] sm:text-[15.5px]">
                 <thead>
-                  <tr className="border-b border-[#E9E9ED] text-[#737378] text-[12px] font-medium">
+                  <tr className="border-b border-[#E9E9ED] text-[#737378] text-[11px] sm:text-[13px] font-medium">
                     <th className="py-2.5 pr-4 font-medium w-16">Year</th>
-                    <th className="py-2.5 px-4 font-medium w-32">Date</th>
                     <th className="py-2.5 px-4 font-medium">Item</th>
                     <th className="py-2.5 px-4 font-medium text-right w-28">CR</th>
                     <th className="py-2.5 px-4 font-medium text-right w-28">DR</th>
@@ -391,7 +414,7 @@ export function AccountStatementReportView({
                 <tbody className="divide-y divide-[#F2F2F5] text-[#1D1D1F]">
                   {ledgerRows.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="py-8 text-center text-xs text-[#737378]">
+                      <td colSpan={5} className="py-8 text-center text-[13px] sm:text-[15.5px] text-[#737378]">
                         No recorded transactions found within the selected dates.
                       </td>
                     </tr>
@@ -399,9 +422,26 @@ export function AccountStatementReportView({
                     ledgerRows.map((row, idx) => (
                       <tr key={idx} className="hover:bg-[#F9F9FB] transition-colors">
                         <td className="py-3 pr-4 font-medium text-[#737378]">{row.year}</td>
-                        <td className="py-3 px-4 text-[#737378] whitespace-nowrap">{row.dateStr}</td>
-                        <td className="py-3 px-4 font-medium">{row.item}</td>
-                        <td className="py-3 px-4 text-right font-mono tabular-nums text-[#34C759]">
+                        <td className="py-3 px-4 font-medium">
+                          {row.cr > 0 && row.item.startsWith("GCR") ? (
+                            <a
+                              href={`/?tab=PAYMENTS&account=${encodeURIComponent(accountNo)}`}
+                              className="inline-flex items-center gap-1.5 text-[#007AFF] hover:underline font-medium group"
+                              title="View payment records for this account"
+                            >
+                              <span>{row.item}</span>
+                              {row.dateStr && (
+                                <span className="text-[11px] sm:text-[12px] text-[#737378] font-normal">
+                                  ({row.dateStr})
+                                </span>
+                              )}
+                              <ArrowUpRight className="w-3.5 h-3.5 opacity-70 group-hover:opacity-100 transition-opacity shrink-0" />
+                            </a>
+                          ) : (
+                            row.item
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono tabular-nums text-[#248A3D] font-semibold">
                           {row.cr > 0 ? row.cr.toFixed(2) : "0.00"}
                         </td>
                         <td className="py-3 px-4 text-right font-mono tabular-nums text-[#1D1D1F]">
@@ -416,16 +456,16 @@ export function AccountStatementReportView({
 
                   {/* Statement Totals Row */}
                   <tr className="border-t-2 border-[#1D1D1F] font-semibold text-[#1D1D1F] bg-[#FDFDFE]">
-                    <td colSpan={3} className="py-3.5 pr-4 text-[13px]">
+                    <td colSpan={2} className="py-3.5 pr-4 text-[13px] sm:text-[15.5px]">
                       Closing balance
                     </td>
-                    <td className="py-3.5 px-4 text-right font-mono tabular-nums text-[#34C759]">
+                    <td className="py-3.5 px-4 text-right font-mono tabular-nums text-[#248A3D] font-semibold">
                       {totalCr.toFixed(2)}
                     </td>
                     <td className="py-3.5 px-4 text-right font-mono tabular-nums text-[#1D1D1F]">
                       {totalDr.toFixed(2)}
                     </td>
-                    <td className="py-3.5 pl-4 text-right font-mono tabular-nums text-[14px] text-[#007AFF]">
+                    <td className="py-3.5 pl-4 text-right font-mono tabular-nums text-[14px] sm:text-[16.5px] text-[#007AFF]">
                       {formatGhc(closingBalance)}
                     </td>
                   </tr>

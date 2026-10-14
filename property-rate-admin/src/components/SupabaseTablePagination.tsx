@@ -37,6 +37,10 @@ export function SupabaseTablePagination({
 
   const maxPages = Math.max(1, totalPages);
 
+  if (totalPages <= 1) {
+    return null;
+  }
+
   const commitPageJump = () => {
     const parsed = parseInt(pageInput, 10);
     if (isNaN(parsed)) {
@@ -89,6 +93,14 @@ export function SupabaseTablePagination({
             onBlur={commitPageJump}
             onKeyDown={handleKeyDown}
             disabled={isLoading}
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            data-lpignore="true"
+            data-1p-ignore="true"
+            data-bwignore="true"
+            data-form-type="other"
             className="h-8 w-10 sm:w-12 text-center text-xs font-semibold rounded-lg border border-[#E5E5EA] bg-[#F8F9FA] hover:bg-white focus:bg-white text-[#1C1C1E] focus:outline-none focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] transition-colors tabular-nums"
           />
         </div>

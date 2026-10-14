@@ -3,9 +3,15 @@
 @layer base {
   html {
     font-size: 104%;
+    height: 100%;
+    max-height: 100dvh;
+    overflow: hidden;
   }
 
   body {
+    height: 100%;
+    max-height: 100dvh;
+    overflow: hidden;
     background-color: #F5F5F7;
     color: #1D1D1F;
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -107,31 +113,26 @@
   }
 }
 
-/* Apple HIG / Google Enterprise Precision Scrollbars for smooth, visible, drag-scrollable tables */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #C7C7CC;
-  border-radius: 9999px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #8E8E93;
-}
-
+/* Zero Visible Scrollbar UI Standard (Apple HIG / Zero-Chrome Fluid UX)
+   Hides all visible scrollbar chrome globally across all browsers (WebKit, Firefox, IE/Edge)
+   while preserving 100% natural touch swiping, mouse wheel, trackpad, and keyboard scrollability.
+   This ensures all existing and future components automatically render with zero visible scrollbar chrome. */
+html,
+body,
 * {
-  scrollbar-width: thin;
-  scrollbar-color: #C7C7CC transparent;
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
 }
 
-/* Explicit opt-in suppression only when specifically marked with .scrollbar-none */
+*::-webkit-scrollbar,
+::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+}
+
+/* Explicit utility classes preserved for semantic styling */
 .scrollbar-none::-webkit-scrollbar,
 .no-scrollbar::-webkit-scrollbar {
   display: none !important;
@@ -153,3 +154,39 @@
 .text-\[13px\] { font-size: 13.52px !important; }
 .text-\[14px\] { font-size: 14.56px !important; }
 .text-\[15px\] { font-size: 15.6px !important; }
+
+/* Static Print styles for Official Payment Receipt (Zero-overhead on modal mount) */
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+  #payment-receipt-print-area,
+  #payment-receipt-print-area * {
+    visibility: visible !important;
+  }
+  #payment-receipt-print-area {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-shadow: none !important;
+    border: none !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    padding: 24px !important;
+    margin: 0 !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+}
+@media screen {
+  .print-only {
+    display: none !important;
+  }
+}
+

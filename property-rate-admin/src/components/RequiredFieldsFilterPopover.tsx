@@ -254,7 +254,12 @@ export function RequiredFieldsFilterPopover({
               placeholder="Search fields (e.g. Phone, GPS, Name)..."
               autoComplete="off"
               autoCorrect="off"
-              spellCheck="false"
+              autoCapitalize="off"
+              spellCheck={false}
+              data-lpignore="true"
+              data-1p-ignore="true"
+              data-bwignore="true"
+              data-form-type="other"
               className="w-full h-7 pl-7 pr-2 rounded-md border border-[#E5E5EA] bg-[#F2F2F7] text-[11px] text-[#1C1C1E] focus:outline-none focus:border-[#007AFF] focus:bg-white"
             />
           </div>

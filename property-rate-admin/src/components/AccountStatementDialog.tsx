@@ -61,6 +61,17 @@ export function AccountStatementDialog({
     }
   }, [isOpen, initialAccountNo]);
 
+  // Lock background viewport scrolling when statement dialog is active
+  useEffect(() => {
+    if (isOpen) {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
+    }
+  }, [isOpen]);
+
   // Debounced search
   useEffect(() => {
     if (!isOpen) return;
@@ -134,7 +145,7 @@ export function AccountStatementDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs transition-opacity duration-200"
+      className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs transition-opacity duration-200 pointer-events-auto"
       role="dialog"
       aria-modal="true"
       aria-labelledby="statement-dialog-title"
@@ -191,6 +202,13 @@ export function AccountStatementDialog({
                   placeholder="Search by Account No, Owner Name, or Phone..."
                   className="w-full bg-transparent text-[13px] text-[#1D1D1F] placeholder:text-[#8E8E93] focus:outline-none"
                   autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  data-bwignore="true"
+                  data-form-type="other"
                 />
                 {isSearching && <AppleSpinner size="sm" className="shrink-0 text-[#007AFF] ml-2" />}
                 {searchQuery && !isSearching && (
@@ -292,6 +310,14 @@ export function AccountStatementDialog({
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
                   className="w-full text-[13px] text-[#1D1D1F] bg-transparent focus:outline-none"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  data-bwignore="true"
+                  data-form-type="other"
                 />
               </div>
             </div>
@@ -309,6 +335,14 @@ export function AccountStatementDialog({
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
                   className="w-full text-[13px] text-[#1D1D1F] bg-transparent focus:outline-none"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  data-bwignore="true"
+                  data-form-type="other"
                 />
               </div>
             </div>

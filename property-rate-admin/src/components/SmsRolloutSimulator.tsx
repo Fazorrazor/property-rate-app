@@ -20,6 +20,9 @@ import {
   RotateCcw,
   RefreshCw,
   History,
+  ChevronLeft,
+  ChevronRight,
+  MoreHorizontal,
 } from "lucide-react";
 import { AppleSpinner } from "@/components/ui/AppleSpinner";
 import {
@@ -42,6 +45,7 @@ import {
   FILTER_SMS_TEMPLATES,
   DEFAULT_SAVED_TEMPLATES,
 } from "@/lib/sms/types";
+import { MessageTemplateModal, MessageTemplatePreset } from "@/components/MessageTemplateModal";
 import { motion, AnimatePresence } from "framer-motion";
 
 const cleanDash = (val: any): string => {
@@ -613,6 +617,17 @@ export function SmsRolloutSimulator({
   const [retryTargetJob, setRetryTargetJob] = useState<{ id: string; count: number } | null>(null);
   const [gatewayBalance, setGatewayBalance] = useState<{ smsBalance: number; mainBalance: string } | null>(null);
   const [isFetchingBalance, setIsFetchingBalance] = useState(false);
+  const [batchSearchQuery, setBatchSearchQuery] = useState("");
+
+  const filteredRolloutJobs = useMemo(() => {
+    if (!batchSearchQuery.trim()) return rolloutJobs;
+    const q = batchSearchQuery.toLowerCase();
+    return rolloutJobs.filter((job) =>
+      job.id.toLowerCase().includes(q) ||
+      (job.mode && job.mode.toLowerCase().includes(q)) ||
+      (job.createdAtFormatted && job.createdAtFormatted.toLowerCase().includes(q))
+    );
+  }, [rolloutJobs, batchSearchQuery]);
 
   // Supabase-style dynamic column ordering state
   const [columnOrder, setColumnOrder] = useState<AudienceColumnId[]>(() => {
@@ -1017,14 +1032,16 @@ export function SmsRolloutSimulator({
     }
   }, [targetStatus]);
 
-  // Applied Required Fields state vs Draft Popover State
+  // Applied Required Fields state vs Draft Apple HIG Bottom Sheet State
   const [requiredFields, setRequiredFields] = useState<string[]>([]);
   const [draftRequiredFields, setDraftRequiredFields] = useState<string[]>([]);
   const [showFieldsFilter, setShowFieldsFilter] = useState(false);
   const [fieldsSearchQuery, setFieldsSearchQuery] = useState("");
+  const [showSelectMenu, setShowSelectMenu] = useState(false);
 
   const fieldsFilterRef = useRef<HTMLDivElement>(null);
   const fieldsFilterBtnRef = useRef<HTMLButtonElement>(null);
+  const selectMenuRef = useRef<HTMLDivElement>(null);
 
   // Actionable ratepayer & property database fields for SMS campaign filtering
   const availableFieldFilters = [
@@ -1055,9 +1072,35 @@ export function SmsRolloutSimulator({
     );
   }, [fieldsSearchQuery]);
 
+  // Group fields by category following Apple HIG layout specification
+  const groupedFields = useMemo(() => {
+    const CATEGORY_ORDER = ["Location", "Identification", "Financial", "Contact", "Profile", "Classification"];
+    const groups: { category: string; fields: typeof availableFieldFilters }[] = [];
+    const categoryMap = new Map<string, typeof availableFieldFilters>();
+
+    for (const cat of CATEGORY_ORDER) {
+      categoryMap.set(cat, []);
+    }
+
+    for (const field of filteredAvailableFields) {
+      if (!categoryMap.has(field.category)) {
+        categoryMap.set(field.category, []);
+      }
+      categoryMap.get(field.category)!.push(field);
+    }
+
+    for (const [category, fields] of categoryMap.entries()) {
+      if (fields.length > 0) {
+        groups.push({ category, fields });
+      }
+    }
+    return groups;
+  }, [filteredAvailableFields]);
+
   const handleOpenFieldsFilter = () => {
     setDraftRequiredFields(requiredFields);
-    setShowFieldsFilter((prev) => !prev);
+    setShowFieldsFilter(true);
+    setShowSelectMenu(false);
   };
 
   const handleToggleDraftField = (fieldKey: string) => {
@@ -1070,6 +1113,7 @@ export function SmsRolloutSimulator({
     setRequiredFields(draftRequiredFields);
     localStorage.setItem("kkma_sms_required_fields", JSON.stringify(draftRequiredFields));
     setShowFieldsFilter(false);
+    setShowSelectMenu(false);
   };
 
   const handleSelectAllFields = () => {
@@ -1087,18 +1131,29 @@ export function SmsRolloutSimulator({
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (
-        showFieldsFilter &&
-        fieldsFilterRef.current &&
-        !fieldsFilterRef.current.contains(e.target as Node) &&
-        fieldsFilterBtnRef.current &&
-        !fieldsFilterBtnRef.current.contains(e.target as Node)
+        showSelectMenu &&
+        selectMenuRef.current &&
+        !selectMenuRef.current.contains(e.target as Node)
       ) {
-        setShowFieldsFilter(false);
+        setShowSelectMenu(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (showSelectMenu) {
+          setShowSelectMenu(false);
+        } else if (showFieldsFilter) {
+          setShowFieldsFilter(false);
+        }
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [showFieldsFilter]);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [showSelectMenu, showFieldsFilter]);
 
   // Dynamic Full Database Audience State with Supabase Studio Pagination
   const [liveAudience, setLiveAudience] = useState<AdminProperty[]>(properties);
@@ -1130,8 +1185,26 @@ export function SmsRolloutSimulator({
     setLogsTotal((prev) => Math.max(prev, smsLogs.length));
   }, [smsLogs]);
 
-  // Ratepayer Hierarchical Portfolio Grouping
-  const [isHierarchicalView, setIsHierarchicalView] = useState(true);
+  // Ratepayer Hierarchical Portfolio Grouping (Persisted)
+  const [isHierarchicalView, setIsHierarchicalView] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("kkma_sms_hierarchical_view");
+        if (saved !== null) return saved === "true";
+      } catch {}
+    }
+    return true;
+  });
+
+  const handleToggleHierarchicalView = () => {
+    setIsHierarchicalView((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("kkma_sms_hierarchical_view", String(next));
+      } catch {}
+      return next;
+    });
+  };
   const [collapsedGroupKeys, setCollapsedGroupKeys] = useState<Set<string>>(new Set());
 
   const toggleGroupCollapse = (key: string) => {
@@ -1160,28 +1233,9 @@ export function SmsRolloutSimulator({
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
 
-  const [showTokenInserter, setShowTokenInserter] = useState(false);
-  const [showSavedTemplates, setShowSavedTemplates] = useState(false);
-  const [savedTemplates, setSavedTemplates] = useState(DEFAULT_SAVED_TEMPLATES);
-
-  const savedTemplatesRef = useRef<HTMLDivElement>(null);
-  const tokenInserterRef = useRef<HTMLDivElement>(null);
-  const savedTemplatesBtnRef = useRef<HTMLButtonElement>(null);
-  const tokenInserterBtnRef = useRef<HTMLButtonElement>(null);
-  const templateTextareaRef = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (showSavedTemplates && savedTemplatesRef.current && !savedTemplatesRef.current.contains(e.target as Node) && savedTemplatesBtnRef.current && !savedTemplatesBtnRef.current.contains(e.target as Node)) {
-        setShowSavedTemplates(false);
-      }
-      if (showTokenInserter && tokenInserterRef.current && !tokenInserterRef.current.contains(e.target as Node) && tokenInserterBtnRef.current && !tokenInserterBtnRef.current.contains(e.target as Node)) {
-        setShowTokenInserter(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [showSavedTemplates, showTokenInserter]);
+  const [savedTemplates, setSavedTemplates] = useState<MessageTemplatePreset[]>(
+    DEFAULT_SAVED_TEMPLATES as MessageTemplatePreset[]
+  );
 
   useEffect(() => {
     try {
@@ -1222,7 +1276,13 @@ export function SmsRolloutSimulator({
         }
         return st;
       });
-      setSavedTemplates(hydratedPresets);
+
+      let customPresets: any[] = [];
+      try {
+        customPresets = JSON.parse(localStorage.getItem("kkma_sms_custom_presets") || "[]");
+      } catch {}
+
+      setSavedTemplates([...customPresets, ...hydratedPresets]);
 
       const cachedReceipt = localStorage.getItem("kkma_sms_receipt_template");
       if (cachedReceipt && cachedReceipt.trim()) setReceiptTemplate(cachedReceipt);
@@ -1665,54 +1725,49 @@ export function SmsRolloutSimulator({
 
   return (
     <div className="relative w-full h-full flex-1 min-h-0 overflow-hidden flex flex-col font-sans bg-[#F2F2F7] text-[#1C1C1E]">
-      {/* SMS SUBNAVIGATION TABS (Collapses on mobile scroll-down) */}
-      <div className={`w-full bg-white border-b border-[#E5E5EA] px-3.5 sm:px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-3 shrink-0 z-10 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] overflow-hidden ${
-        !isHeaderVisible
-          ? "max-h-0 sm:max-h-none py-0 opacity-0 sm:opacity-100 pointer-events-none sm:pointer-events-auto border-b-0"
-          : "max-h-[140px] opacity-100"
-      }`}>
-        <div className="flex items-center gap-4 sm:gap-6 overflow-x-auto no-scrollbar py-0.5 shrink-0">
+      {/* SMS SUBNAVIGATION TAB STRIP (Figma SMS Section Switcher) */}
+      <div className="w-full bg-[#F2F2F7] sm:bg-white border-b border-[#DDE2E8] px-4 py-2 sm:py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shrink-0 z-10">
+        <div className="w-full max-w-[361px] sm:max-w-md mx-auto sm:mx-0 h-[42px] bg-[#E8EBF0] p-[3px] rounded-[10px] flex items-center gap-[3px] shrink-0">
           <button
             type="button"
             onClick={() => handleActiveViewChange("SIMULATOR")}
-            className={`py-2.5 sm:py-3 text-xs font-semibold transition-colors cursor-pointer relative whitespace-nowrap shrink-0 ${
+            className={`flex-1 h-[36px] flex items-center justify-center rounded-[8px] text-[13px] transition-all cursor-pointer ${
               activeView === "SIMULATOR"
-                ? "text-[#007AFF] border-b-2 border-[#007AFF]"
-                : "text-[#6C6C70] hover:text-[#1C1C1E]"
+                ? "bg-[#FFFFFF] text-[#155DAA] font-semibold shadow-xs"
+                : "bg-transparent text-[#596575] font-medium hover:text-[#182331]"
             }`}
           >
-            <span>Rollout Engine</span>
+            <span>Rollout</span>
           </button>
           <button
             type="button"
             onClick={() => handleActiveViewChange("BATCHES")}
-            className={`py-2.5 sm:py-3 text-xs font-semibold transition-colors cursor-pointer relative flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+            className={`flex-1 h-[36px] flex items-center justify-center rounded-[8px] text-[13px] transition-all cursor-pointer ${
               activeView === "BATCHES"
-                ? "text-[#007AFF] border-b-2 border-[#007AFF]"
-                : "text-[#6C6C70] hover:text-[#1C1C1E]"
+                ? "bg-[#FFFFFF] text-[#155DAA] font-semibold shadow-xs"
+                : "bg-transparent text-[#596575] font-medium hover:text-[#182331]"
             }`}
           >
-            <span className="hidden sm:inline">Rollout Batches &amp; History</span>
-            <span className="sm:hidden">Batches &amp; History</span>
+            <span>Batches</span>
           </button>
           <button
             type="button"
             onClick={() => handleActiveViewChange("LOGS")}
-            className={`py-2.5 sm:py-3 text-xs font-semibold transition-colors cursor-pointer relative flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+            className={`flex-1 h-[36px] flex items-center justify-center rounded-[8px] text-[13px] transition-all cursor-pointer ${
               activeView === "LOGS"
-                ? "text-[#007AFF] border-b-2 border-[#007AFF]"
-                : "text-[#6C6C70] hover:text-[#1C1C1E]"
+                ? "bg-[#FFFFFF] text-[#155DAA] font-semibold shadow-xs"
+                : "bg-transparent text-[#596575] font-medium hover:text-[#182331]"
             }`}
           >
-            <span>Delivery Logs</span>
+            <span>Logs</span>
           </button>
         </div>
 
-        {/* Live Gateway Balance Quick Widget */}
-        <div className="flex items-center gap-2.5 text-xs py-2 sm:py-0">
-          <span className="text-[11px] text-[#6C6C70]">
+        {/* Live Gateway Balance Widget */}
+        <div className="hidden sm:flex items-center gap-2 text-xs py-1">
+          <span className="text-[12px] text-[#596575]">
             Gateway Credit:{" "}
-            <span className="font-semibold text-[#1C1C1E] tabular-nums">
+            <span className="font-semibold text-[#182331] tabular-nums">
               {gatewayBalance ? `${gatewayBalance.smsBalance.toLocaleString()} SMS (${gatewayBalance.mainBalance.replace('GHS', 'GH₵')})` : "Checking..."}
             </span>
           </span>
@@ -1726,314 +1781,305 @@ export function SmsRolloutSimulator({
 
             {/* Audience & Field Selection */}
             <div className="border-0 rounded-none shadow-none shrink-0 flex flex-col bg-white">
-              <div className="shrink-0 space-y-2.5 relative z-20 p-3.5 border-b border-[#E5E5EA] bg-white">
-                {/* Search, Classification, Fields Filter & Action Toolbar */}
-                <div className="flex flex-wrap items-center justify-end-safe gap-2">
-                  <div className="relative flex-1 min-w-[180px] order-last lg:order-none">
-                    <Search className="w-3.5 h-3.5 text-[#8E8E93] absolute left-2.5 top-1/2 -translate-y-1/2 z-10" />
+              <div className="shrink-0 space-y-3 relative z-20 p-3.5 sm:p-4 border-b border-[#DDE2E8] bg-white">
+                {/* Row 1: Field filters | Reset | Unpaid only Toggle (Strictly Single Row) */}
+                <div className="flex items-center justify-between gap-2 w-full">
+                  <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                    {/* FIELDS FILTER TRIGGER & CONTAINER */}
+                    <div className="relative shrink-0 z-50 isolate">
+                      <button
+                        ref={fieldsFilterBtnRef}
+                        type="button"
+                        onClick={handleOpenFieldsFilter}
+                        className={`h-[34px] sm:h-[36px] px-2.5 sm:px-3 rounded-[10px] text-[12px] sm:text-[13px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                          requiredFields.length > 0
+                            ? "bg-[#155DAA] text-white shadow-xs"
+                            : "bg-[#EAF2FC] text-[#155DAA] hover:bg-[#D5E6F9]"
+                        }`}
+                      >
+                        <SlidersHorizontal className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                        <span className="truncate">Fields</span>
+                        {requiredFields.length > 0 && (
+                          <span className="font-semibold text-[11px] sm:text-xs tabular-nums">
+                            ({requiredFields.length})
+                          </span>
+                        )}
+                        <ChevronDown className={`w-3.5 h-3.5 transition-transform shrink-0 ${showFieldsFilter ? "rotate-180" : ""}`} />
+                      </button>
 
-                  <input
-                    type="text"
-                    value={accountSearchQuery}
-                    onChange={(e) => setAccountSearchQuery(e.target.value)}
-                    placeholder="Search Valuation ID, Ratepayer, Phone, GPS, Class..."
-                    autoComplete="off"
-                    autoCorrect="off"
-                    spellCheck="false"
-                    className="w-full h-8 pl-8 pr-8 rounded-lg border border-[#E5E5EA] bg-[#F2F2F7] text-xs text-[#1C1C1E] focus:outline-none focus:border-[#007AFF] focus:bg-white placeholder-[#8E8E93] transition-colors"
-                  />
+                      {/* APPLE HIG BOTTOM SHEET MODAL */}
+                      {showFieldsFilter &&
+                        typeof document !== "undefined" &&
+                        createPortal(
+                          <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4">
+                            {/* Backdrop */}
+                            <div
+                              onClick={() => setShowFieldsFilter(false)}
+                              className="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity"
+                            />
 
-                  {accountSearchQuery && (
+                            {/* Native Bottom Sheet Container */}
+                            <div
+                              ref={fieldsFilterRef}
+                              className="relative z-10 w-full sm:max-w-[480px] h-[82vh] sm:h-[640px] max-h-[90vh] bg-[#F2F2F7] dark:bg-black rounded-t-[20px] sm:rounded-[20px] flex flex-col overflow-hidden shadow-2xl animate-in slide-in-from-bottom duration-200"
+                            >
+                              {/* System Grabber */}
+                              <div className="w-full flex justify-center pt-2.5 pb-1 shrink-0">
+                                <div className="w-9 h-1 rounded-full bg-[#D1D1D6] dark:bg-[#48484A]" />
+                              </div>
+
+                              {/* Navigation Bar */}
+                              <div className="h-[48px] px-4 flex items-center justify-between shrink-0">
+                                {/* Left: Cancel */}
+                                <button
+                                  type="button"
+                                  onClick={() => setShowFieldsFilter(false)}
+                                  className="text-[#007AFF] dark:text-[#0A84FF] text-[17px] font-normal hover:opacity-70 active:opacity-40 transition-opacity cursor-pointer"
+                                >
+                                  Cancel
+                                </button>
+
+                                {/* Center: Title & Count Subtitle */}
+                                <div className="flex flex-col items-center justify-center text-center px-2 min-w-0">
+                                  <span className="text-[17px] font-semibold text-black dark:text-white leading-tight truncate">
+                                    Required Fields
+                                  </span>
+                                  <span className="text-[12px] text-[#8E8E93] dark:text-[#98989D] leading-tight">
+                                    {draftRequiredFields.length} of {availableFieldFilters.length} selected
+                                  </span>
+                                </div>
+
+                                {/* Right: More Menu & Done */}
+                                <div className="flex items-center gap-2.5">
+                                  {/* Overflow Selection Options Menu */}
+                                  <div className="relative" ref={selectMenuRef}>
+                                    <button
+                                      type="button"
+                                      onClick={() => setShowSelectMenu((prev) => !prev)}
+                                      className="p-1 rounded-full text-[#007AFF] dark:text-[#0A84FF] hover:bg-black/5 dark:hover:bg-white/10 active:opacity-40 transition-colors cursor-pointer"
+                                      aria-label="More selection options"
+                                    >
+                                      <MoreHorizontal className="w-5 h-5" />
+                                    </button>
+
+                                    {showSelectMenu && (
+                                      <div className="absolute right-0 top-full mt-1.5 w-44 bg-white/95 dark:bg-[#2C2C2E]/95 backdrop-blur-xl rounded-[14px] shadow-lg border border-black/10 dark:border-white/10 py-1 z-50 text-[14px]">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            handleSelectAllFields();
+                                            setShowSelectMenu(false);
+                                          }}
+                                          className="w-full text-left px-3.5 py-2 text-black dark:text-white hover:bg-[#007AFF] hover:text-white transition-colors cursor-pointer"
+                                        >
+                                          Select All
+                                        </button>
+                                        <div className="h-px bg-black/5 dark:bg-white/10 mx-2" />
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            handleClearAllFields();
+                                            setShowSelectMenu(false);
+                                          }}
+                                          className="w-full text-left px-3.5 py-2 text-black dark:text-white hover:bg-[#007AFF] hover:text-white transition-colors cursor-pointer"
+                                        >
+                                          Deselect All
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Done Action */}
+                                  <button
+                                    type="button"
+                                    onClick={handleApplyFieldsFilter}
+                                    className="text-[#007AFF] dark:text-[#0A84FF] text-[17px] font-semibold hover:opacity-70 active:opacity-40 transition-opacity cursor-pointer"
+                                  >
+                                    Done
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Search Bar */}
+                              <div className="px-4 pb-2.5 shrink-0">
+                                <div className="relative flex items-center">
+                                  <Search className="w-4 h-4 text-[#8E8E93] dark:text-[#98989D] absolute left-3 pointer-events-none" />
+                                  <input
+                                    type="text"
+                                    value={fieldsSearchQuery}
+                                    onChange={(e) => setFieldsSearchQuery(e.target.value)}
+                                    placeholder="Search"
+                                    autoComplete="off"
+                                    spellCheck={false}
+                                    className="w-full h-[36px] pl-9 pr-8 rounded-[10px] bg-[#E5E5EA] dark:bg-[#1C1C1E] text-[15px] text-black dark:text-white placeholder-[#8E8E93] dark:placeholder-[#98989D] focus:outline-none transition-colors"
+                                  />
+                                  {fieldsSearchQuery && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setFieldsSearchQuery("")}
+                                      className="absolute right-2.5 p-0.5 rounded-full bg-[#8E8E93] dark:bg-[#636366] text-white hover:opacity-80 transition-opacity cursor-pointer"
+                                      aria-label="Clear search"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Inset Grouped List with Zero Scrollbar Tracks */}
+                              <div className="flex-1 overflow-y-auto px-4 py-2 space-y-4 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                                {/* Section 1: RECOMMENDED PRESET */}
+                                {(!fieldsSearchQuery || "recommended sms preset".includes(fieldsSearchQuery.toLowerCase())) && (
+                                  <div>
+                                    <div className="px-4 pb-1.5 text-[12px] font-normal tracking-tight text-[#8E8E93] dark:text-[#98989D] uppercase">
+                                      Recommended
+                                    </div>
+                                    <div className="bg-white dark:bg-[#1C1C1E] rounded-[12px] overflow-hidden">
+                                      <button
+                                        type="button"
+                                        onClick={handleResetDefaultFields}
+                                        className="w-full min-h-[44px] px-4 py-2.5 flex items-center justify-between text-left hover:bg-black/5 dark:hover:bg-white/5 active:bg-black/10 transition-colors cursor-pointer"
+                                      >
+                                        <div className="flex flex-col pr-2 min-w-0">
+                                          <span className="text-[16px] text-black dark:text-white font-normal">
+                                            Use SMS preset
+                                          </span>
+                                          <span className="text-[12px] text-[#8E8E93] dark:text-[#98989D]">
+                                            Selects phone, name, and address
+                                          </span>
+                                        </div>
+                                        <ChevronRight className="w-4 h-4 text-[#C7C7CC] dark:text-[#48484A] shrink-0" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Category Sections */}
+                                {groupedFields.map((group) => (
+                                  <div key={group.category}>
+                                    <div className="px-4 pb-1.5 text-[12px] font-normal tracking-tight text-[#8E8E93] dark:text-[#98989D] uppercase">
+                                      {group.category}
+                                    </div>
+                                    <div className="bg-white dark:bg-[#1C1C1E] rounded-[12px] overflow-hidden">
+                                      {group.fields.map((field, idx) => {
+                                        const isSelected = draftRequiredFields.includes(field.key);
+                                        const isLast = idx === group.fields.length - 1;
+                                        return (
+                                          <div key={field.key} className="relative">
+                                            <button
+                                              type="button"
+                                              onClick={() => handleToggleDraftField(field.key)}
+                                              className="w-full min-h-[44px] px-4 py-3 flex items-center justify-between text-left active:bg-black/5 dark:active:bg-white/5 transition-colors cursor-pointer"
+                                            >
+                                              <span className="text-[16px] text-black dark:text-white font-normal truncate pr-3">
+                                                {field.label}
+                                              </span>
+                                              {isSelected && (
+                                                <Check className="w-5 h-5 text-[#007AFF] dark:text-[#0A84FF] shrink-0 stroke-[2.5]" />
+                                              )}
+                                            </button>
+                                            {!isLast && (
+                                              <div className="ml-4 h-px bg-[#E5E5EA] dark:bg-[#38383A]" />
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                ))}
+
+                                {/* Empty Search Results State */}
+                                {groupedFields.length === 0 && (
+                                  <div className="text-center py-12 text-[#8E8E93] dark:text-[#98989D] text-[15px]">
+                                    No fields found for &ldquo;{fieldsSearchQuery}&rdquo;
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>,
+                          document.body
+                        )}
+                    </div>
+
+                    {/* Template Action (Moved to top row beside Fields) */}
                     <button
                       type="button"
-                      onClick={() => setAccountSearchQuery("")}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-[#8E8E93] p-1 cursor-pointer z-10 hover:text-[#1C1C1E]"
+                      onClick={() => setShowTemplateModal(true)}
+                      className="h-[34px] sm:h-[36px] px-2.5 sm:px-3 rounded-[10px] text-[12px] sm:text-[13px] font-semibold text-[#155DAA] bg-[#EAF2FC] hover:bg-[#D5E6F9] transition-colors cursor-pointer shrink-0 flex items-center gap-1.5"
                     >
-                      <X className="w-3 h-3" />
+                      <Edit3 className="w-3.5 h-3.5 shrink-0" />
+                      <span className="truncate">Template</span>
                     </button>
-                  )}
-                </div>
+                  </div>
 
-                {/* FIELDS FILTER TRIGGER & CONTAINER POPOVER */}
-                <div className="relative shrink-0 z-50 isolate">
-                  <button
-                    ref={fieldsFilterBtnRef}
-                    type="button"
-                    onClick={handleOpenFieldsFilter}
-                    className={`h-8 px-3 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                      requiredFields.length > 0
-                        ? "bg-[#007AFF] text-white font-medium border-[#007AFF] shadow-xs"
-                        : "bg-[#F2F2F7] text-[#1C1C1E] border-[#E5E5EA] hover:bg-[#E5E5EA]"
-                    }`}
+                  {/* Unpaid balances filter toggle (Single-line compact Apple switch, clean borderless) */}
+                  <div
+                    onClick={() => handleStatusChange(targetStatus === "UNPAID" ? "ALL" : "UNPAID")}
+                    className="h-[34px] sm:h-[36px] px-1 flex items-center gap-2 sm:gap-2.5 cursor-pointer select-none shrink-0"
                   >
-                    <SlidersHorizontal className="w-3.5 h-3.5" />
-                    <span>Fields Filter</span>
-                    {requiredFields.length > 0 && (
-                      <span className="ml-0.5 text-[11px] font-bold opacity-90">
-                        ({requiredFields.length})
-                      </span>
-                    )}
-                    <ChevronDown className={`w-3 h-3 transition-transform ${showFieldsFilter ? "rotate-180" : ""}`} />
-                  </button>
-
-                  {/* FIELDS SELECTION POPOVER (FITS VIEWPORT & FULLY RESPONSIVE) */}
-                  {showFieldsFilter && (
+                    <span className="text-[12px] sm:text-[13px] font-medium text-[#182331] whitespace-nowrap">Unpaid only</span>
                     <div
-                      ref={fieldsFilterRef}
-                      className="absolute right-0 top-full mt-1.5 w-[340px] sm:w-[380px] max-w-[calc(100vw-32px)] z-50 rounded-xl border border-[#E5E5EA] bg-white/95 backdrop-blur-xl shadow-xl p-3 flex flex-col font-sans max-h-[340px] overflow-hidden"
+                      className={`w-[36px] sm:w-[42px] h-[22px] sm:h-[26px] flex items-center rounded-full p-[2px] transition-colors duration-200 ease-in-out ${
+                        targetStatus === "UNPAID" ? "bg-[#34C759]" : "bg-[#E8EBF0]"
+                      }`}
                     >
-                      <div className="flex items-center justify-between border-b border-[#E5E5EA] pb-2 shrink-0">
-                        <div className="flex items-center gap-1.5">
-                          <SlidersHorizontal className="w-3.5 h-3.5 text-[#007AFF]" />
-                          <span className="text-xs font-bold text-[#1C1C1E]">Required Field Criteria</span>
-                          <span className="text-[10px] text-[#6C6C70]">({availableFieldFilters.length} fields)</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setShowFieldsFilter(false)}
-                          className="text-[#8E8E93] hover:text-[#1C1C1E] p-0.5 rounded cursor-pointer"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-
-                      <div className="relative shrink-0 pt-2">
-                        <Search className="w-3 h-3 text-[#8E8E93] absolute left-2 top-1/2 -translate-y-1/2" />
-                        <input
-                          type="text"
-                          value={fieldsSearchQuery}
-                          onChange={(e) => setFieldsSearchQuery(e.target.value)}
-                          placeholder="Search fields (e.g. Phone, GPS, Name)..."
-                          autoComplete="off"
-                          autoCorrect="off"
-                          spellCheck="false"
-                          className="w-full h-7 pl-7 pr-2 rounded-md border border-[#E5E5EA] bg-[#F2F2F7] text-[11px] text-[#1C1C1E] focus:outline-none focus:border-[#007AFF] focus:bg-white"
-                        />
-                      </div>
-
-                      <div className="flex items-center justify-between text-[10px] shrink-0 py-1.5">
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={handleSelectAllFields}
-                            className="text-[#007AFF] hover:underline font-semibold cursor-pointer"
-                          >
-                            Select All
-                          </button>
-                          <span className="text-[#E5E5EA]">&bull;</span>
-                          <button
-                            type="button"
-                            onClick={handleClearAllFields}
-                            className="text-[#6C6C70] hover:underline font-medium cursor-pointer"
-                          >
-                            Clear
-                          </button>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={handleResetDefaultFields}
-                          className="text-[#34C759] hover:underline font-semibold cursor-pointer flex items-center gap-1"
-                        >
-                          <span>Recommended for SMS</span>
-                        </button>
-                      </div>
-
-                      <div className="flex-1 min-h-[140px] overflow-y-auto divide-y divide-[#E5E5EA] rounded-lg border border-[#E5E5EA] bg-[#F2F2F7]/50">
-                        {filteredAvailableFields.map((field) => {
-                          const isChecked = draftRequiredFields.includes(field.key);
-                          return (
-                            <label
-                              key={field.key}
-                              onClick={() => handleToggleDraftField(field.key)}
-                              className={`px-2.5 py-1.5 flex items-center justify-between text-xs cursor-pointer hover:bg-white transition-colors ${
-                                isChecked ? "bg-[#007AFF]/8 font-medium text-[#007AFF]" : "text-[#1C1C1E]"
-                              }`}
-                            >
-                              <div className="flex items-center gap-2 min-w-0 pr-2">
-                                <div
-                                  className={`w-3.5 h-3.5 rounded shrink-0 flex items-center justify-center border transition-colors ${
-                                    isChecked
-                                      ? "bg-[#007AFF] border-[#007AFF] text-white"
-                                      : "border-[#C7C7CC] bg-white"
-                                  }`}
-                                >
-                                  {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
-                                </div>
-                                <span className="text-[11px] text-[#1C1C1E] truncate">
-                                  {field.label}
-                                </span>
-                              </div>
-                              <span className="text-[9px] text-[#6C6C70] uppercase tracking-wide shrink-0">
-                                {field.category}
-                              </span>
-                            </label>
-                          );
-                        })}
-                      </div>
-
-                      <div className="pt-2 border-t border-[#E5E5EA] flex items-center justify-between text-[10px] text-[#6C6C70] shrink-0">
-                        <span>{draftRequiredFields.length} field{draftRequiredFields.length === 1 ? "" : "s"} required</span>
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => setShowFieldsFilter(false)}
-                            className="h-6 px-2 rounded border border-[#E5E5EA] text-[#6C6C70] hover:bg-[#F2F2F7] font-medium cursor-pointer transition-colors"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            type="button"
-                            onClick={handleApplyFieldsFilter}
-                            className="h-6 px-2.5 rounded bg-[#007AFF] text-white font-semibold cursor-pointer hover:bg-[#007AFF]/90 transition-colors shadow-2xs"
-                          >
-                            Apply Filter
-                          </button>
-                        </div>
-                      </div>
+                      <div
+                        className={`bg-white w-[18px] sm:w-[22px] h-[18px] sm:h-[22px] rounded-full shadow-xs border border-black/5 transform transition-transform duration-200 ease-in-out ${
+                          targetStatus === "UNPAID" ? "translate-x-[14px] sm:translate-x-[16px]" : "translate-x-0"
+                        }`}
+                      />
                     </div>
-                  )}
+                  </div>
                 </div>
 
-                <select
-                  value={targetStatus}
-                  onChange={(e) => handleStatusChange(e.target.value as any)}
-                  className="shrink-0 h-8 px-2 rounded-lg border border-[#E5E5EA] bg-[#F2F2F7] text-[11px] text-[#1C1C1E] focus:outline-none focus:border-[#007AFF] focus:bg-white cursor-pointer font-medium"
-                >
-                  <option value="UNPAID">Unpaid Balances Only</option>
-                  <option value="PAID">Paid / Settled</option>
-                  <option value="OVERPAID">Overpaid (Credit Balance)</option>
-                  <option value="ALL">All Records</option>
-                </select>
+                {/* Search & Send SMS Action (Outer container removed, Send SMS floated to right of search field) */}
+                <div className="flex items-center gap-2 w-full">
+                  {/* Search Field */}
+                  <div className="relative flex-1 h-[36px] sm:h-[38px] bg-[#F2F2F7] rounded-[10px] flex items-center px-3 gap-2">
+                    <Search className="w-4 h-4 text-[#596575] shrink-0" />
+                    <input
+                      type="text"
+                      value={accountSearchQuery}
+                      onChange={(e) => setAccountSearchQuery(e.target.value)}
+                      placeholder="Account, name, phone or location"
+                      autoComplete="off"
+                      spellCheck={false}
+                      className="w-full h-full bg-transparent text-[13px] sm:text-[14px] text-[#182331] placeholder-[#8E8E93] focus:outline-none"
+                    />
+                    {accountSearchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setAccountSearchQuery("")}
+                        className="text-[#8E8E93] hover:text-[#182331] p-0.5 cursor-pointer shrink-0"
+                        title="Clear search"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
 
-                {/* Edit Message Template Modal Trigger Button */}
-                <button
-                  type="button"
-                  onClick={() => setShowTemplateModal(true)}
-                  className="h-8 px-2.5 rounded-lg border border-[#E5E5EA] bg-[#F2F2F7] hover:bg-[#E5E5EA] hover:border-[#007AFF] text-xs font-semibold text-[#1C1C1E] flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
-                  title="Configure SMS Message Template"
-                >
-                  <FileText className="w-3.5 h-3.5 text-[#6C6C70]" />
-                  <span>Message Template</span>
-                  <span className="text-[10px] text-[#6C6C70]">({currentTemplate.length} chars)</span>
-                </button>
-
-                {/* Rollout Action Button with Floating Metric Tooltip on Hover */}
-                <div className="relative group shrink-0">
+                  {/* Send SMS Button floated to right side of search field */}
                   <button
                     type="button"
                     onClick={handleOpenAuthModal}
                     disabled={isProcessing || effectiveRolloutCount === 0}
-                    className="h-8 px-3.5 rounded-lg font-semibold text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all shadow-xs bg-[#007AFF] hover:bg-[#007AFF]/90 text-white"
+                    className="h-[36px] sm:h-[38px] px-3.5 sm:px-4 rounded-[10px] bg-[#155DAA] hover:bg-[#114B8B] text-white text-[12px] sm:text-[13px] font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all shadow-xs shrink-0"
                   >
-                    <Send className="w-3.5 h-3.5" />
-                    <span>
-                      {isProcessing ? "Dispatching..." : "Rollout"}
-                    </span>
+                    <Send className="w-3.5 h-3.5 shrink-0" />
+                    <span className="whitespace-nowrap">{isProcessing ? "Sending..." : "Send SMS"}</span>
                   </button>
-
-                  {/* Floating Tooltip Card (Appears on Hover) - iOS Liquid Glass */}
-                  <div className="absolute right-0 bottom-full mb-2 hidden group-hover:flex flex-col items-center pointer-events-none z-50 animate-in fade-in zoom-in-95 duration-150">
-                    <div className="bg-white/95 backdrop-blur-xl border border-[#E5E5EA] text-[#1C1C1E] text-xs px-3 py-1.5 rounded-lg shadow-xl whitespace-nowrap flex items-center gap-2">
-                      <span className="font-semibold text-[#007AFF]">
-                        {effectiveRolloutCount.toLocaleString()}
-                      </span>
-                      <span className="text-[#6C6C70] text-[11px]">
-                        {audienceScope === "SELECTED" ? "accounts selected" : "accounts matching filter criteria"}
-                      </span>
-                      <span className="text-[#E5E5EA] text-[10px]">•</span>
-                      <span className="text-[#1C1C1E] text-[11px] font-mono tabular-nums">
-                        {effectiveRolloutTotalDueFormatted}
-                      </span>
-                    </div>
-                    {/* Tooltip Caret Arrow */}
-                    <div className="w-2.5 h-2.5 bg-white/95 backdrop-blur-xl border-r border-b border-[#E5E5EA] rotate-45 -mt-1" />
-                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-            {/* Matched Audience Rollout Queue Table (Consumes All Vertical Space) */}
+            {/* Matched Audience Rollout Queue Table / Cards (Consumes All Vertical Space) */}
             <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-white">
-              <div className="px-3.5 py-2 border-b flex flex-col md:flex-row md:items-center justify-between gap-2 shrink-0 bg-[#F8F9FA] border-[#E5E5EA]">
-                <div className="flex items-center justify-between gap-2 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap min-w-0">
-                    <span className="text-xs font-bold text-[#1C1C1E] truncate">Audience Rollout Queue</span>
-                    <span className="text-[11px] text-[#6C6C70] whitespace-nowrap">
-                      ({totalAudienceCount.toLocaleString()} • P{audiencePage}/{Math.max(1, Math.ceil(totalAudienceCount / audienceLimit))}
-                      {multiPropertyRatepayersCount > 0 && ` • ${multiPropertyRatepayersCount} portfolios`})
-                    </span>
-                  </div>
-                  {/* Quick Select All in Mobile view */}
-                  <label className="md:hidden flex items-center gap-1.5 text-[11px] font-medium text-[#007AFF] cursor-pointer shrink-0 min-h-[44px]">
-                    <input
-                      type="checkbox"
-                      checked={audienceScope === "SELECTED" && liveAudience.length > 0 && selectedSpecificAccounts.length === liveAudience.length}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedSpecificAccounts(liveAudience);
-                          setAudienceScope("SELECTED");
-                        } else {
-                          setSelectedSpecificAccounts([]);
-                          setAudienceScope("DATABASE_FILTER");
-                        }
-                      }}
-                      className="w-4 h-4 rounded border-[#C7C7CC] text-[#007AFF] accent-[#007AFF] cursor-pointer"
-                    />
-                    <span>Select Page</span>
-                  </label>
-                </div>
-                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5 shrink-0">
-                  {multiPropertyRatepayersCount > 0 && isHierarchicalView && (
-                    <button
-                      type="button"
-                      onClick={handleToggleCollapseAll}
-                      className="text-[11px] text-[#6C6C70] hover:text-[#1C1C1E] cursor-pointer whitespace-nowrap"
-                    >
-                      {collapsedGroupKeys.size > 0 ? "Expand All" : "Collapse All"}
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setIsHierarchicalView(!isHierarchicalView)}
-                    className={`h-7 px-2.5 rounded-md border text-[11px] font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 whitespace-nowrap ${
-                      isHierarchicalView
-                        ? "border-[#007AFF] bg-[#007AFF]/10 text-[#007AFF]"
-                        : "border-[#E5E5EA] bg-[#F2F2F7] text-[#6C6C70] hover:text-[#1C1C1E]"
-                    }`}
-                    title="Toggle between Ratepayer Portfolio Grouping and Flat Property rows"
-                  >
-                    <Users className="w-3 h-3" />
-                    <span>{isHierarchicalView ? "Hierarchical" : "Flat"}</span>
-                  </button>
-                  <div className="h-3 w-px bg-[#E5E5EA] shrink-0" />
-                  <button
-                    type="button"
-                    onClick={() => setShowTemplateModal(true)}
-                    className="text-[11px] font-semibold text-[#007AFF] hover:underline cursor-pointer flex items-center gap-1 shrink-0 whitespace-nowrap"
-                  >
-                    <Edit3 className="w-3 h-3" />
-                    <span>Template</span>
-                  </button>
-                  {JSON.stringify(columnOrder) !== JSON.stringify(DEFAULT_AUDIENCE_COLUMNS.map((c) => c.id)) && (
-                    <button
-                      type="button"
-                      onClick={resetColumnOrder}
-                      className="h-7 px-2.5 rounded-md border border-[#E5E5EA] bg-[#F2F2F7] text-[#6C6C70] hover:text-[#1C1C1E] text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer shrink-0"
-                      title="Reset columns to default layout"
-                    >
-                      <RotateCcw className="w-3 h-3" />
-                      <span>Reset Columns</span>
-                    </button>
-                  )}
-                </div>
-              </div>
 
               {/* Audience Table Container */}
               <div
                 ref={tableContainerRef}
                 onScroll={onTableScroll}
-                className="flex-1 min-h-0 min-h-[calc(100dvh-13rem)] overflow-auto [overflow-anchor:auto] [isolation:isolate]"
+                className="flex-1 min-h-0 overflow-auto [overflow-anchor:auto] [isolation:isolate]"
               >
                 <table className="hidden md:table w-[2860px] min-w-[2860px] table-fixed text-left text-xs border-collapse">
                   <colgroup>
@@ -2356,21 +2402,25 @@ export function SmsRolloutSimulator({
                   </tbody>
                 </table>
 
-                {/* Mobile Matched Audience Cards (< 768px) */}
-                <div className="block md:hidden divide-y divide-[#E5E5EA] bg-white">
+                {/* Mobile Matched Audience Cards (< 768px) (Figma Screen 1) */}
+                <div className="block md:hidden p-3.5 space-y-2.5 bg-[#F2F2F7]">
                   {isLoadingAudience ? (
-                    Array.from({ length: 6 }).map((_, i) => (
-                      <div key={`mob-aud-skel-${i}`} className="p-3.5 space-y-2 animate-pulse">
+                    Array.from({ length: 4 }).map((_, i) => (
+                      <div key={`mob-aud-skel-${i}`} className="p-3.5 space-y-2 bg-white rounded-[14px] border border-[#DDE2E8] animate-pulse">
                         <div className="flex items-center justify-between">
-                          <div className="h-4 w-28 bg-[#E5E5EA] rounded" />
-                          <div className="h-4 w-20 bg-[#E5E5EA] rounded" />
+                          <div className="h-4 w-28 bg-[#E8EBF0] rounded" />
+                          <div className="h-4 w-20 bg-[#E8EBF0] rounded" />
                         </div>
-                        <div className="h-3 w-40 bg-[#E5E5EA] rounded" />
-                        <div className="h-3 w-24 bg-[#E5E5EA] rounded" />
+                        <div className="h-3.5 w-40 bg-[#E8EBF0] rounded" />
+                        <div className="h-3 w-48 bg-[#E8EBF0] rounded" />
+                        <div className="flex items-center justify-between pt-1">
+                          <div className="h-3 w-28 bg-[#E8EBF0] rounded" />
+                          <div className="h-4 w-16 bg-[#E8EBF0] rounded" />
+                        </div>
                       </div>
                     ))
                   ) : liveAudience.length === 0 ? (
-                    <div className="py-12 px-4 text-center text-[#8E8E93] italic text-xs">
+                    <div className="py-12 px-4 text-center text-[#596575] italic text-xs bg-white rounded-[14px] border border-[#DDE2E8]">
                       No properties match the selected audience filters.
                     </div>
                   ) : isHierarchicalView ? (
@@ -2386,11 +2436,10 @@ export function SmsRolloutSimulator({
 
                       if (group.isMultiProperty) {
                         return (
-                          <div key={`mob-grp-${group.key}`} className="border-b border-[#E5E5EA]">
+                          <div key={`mob-grp-${group.key}`} className="bg-white rounded-[14px] border border-[#DDE2E8] p-3.5 space-y-2.5">
                             {/* Portfolio Header Card */}
-                            <div className="p-3 bg-[#F8F9FA] flex items-start gap-2.5">
-                              {/* 44px Checkbox */}
-                              <div className="min-w-[44px] min-h-[44px] flex items-center justify-center -m-2 shrink-0">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex items-center gap-2.5 min-w-0">
                                 <input
                                   type="checkbox"
                                   checked={isAllGroupSelected}
@@ -2418,53 +2467,35 @@ export function SmsRolloutSimulator({
                                       setAudienceScope("SELECTED");
                                     }
                                   }}
-                                  className="w-4 h-4 rounded border-[#C7C7CC] text-[#007AFF] accent-[#007AFF] cursor-pointer"
+                                  className="w-4 h-4 rounded border-[#C7C7CC] text-[#155DAA] accent-[#155DAA] cursor-pointer shrink-0"
                                 />
+                                <span className="font-bold text-xs text-[#182331] uppercase truncate">
+                                  {group.ownerName}
+                                </span>
                               </div>
 
-                              {/* Portfolio Info */}
-                              <div
-                                onClick={() => toggleGroupCollapse(group.key)}
-                                className="flex-1 min-w-0 cursor-pointer pt-0.5"
-                              >
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="font-bold text-xs text-[#1C1C1E] truncate">
-                                    {group.ownerName}
-                                  </span>
-                                  <span className="text-xs font-bold text-[#1C1C1E] tabular-nums shrink-0">
-                                    {formatGhc(group.totalAmountDue)}
-                                  </span>
-                                </div>
-
-                                <div className="flex items-center gap-1.5 text-[11px] text-[#6C6C70] mt-0.5 flex-wrap">
-                                  <span className="font-mono">{cleanDash(group.phone)}</span>
-                                  <span>&bull;</span>
-                                  <span className="font-semibold text-[#007AFF]">{group.properties.length} Accounts</span>
-                                  {group.totalArrears > 0 && (
-                                    <>
-                                      <span>&bull;</span>
-                                      <span className="text-[#FF3B30] font-semibold">
-                                        Arrears: {formatGhc(group.totalArrears)}
-                                      </span>
-                                    </>
-                                  )}
-                                </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <span className="text-sm font-bold text-[#182331] tabular-nums">
+                                  {formatGhc(group.totalAmountDue)}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleGroupCollapse(group.key)}
+                                  className="p-1 text-[#596575] hover:text-[#182331] cursor-pointer"
+                                  aria-label={isExpanded ? "Collapse portfolio" : "Expand portfolio"}
+                                >
+                                  <ChevronDown className={`w-4 h-4 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                                </button>
                               </div>
+                            </div>
 
-                              {/* 44px Expand/Collapse Chevron */}
-                              <button
-                                type="button"
-                                onClick={() => toggleGroupCollapse(group.key)}
-                                className="min-w-[44px] min-h-[44px] flex items-center justify-center -m-2 text-[#6C6C70] hover:text-[#1C1C1E] cursor-pointer shrink-0"
-                                aria-label={isExpanded ? "Collapse portfolio" : "Expand portfolio"}
-                              >
-                                <ChevronDown className={`w-4 h-4 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
-                              </button>
+                            <div className="flex items-center gap-2 text-[11px] text-[#596575] flex-wrap">
+                              <span className="font-semibold text-[#155DAA]">{group.properties.length} Properties</span>
                             </div>
 
                             {/* Nested Property Cards */}
                             {isExpanded && (
-                              <div className="pl-6 border-l-2 border-[#007AFF] divide-y divide-[#E5E5EA] bg-white">
+                              <div className="space-y-2 pt-2 border-t border-[#E8EBF0]">
                                 {group.properties.map((prop) => {
                                   const isSelected = selectedSpecificAccounts.some(
                                     (p) => (p.id || p.accountNumber) === (prop.id || prop.accountNumber)
@@ -2487,45 +2518,46 @@ export function SmsRolloutSimulator({
                                           setAudienceScope("SELECTED");
                                         }
                                       }}
-                                      className={`p-3 flex items-start gap-2.5 transition-colors cursor-pointer ${
-                                        isSelected ? "bg-[#007AFF]/8" : "hover:bg-[#F8F9FA]"
+                                      className={`p-3 rounded-[10px] border transition-colors cursor-pointer space-y-1.5 ${
+                                        isSelected ? "bg-[#EAF2FC] border-[#155DAA]" : "bg-[#F8F9FA] border-[#DDE2E8] hover:bg-white"
                                       }`}
                                     >
-                                      <div className="min-w-[44px] min-h-[44px] flex items-center justify-center -m-2 shrink-0 pointer-events-none">
-                                        <input
-                                          type="checkbox"
-                                          checked={isSelected}
-                                          readOnly
-                                          className="w-4 h-4 rounded border-[#C7C7CC] text-[#007AFF] accent-[#007AFF]"
-                                        />
-                                      </div>
-
-                                      <div className="flex-1 min-w-0 pt-0.5">
-                                        <div className="flex items-center justify-between gap-2">
-                                          <span className="font-mono text-xs font-bold text-[#007AFF] truncate">
+                                      {/* Row 1: Checkbox + Account No + Total Due */}
+                                      <div className="flex items-center justify-between gap-2">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                          <input
+                                            type="checkbox"
+                                            checked={isSelected}
+                                            readOnly
+                                            className="w-3.5 h-3.5 rounded border-[#C7C7CC] text-[#155DAA] accent-[#155DAA] pointer-events-none shrink-0"
+                                          />
+                                          <span className="font-mono text-xs font-bold text-[#155DAA] truncate">
                                             {cleanDash(prop.accountNumber)}
                                           </span>
-                                          <span className="text-xs font-bold text-[#1C1C1E] tabular-nums shrink-0">
-                                            {formatGhc(prop.totalAmountDue)}
+                                        </div>
+                                        <span className="text-xs font-bold text-[#182331] tabular-nums shrink-0">
+                                          {formatGhc(prop.totalAmountDue)}
+                                        </span>
+                                      </div>
+
+                                      {/* Row 2: GPS Address */}
+                                      {(prop.ownerDigitalAddress || (prop as any).gpsAddress) && (
+                                        <div className="text-[11px] text-[#596575] font-mono truncate" title={cleanDash(prop.ownerDigitalAddress || (prop as any).gpsAddress)}>
+                                          {cleanDash(prop.ownerDigitalAddress || (prop as any).gpsAddress)}
+                                        </div>
+                                      )}
+
+                                      {/* Row 3: Status Indicator */}
+                                      <div className="pt-0.5 flex items-center">
+                                        {prop.totalAmountDue > 0 ? (
+                                          <span className="text-[11px] font-semibold text-[#B42332] flex items-center gap-1">
+                                            &bull; Balance Due
                                           </span>
-                                        </div>
-
-                                        <div className="text-[11px] text-[#6C6C70] flex items-center gap-1.5 flex-wrap mt-0.5">
-                                          <span>{cleanDash(prop.valuationNo)}</span>
-                                          <span>&bull;</span>
-                                          <span className="font-mono">{cleanDash(prop.ownerDigitalAddress)}</span>
-                                        </div>
-
-                                        <div className="text-[11px] flex items-center justify-between mt-1">
-                                          <span className="text-[#8E8E93] truncate">{cleanDash(prop.propertyClassification)}</span>
-                                          {prop.arrears > 0 ? (
-                                            <span className="text-[#FF3B30] font-semibold tabular-nums">
-                                              Arrears: {prop.arrearsFormatted}
-                                            </span>
-                                          ) : (
-                                            <span className="text-[#34C759] font-medium">&bull; Current</span>
-                                          )}
-                                        </div>
+                                        ) : (
+                                          <span className="text-[11px] font-semibold text-[#187444] flex items-center gap-1">
+                                            &bull; Paid
+                                          </span>
+                                        )}
                                       </div>
                                     </div>
                                   );
@@ -2560,49 +2592,51 @@ export function SmsRolloutSimulator({
                               setAudienceScope("SELECTED");
                             }
                           }}
-                          className={`p-3 flex items-start gap-2.5 transition-colors cursor-pointer ${
-                            isSelected ? "bg-[#007AFF]/8" : "hover:bg-[#F8F9FA]"
+                          className={`bg-white rounded-[14px] border transition-all cursor-pointer p-3.5 space-y-2 ${
+                            isSelected ? "border-[#155DAA] ring-1 ring-[#155DAA]/20" : "border-[#DDE2E8] hover:border-[#B5C2D1]"
                           }`}
                         >
-                          <div className="min-w-[44px] min-h-[44px] flex items-center justify-center -m-2 shrink-0 pointer-events-none">
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              readOnly
-                              className="w-4 h-4 rounded border-[#C7C7CC] text-[#007AFF] accent-[#007AFF]"
-                            />
-                          </div>
-
-                          <div className="flex-1 min-w-0 pt-0.5">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="font-mono text-xs font-bold text-[#007AFF] truncate">
+                          {/* Row 1: Checkbox + Account No + Balance Due */}
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                readOnly
+                                className="w-4 h-4 rounded border-[#C7C7CC] text-[#155DAA] accent-[#155DAA] pointer-events-none shrink-0"
+                              />
+                              <span className="font-mono text-xs font-bold text-[#155DAA] truncate">
                                 {cleanDash(prop.accountNumber)}
                               </span>
-                              <span className="text-xs font-bold text-[#1C1C1E] tabular-nums shrink-0">
-                                {formatGhc(prop.totalAmountDue)}
+                            </div>
+                            <span className="text-sm font-bold text-[#182331] tabular-nums shrink-0">
+                              {formatGhc(prop.totalAmountDue)}
+                            </span>
+                          </div>
+
+                          {/* Row 2: Owner Name */}
+                          <div className="text-xs font-bold text-[#182331] uppercase truncate">
+                            {cleanDash(prop.ownerName)}
+                          </div>
+
+                          {/* Row 3: GPS Address */}
+                          {(prop.ownerDigitalAddress || (prop as any).gpsAddress) && (
+                            <div className="text-[11px] text-[#596575] font-mono truncate" title={cleanDash(prop.ownerDigitalAddress || (prop as any).gpsAddress)}>
+                              {cleanDash(prop.ownerDigitalAddress || (prop as any).gpsAddress)}
+                            </div>
+                          )}
+
+                          {/* Row 4: Status Indicator */}
+                          <div className="pt-0.5 flex items-center">
+                            {prop.totalAmountDue > 0 ? (
+                              <span className="text-[11px] font-semibold text-[#B42332] flex items-center gap-1">
+                                &bull; Balance Due
                               </span>
-                            </div>
-
-                            <div className="text-xs font-bold text-[#1C1C1E] truncate mt-0.5">
-                              {cleanDash(prop.ownerName)}
-                            </div>
-
-                            <div className="text-[11px] text-[#6C6C70] flex items-center gap-1.5 flex-wrap mt-0.5 font-mono">
-                              <span>{cleanDash(prop.ownerPhone)}</span>
-                              <span>&bull;</span>
-                              <span>{cleanDash(prop.ownerDigitalAddress)}</span>
-                            </div>
-
-                            <div className="text-[11px] flex items-center justify-between mt-1">
-                              <span className="text-[#8E8E93] truncate">{cleanDash(prop.propertyClassification)}</span>
-                              {prop.arrears > 0 ? (
-                                <span className="text-[#FF3B30] font-semibold tabular-nums">
-                                  Arrears: {prop.arrearsFormatted}
-                                </span>
-                              ) : (
-                                <span className="text-[#34C759] font-medium">&bull; Current</span>
-                              )}
-                            </div>
+                            ) : (
+                              <span className="text-[11px] font-semibold text-[#187444] flex items-center gap-1">
+                                &bull; Paid
+                              </span>
+                            )}
                           </div>
                         </div>
                       );
@@ -2631,113 +2665,163 @@ export function SmsRolloutSimulator({
                               setAudienceScope("SELECTED");
                             }
                           }}
-                          className={`p-3 flex items-start gap-2.5 transition-colors cursor-pointer ${
-                            isSelected ? "bg-[#007AFF]/8" : "hover:bg-[#F8F9FA]"
+                          className={`bg-white rounded-[14px] border transition-all cursor-pointer p-3.5 space-y-2 ${
+                            isSelected ? "border-[#155DAA] ring-1 ring-[#155DAA]/20" : "border-[#DDE2E8] hover:border-[#B5C2D1]"
                           }`}
                         >
-                          <div className="min-w-[44px] min-h-[44px] flex items-center justify-center -m-2 shrink-0 pointer-events-none">
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              readOnly
-                              className="w-4 h-4 rounded border-[#C7C7CC] text-[#007AFF] accent-[#007AFF]"
-                            />
-                          </div>
-
-                          <div className="flex-1 min-w-0 pt-0.5">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="font-mono text-xs font-bold text-[#007AFF] truncate">
+                          {/* Row 1: Checkbox + Account No + Balance Due */}
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                readOnly
+                                className="w-4 h-4 rounded border-[#C7C7CC] text-[#155DAA] accent-[#155DAA] pointer-events-none shrink-0"
+                              />
+                              <span className="font-mono text-xs font-bold text-[#155DAA] truncate">
                                 {cleanDash(prop.accountNumber)}
                               </span>
-                              <span className="text-xs font-bold text-[#1C1C1E] tabular-nums shrink-0">
-                                {formatGhc(prop.totalAmountDue)}
+                            </div>
+                            <span className="text-sm font-bold text-[#182331] tabular-nums shrink-0">
+                              {formatGhc(prop.totalAmountDue)}
+                            </span>
+                          </div>
+
+                          {/* Row 2: Owner Name */}
+                          <div className="text-xs font-bold text-[#182331] uppercase truncate">
+                            {cleanDash(prop.ownerName)}
+                          </div>
+
+                          {/* Row 3: GPS Address */}
+                          {(prop.ownerDigitalAddress || (prop as any).gpsAddress) && (
+                            <div className="text-[11px] text-[#596575] font-mono truncate" title={cleanDash(prop.ownerDigitalAddress || (prop as any).gpsAddress)}>
+                              {cleanDash(prop.ownerDigitalAddress || (prop as any).gpsAddress)}
+                            </div>
+                          )}
+
+                          {/* Row 4: Status Indicator */}
+                          <div className="pt-0.5 flex items-center">
+                            {prop.totalAmountDue > 0 ? (
+                              <span className="text-[11px] font-semibold text-[#B42332] flex items-center gap-1">
+                                &bull; Balance Due
                               </span>
-                            </div>
-
-                            <div className="text-xs font-bold text-[#1C1C1E] truncate mt-0.5">
-                              {cleanDash(prop.ownerName)}
-                            </div>
-
-                            <div className="text-[11px] text-[#6C6C70] flex items-center gap-1.5 flex-wrap mt-0.5 font-mono">
-                              <span>{cleanDash(prop.ownerPhone)}</span>
-                              <span>&bull;</span>
-                              <span>{cleanDash(prop.ownerDigitalAddress)}</span>
-                            </div>
-
-                            <div className="text-[11px] flex items-center justify-between mt-1">
-                              <span className="text-[#8E8E93] truncate">{cleanDash(prop.propertyClassification)}</span>
-                              {prop.arrears > 0 ? (
-                                <span className="text-[#FF3B30] font-semibold tabular-nums">
-                                  Arrears: {prop.arrearsFormatted}
-                                </span>
-                              ) : (
-                                <span className="text-[#34C759] font-medium">&bull; Current</span>
-                              )}
-                            </div>
+                            ) : (
+                              <span className="text-[11px] font-semibold text-[#187444] flex items-center gap-1">
+                                &bull; Paid
+                              </span>
+                            )}
                           </div>
                         </div>
                       );
                     })
                   )}
+
                 </div>
               </div>
 
-              {/* Supabase Studio-Style Table Pagination Bar */}
-              <SupabaseTablePagination
-                currentPage={audiencePage}
-                totalPages={Math.max(1, Math.ceil(totalAudienceCount / audienceLimit))}
-                totalRecords={totalAudienceCount}
-                pageSize={audienceLimit}
-                pageSizeOptions={[25, 50, 100]}
-                onPageChange={handleAudiencePageChange}
-                onPageSizeChange={handleAudiencePageSizeChange}
-                isLoading={isLoadingAudience}
-                entityLabel="properties"
-              />
+              {/* Native iOS Pagination Footer for Mobile (< 768px, Static at Bottom - Payments Screen Inspo) */}
+              <div className="md:hidden shrink-0 border-t border-[#E8E8ED] bg-white px-4 py-2.5 flex items-center justify-between text-xs text-[#596575] font-medium z-10">
+                <span className="text-xs text-[#6E6E73]">
+                  Page <strong className="text-[#182331] font-semibold">{audiencePage}</strong> of {Math.max(1, Math.ceil(totalAudienceCount / audienceLimit))}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={audiencePage <= 1}
+                    onClick={() => handleAudiencePageChange(audiencePage - 1)}
+                    className="px-2.5 py-1 rounded-[8px] border border-[#DDE2E8] bg-white text-xs font-medium text-[#182331] hover:bg-[#F2F2F7] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    type="button"
+                    disabled={audiencePage >= Math.max(1, Math.ceil(totalAudienceCount / audienceLimit))}
+                    onClick={() => handleAudiencePageChange(audiencePage + 1)}
+                    className="px-2.5 py-1 rounded-[8px] border border-[#DDE2E8] bg-white text-xs font-medium text-[#182331] hover:bg-[#F2F2F7] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+
+              {/* Supabase Studio-Style Table Pagination Bar (Desktop >= 768px) */}
+              <div className="hidden md:block shrink-0">
+                <SupabaseTablePagination
+                  currentPage={audiencePage}
+                  totalPages={Math.max(1, Math.ceil(totalAudienceCount / audienceLimit))}
+                  totalRecords={totalAudienceCount}
+                  pageSize={audienceLimit}
+                  pageSizeOptions={[25, 50, 100]}
+                  onPageChange={handleAudiencePageChange}
+                  onPageSizeChange={handleAudiencePageSizeChange}
+                  isLoading={isLoadingAudience}
+                  entityLabel="properties"
+                />
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* PANE 2: ROLLOUT BATCHES & RETRY QUEUE */}
+      {/* PANE 2: ROLLOUT BATCHES & RETRY QUEUE (Figma Screen 2) */}
       {activeView === "BATCHES" && (
-        <div className="w-full h-full flex flex-col overflow-hidden bg-white border-0 rounded-none shadow-none">
-          <div className="p-3 border-b border-[#E5E5EA] bg-[#F8F9FA] flex items-center justify-between gap-3 shrink-0">
-            <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-[#6C6C70]">
-                Batch Dispatches &amp; Retries
-              </span>
+        <div className="w-full h-full flex flex-col overflow-hidden bg-[#F2F2F7] border-0 rounded-none shadow-none">
+          {/* Top Search Bar */}
+          <div className="p-3.5 sm:p-4 bg-white border-b border-[#DDE2E8] shrink-0">
+            <div className="relative w-full h-[40px] bg-[#E8EBF0] rounded-[10px] flex items-center px-3.5 gap-2">
+              <Search className="w-4 h-4 text-[#596575] shrink-0" />
+              <input
+                type="text"
+                value={batchSearchQuery}
+                onChange={(e) => setBatchSearchQuery(e.target.value)}
+                placeholder="Search batches"
+                autoComplete="off"
+                spellCheck={false}
+                className="w-full h-full bg-transparent text-[14px] text-[#182331] placeholder-[#596575] focus:outline-none"
+              />
+              {batchSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setBatchSearchQuery("")}
+                  className="text-[#596575] hover:text-[#182331] p-1 cursor-pointer shrink-0"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
-
           </div>
 
           <div onScroll={onTableScroll} className="flex-1 min-h-0 min-h-[calc(100dvh-13rem)] overflow-auto [overflow-anchor:auto] [isolation:isolate]">
-            {rolloutJobs.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-48 text-[#6C6C70] text-xs space-y-2">
+            {filteredRolloutJobs.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-48 text-[#596575] text-xs space-y-2 p-4">
                 {isLoadingJobs ? (
                   <>
-                    <AppleSpinner size="sm" className="text-[#007AFF]" />
+                    <AppleSpinner size="sm" className="text-[#155DAA]" />
                     <span>Loading rollout batches...</span>
                   </>
                 ) : (
                   <>
-                    <History className="w-8 h-8 text-[#8E8E93] stroke-[1.5]" />
-                    <span className="font-medium">No batch rollouts dispatched yet.</span>
-                    <button
-                      type="button"
-                      onClick={() => handleActiveViewChange("SIMULATOR")}
-                      className="text-xs text-[#007AFF] hover:underline cursor-pointer"
-                    >
-                      Go to Rollout Engine to launch a campaign
-                    </button>
+                    <History className="w-8 h-8 text-[#596575] stroke-[1.5]" />
+                    <span className="font-medium">
+                      {batchSearchQuery ? "No batches match your search." : "No batch rollouts dispatched yet."}
+                    </span>
+                    {!batchSearchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => handleActiveViewChange("SIMULATOR")}
+                        className="text-xs text-[#155DAA] hover:underline cursor-pointer"
+                      >
+                        Go to Rollout Engine to launch a campaign
+                      </button>
+                    )}
                   </>
                 )}
               </div>
             ) : (
               <>
                 {/* Desktop Batches Table (>= 768px) */}
-                <table className="hidden md:table min-w-[800px] w-full text-left text-xs border-collapse font-sans">
-                  <thead className="border-b text-[#6C6C70] sticky top-0 bg-[#F8F9FA] border-[#E5E5EA] z-10">
+                <table className="hidden md:table min-w-[800px] w-full text-left text-xs border-collapse font-sans bg-white">
+                  <thead className="border-b text-[#596575] sticky top-0 bg-[#F8F9FA] border-[#DDE2E8] z-10 font-semibold">
                     <tr>
                       <th className="py-2.5 px-3">Date &amp; Time</th>
                       <th className="py-2.5 px-3">Batch ID</th>
@@ -2748,8 +2832,8 @@ export function SmsRolloutSimulator({
                       <th className="py-2.5 px-3 text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#E5E5EA]">
-                    {rolloutJobs.map((job) => {
+                  <tbody className="divide-y divide-[#DDE2E8]">
+                    {filteredRolloutJobs.map((job) => {
                       const total = job.totalCount || 0;
                       const sent = job.sentCount || 0;
                       const failed = job.failedCount || 0;
@@ -2763,29 +2847,31 @@ export function SmsRolloutSimulator({
 
                       return (
                         <tr key={job.id} className="hover:bg-[#F8F9FA] transition-colors">
-                          <td className="py-2.5 px-3 text-xs font-medium text-[#1C1C1E] whitespace-nowrap">
+                          <td className="py-2.5 px-3 text-xs font-medium text-[#182331] whitespace-nowrap">
                             {job.createdAtFormatted}
                           </td>
-                          <td className="py-2.5 px-3 text-[11px] font-mono font-bold text-[#007AFF] whitespace-nowrap">
+                          <td className="py-2.5 px-3 text-[11px] font-mono font-bold text-[#155DAA] whitespace-nowrap">
                             {job.id}
                           </td>
-                          <td className="py-2.5 px-3 text-xs font-semibold whitespace-nowrap">
-                            <span className={job.mode === "LIVE" ? "text-[#FF9500]" : "text-[#6C6C70]"}>
+                          <td className="py-2.5 px-3 text-xs whitespace-nowrap">
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-[4px] ${
+                              job.mode === "LIVE" ? "text-[#955B08] bg-[#FFF3DE]" : "text-[#596575] bg-[#E8EBF0]"
+                            }`}>
                               {job.mode}
                             </span>
                           </td>
                           <td className="py-2.5 px-3 whitespace-nowrap">
                             <div className="flex flex-col gap-1 min-w-[140px] max-w-[200px]">
-                              <div className="flex items-center justify-between text-[11px] font-mono tabular-nums text-[#1C1C1E]">
+                              <div className="flex items-center justify-between text-[11px] font-mono tabular-nums text-[#182331]">
                                 <span className="flex items-center gap-1.5">
                                   {isRunning && <AppleSpinner size="xs" />}
                                   <span>{sent} / {total}</span>
                                 </span>
-                                <span className="text-[#6C6C70] font-semibold">{pct}%</span>
+                                <span className="text-[#596575] font-semibold">{pct}%</span>
                               </div>
-                              <div className="w-full bg-[#E5E5EA] rounded-full h-1.5 overflow-hidden">
+                              <div className="w-full bg-[#E8EBF0] rounded-full h-1.5 overflow-hidden">
                                 <div
-                                  className="h-full bg-[#34C759] rounded-full transition-all duration-300 ease-out"
+                                  className="h-full bg-[#187444] rounded-full transition-all duration-300 ease-out"
                                   style={{ width: `${pct}%` }}
                                 />
                               </div>
@@ -2793,12 +2879,11 @@ export function SmsRolloutSimulator({
                           </td>
                           <td className="py-2.5 px-3 whitespace-nowrap">
                             {job.failedCount > 0 ? (
-                              <span className="text-xs font-semibold text-[#FF3B30] flex items-center gap-1">
-                                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                                <span>{job.failedCount} Failed ({job.failedAccountCount} accounts)</span>
+                              <span className="inline-block text-[10px] font-bold text-[#B42332] bg-[#FCEDEF] px-2 py-0.5 rounded-[4px]">
+                                {job.failedCount} Failed ({job.failedAccountCount} accounts)
                               </span>
                             ) : (
-                              <span className="text-xs font-medium text-[#34C759]">
+                              <span className="text-xs font-medium text-[#187444]">
                                 &bull; 0 Failed
                               </span>
                             )}
@@ -2806,30 +2891,30 @@ export function SmsRolloutSimulator({
                           <td className="py-2.5 px-3 whitespace-nowrap font-medium text-xs">
                             {effectiveStatus === "DONE" ? (
                               job.failedCount > 0 ? (
-                                <span className="text-[#FF9500] font-semibold flex items-center gap-1">
+                                <span className="text-[#955B08] font-semibold flex items-center gap-1">
                                   &bull; Partial
                                 </span>
                               ) : (
-                                <span className="text-[#34C759] font-semibold flex items-center gap-1">
+                                <span className="text-[#187444] font-semibold flex items-center gap-1">
                                   <CheckCircle2 className="w-3.5 h-3.5" /> Done
                                 </span>
                               )
                             ) : isRunning ? (
-                              <span className="text-[#007AFF] font-semibold flex items-center gap-1.5">
+                              <span className="text-[#155DAA] font-semibold flex items-center gap-1.5">
                                 <AppleSpinner size="xs" />
                                 <span>Running</span>
                               </span>
                             ) : isQueued ? (
-                              <span className="text-[#8E8E93] font-semibold flex items-center gap-1.5">
+                              <span className="text-[#596575] font-semibold flex items-center gap-1.5">
                                 <AppleSpinner size="xs" />
                                 <span>Queued</span>
                               </span>
                             ) : effectiveStatus === "FAILED" ? (
-                              <span className="text-[#FF3B30] font-semibold">
+                              <span className="text-[#B42332] font-semibold">
                                 &bull; Failed
                               </span>
                             ) : (
-                              <span className="text-[#8E8E93]">
+                              <span className="text-[#596575]">
                                 &bull; {effectiveStatus}
                               </span>
                             )}
@@ -2846,14 +2931,14 @@ export function SmsRolloutSimulator({
                                   setShowAuthModal(true);
                                   refreshGatewayBalance();
                                 }}
-                                className="text-xs font-bold text-[#007AFF] hover:underline cursor-pointer inline-flex items-center gap-1.5 transition-opacity disabled:opacity-50"
+                                className="bg-[#EAF2FC] text-[#155DAA] font-semibold text-xs rounded-lg px-3 py-1.5 inline-flex items-center gap-1.5 hover:bg-[#D5E5F9] cursor-pointer transition-colors disabled:opacity-50"
                                 title="Dispatch only to recipients who did not receive the SMS"
                               >
                                 <RotateCcw className="w-3.5 h-3.5" />
                                 <span>Retry Failed ({job.failedAccountCount})</span>
                               </button>
                             ) : (
-                              <span className="text-xs text-[#8E8E93]">—</span>
+                              <span className="text-xs text-[#596575]">—</span>
                             )}
                           </td>
                         </tr>
@@ -2862,9 +2947,9 @@ export function SmsRolloutSimulator({
                   </tbody>
                 </table>
 
-                {/* Mobile Rollout Batches List (< 768px) */}
-                <div className="block md:hidden divide-y divide-[#E5E5EA]">
-                  {rolloutJobs.map((job) => {
+                {/* Mobile Rollout Batches List (< 768px) (Figma Screen 2) */}
+                <div className="block md:hidden p-3.5 space-y-3 bg-[#F2F2F7]">
+                  {filteredRolloutJobs.map((job) => {
                     const total = job.totalCount || 0;
                     const sent = job.sentCount || 0;
                     const failed = job.failedCount || 0;
@@ -2876,51 +2961,47 @@ export function SmsRolloutSimulator({
                     const isRunning = effectiveStatus === "RUNNING" && !isFinished;
 
                     return (
-                      <div key={`mob-job-${job.id}`} className="p-3.5 space-y-2.5 hover:bg-[#F8F9FA] transition-colors">
+                      <div key={`mob-job-${job.id}`} className="bg-white rounded-[14px] border border-[#DDE2E8] p-4 space-y-3 shadow-none">
+                        {/* Top Row: Job ID + Mode Badge */}
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-xs font-bold text-[#007AFF]">{job.id}</span>
-                            <span className={`text-[11px] font-semibold ${job.mode === "LIVE" ? "text-[#FF9500]" : "text-[#6C6C70]"}`}>
-                              &bull; {job.mode}
-                            </span>
-                          </div>
-                          <span className="text-[11px] text-[#6C6C70] font-mono">{job.createdAtFormatted}</span>
+                          <span className="font-mono text-xs font-bold text-[#155DAA]">{job.id}</span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-[4px] ${
+                            job.mode === "LIVE" ? "text-[#955B08] bg-[#FFF3DE]" : "text-[#596575] bg-[#E8EBF0]"
+                          }`}>
+                            {job.mode}
+                          </span>
                         </div>
 
-                        {/* Progress Bar */}
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between text-xs font-mono text-[#1C1C1E]">
-                            <span className="flex items-center gap-1.5">
+                        {/* Timestamp */}
+                        <div className="text-[11px] text-[#596575] font-mono">{job.createdAtFormatted}</div>
+
+                        {/* Progress Row */}
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between text-xs font-mono">
+                            <span className="flex items-center gap-1.5 font-bold text-[#182331]">
                               {isRunning && <AppleSpinner size="xs" />}
                               <span>{sent} / {total} dispatched</span>
                             </span>
-                            <span className="font-semibold text-[#6C6C70]">{pct}%</span>
+                            <span className="font-bold text-[#596575]">{pct}%</span>
                           </div>
-                          <div className="w-full bg-[#E5E5EA] rounded-full h-1.5 overflow-hidden">
+                          <div className="w-full bg-[#E8EBF0] rounded-full h-1.5 overflow-hidden">
                             <div
-                              className="h-full bg-[#34C759] rounded-full transition-all duration-300 ease-out"
+                              className="h-full bg-[#187444] rounded-full transition-all duration-300 ease-out"
                               style={{ width: `${pct}%` }}
                             />
                           </div>
                         </div>
 
                         {/* Status & Retry Footer */}
-                        <div className="flex items-center justify-between pt-1 text-xs">
+                        <div className="flex items-center justify-between pt-1">
                           <div>
-                            {effectiveStatus === "FAILED" ? (
-                              <span className="text-[#FF3B30] font-semibold flex items-center gap-1">
-                                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                                <span>{job.failedCount} Failed</span>
-                              </span>
-                            ) : job.failedCount > 0 ? (
-                              <span className="text-[#FF9500] font-semibold flex items-center gap-1">
-                                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                                <span>{job.failedCount} Failed</span>
+                            {effectiveStatus === "FAILED" || job.failedCount > 0 ? (
+                              <span className="inline-block text-[10px] font-bold text-[#B42332] bg-[#FCEDEF] px-2 py-0.5 rounded-[4px]">
+                                {job.failedCount} Failed
                               </span>
                             ) : (
-                              <span className="text-[#34C759] font-medium flex items-center gap-1">
-                                <CheckCircle2 className="w-3.5 h-3.5" />
-                                <span>Completed</span>
+                              <span className="inline-block text-[10px] font-bold text-[#187444] bg-[#EAF7EF] px-2 py-0.5 rounded-[4px]">
+                                Completed
                               </span>
                             )}
                           </div>
@@ -2936,7 +3017,7 @@ export function SmsRolloutSimulator({
                                 setShowAuthModal(true);
                                 refreshGatewayBalance();
                               }}
-                              className="h-8 px-2.5 rounded-lg border border-[#007AFF]/30 text-xs font-bold text-[#007AFF] bg-[#007AFF]/5 hover:bg-[#007AFF]/10 cursor-pointer inline-flex items-center gap-1.5 active:scale-95 transition-all"
+                              className="bg-[#EAF2FC] text-[#155DAA] font-semibold text-xs rounded-lg px-3 py-1.5 flex items-center gap-1.5 hover:bg-[#D5E5F9] cursor-pointer active:scale-95 transition-all"
                             >
                               <RotateCcw className="w-3.5 h-3.5" />
                               <span>Retry ({job.failedAccountCount})</span>
@@ -2953,75 +3034,70 @@ export function SmsRolloutSimulator({
         </div>
       )}
 
-      {/* PANE 3: DELIVERY LOGS */}
+      {/* PANE 3: DELIVERY LOGS (Figma Screen 3) */}
       {activeView === "LOGS" && (
         <div className="w-full h-full flex flex-col min-h-0 p-0 overflow-hidden relative bg-[#F2F2F7]">
-          <div className="h-full flex flex-col overflow-hidden bg-white border-0 rounded-none shadow-none">
-            <div className="p-3 border-b border-[#E5E5EA] bg-[#F8F9FA] flex flex-wrap items-center justify-between gap-3 shrink-0">
-              <div className="flex flex-1 flex-wrap items-center justify-end-safe gap-3">
-                {/* Search Bar */}
-                <div className="relative w-48 sm:w-64 order-last sm:order-none sm:mr-auto">
-                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[#8E8E93]" />
-                  <input
-                    type="text"
-                    placeholder="Search logs (phone, account, name)..."
-                    value={logsSearchQuery}
-                    onChange={(e) => setLogsSearchQuery(e.target.value)}
-                    className="w-full h-8 pl-8 pr-3 text-xs bg-white border border-[#E5E5EA] rounded-lg text-[#1C1C1E] placeholder-[#8E8E93] focus:outline-none focus:border-[#007AFF]"
-                  />
-                  {logsSearchQuery && (
-                    <button
-                      type="button"
-                      onClick={() => setLogsSearchQuery("")}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-[#8E8E93] hover:text-[#1C1C1E] text-xs cursor-pointer"
-                    >
-                      ×
-                    </button>
-                  )}
-                </div>
-
-                {/* Status Filter (Pure Typographic, Zero Pills) */}
-                <div className="flex items-center gap-3 text-xs pl-1">
-                  <button
-                    type="button"
-                    onClick={() => handleLogsStatusFilterChange("ALL")}
-                    className={`pb-0.5 font-medium cursor-pointer transition-colors ${
-                      logsStatusFilter === "ALL"
-                        ? "text-[#007AFF] border-b-2 border-[#007AFF] font-bold"
-                        : "text-[#6C6C70] hover:text-[#1C1C1E]"
-                    }`}
-                  >
-                    All
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleLogsStatusFilterChange("DELIVERED")}
-                    className={`pb-0.5 font-medium cursor-pointer transition-colors ${
-                      logsStatusFilter === "DELIVERED"
-                        ? "text-[#34C759] border-b-2 border-[#34C759] font-bold"
-                        : "text-[#6C6C70] hover:text-[#1C1C1E]"
-                    }`}
-                  >
-                    Delivered
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleLogsStatusFilterChange("FAILED")}
-                    className={`pb-0.5 font-medium cursor-pointer transition-colors ${
-                      logsStatusFilter === "FAILED"
-                        ? "text-[#FF3B30] border-b-2 border-[#FF3B30] font-bold"
-                        : "text-[#6C6C70] hover:text-[#1C1C1E]"
-                    }`}
-                  >
-                    Failed
-                  </button>
-                </div>
+          <div className="h-full flex flex-col overflow-hidden bg-[#F2F2F7] border-0 rounded-none shadow-none">
+            {/* Header: Segmented Filter & Search */}
+            <div className="p-3.5 sm:p-4 bg-white border-b border-[#DDE2E8] space-y-3 shrink-0">
+              {/* Segmented Control [ All | Delivered | Failed ] */}
+              <div className="bg-[#E8EBF0] p-[3px] rounded-[10px] flex items-center">
+                <button
+                  type="button"
+                  onClick={() => handleLogsStatusFilterChange("ALL")}
+                  className={`flex-1 py-1.5 text-xs font-semibold rounded-[7px] text-center transition-all cursor-pointer ${
+                    logsStatusFilter === "ALL"
+                      ? "bg-white text-[#155DAA] shadow-xs"
+                      : "text-[#596575] hover:text-[#182331]"
+                  }`}
+                >
+                  All
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleLogsStatusFilterChange("DELIVERED")}
+                  className={`flex-1 py-1.5 text-xs font-semibold rounded-[7px] text-center transition-all cursor-pointer ${
+                    logsStatusFilter === "DELIVERED"
+                      ? "bg-white text-[#155DAA] shadow-xs"
+                      : "text-[#596575] hover:text-[#182331]"
+                  }`}
+                >
+                  Delivered
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleLogsStatusFilterChange("FAILED")}
+                  className={`flex-1 py-1.5 text-xs font-semibold rounded-[7px] text-center transition-all cursor-pointer ${
+                    logsStatusFilter === "FAILED"
+                      ? "bg-white text-[#155DAA] shadow-xs"
+                      : "text-[#596575] hover:text-[#182331]"
+                  }`}
+                >
+                  Failed
+                </button>
               </div>
 
-              <div className="flex items-center gap-2.5">
-                <span className="text-xs text-[#6C6C70] font-mono tabular-nums">
-                  {logsTotal.toLocaleString()} dispatches
-                </span>
+              {/* Search Input */}
+              <div className="relative w-full h-[40px] bg-[#E8EBF0] rounded-[10px] flex items-center px-3.5 gap-2">
+                <Search className="w-4 h-4 text-[#596575] shrink-0" />
+                <input
+                  type="text"
+                  value={logsSearchQuery}
+                  onChange={(e) => setLogsSearchQuery(e.target.value)}
+                  placeholder="Search name, phone or account"
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="w-full h-full bg-transparent text-[14px] text-[#182331] placeholder-[#596575] focus:outline-none"
+                />
+                {logsSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setLogsSearchQuery("")}
+                    className="text-[#596575] hover:text-[#182331] p-1 cursor-pointer shrink-0"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
             </div>
 
@@ -3032,62 +3108,64 @@ export function SmsRolloutSimulator({
               className="flex-1 min-h-0 min-h-[calc(100dvh-13rem)] overflow-auto [overflow-anchor:auto] [isolation:isolate]"
             >
               {/* Desktop Table (>= 768px) */}
-              <table className="hidden md:table min-w-[850px] w-full text-left text-xs border-collapse">
-                <thead className="border-b text-[#6C6C70] sticky top-0 bg-[#F8F9FA] border-[#E5E5EA] z-10">
+              <table className="hidden md:table min-w-[850px] w-full text-left text-xs border-collapse bg-white">
+                <thead className="border-b text-[#596575] sticky top-0 bg-[#F8F9FA] border-[#DDE2E8] z-10 font-semibold">
                   <tr>
-                    <th className="py-2.5 px-4 font-semibold">Timestamp</th>
-                    <th className="py-2.5 px-4 font-semibold">Account No</th>
-                    <th className="py-2.5 px-4 font-semibold">Recipient</th>
-                    <th className="py-2.5 px-4 font-semibold">Notice Message</th>
-                    <th className="py-2.5 px-4 font-semibold text-center">Status</th>
+                    <th className="py-2.5 px-4">Timestamp</th>
+                    <th className="py-2.5 px-4">Account No</th>
+                    <th className="py-2.5 px-4">Recipient</th>
+                    <th className="py-2.5 px-4">Notice Message</th>
+                    <th className="py-2.5 px-4 text-center">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#E5E5EA]">
+                <tbody className="divide-y divide-[#DDE2E8]">
                   {isLoadingLogs ? (
                     <tr>
-                      <td colSpan={5} className="py-12 text-center text-[#6C6C70]">
+                      <td colSpan={5} className="py-12 text-center text-[#596575]">
                         <div className="flex items-center justify-center gap-2">
-                          <AppleSpinner size="sm" />
+                          <AppleSpinner size="sm" className="text-[#155DAA]" />
                           <span>Loading dispatches...</span>
                         </div>
                       </td>
                     </tr>
                   ) : logsList.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="py-12 text-center text-[#8E8E93]">
+                      <td colSpan={5} className="py-12 text-center text-[#596575]">
                         No transmission logs found matching your criteria.
                       </td>
                     </tr>
                   ) : (
                     logsList.map((log) => (
                       <tr key={log.id} className="hover:bg-[#F8F9FA] transition-colors">
-                        <td className="py-2.5 px-4 text-xs font-medium text-[#6C6C70] font-mono whitespace-nowrap">
+                        <td className="py-2.5 px-4 text-xs font-medium text-[#596575] font-mono whitespace-nowrap">
                           {log.createdAtFormatted}
                         </td>
-                        <td className="py-2.5 px-4 text-xs font-mono font-bold text-[#007AFF] whitespace-nowrap">
+                        <td className="py-2.5 px-4 text-xs font-mono font-bold text-[#155DAA] whitespace-nowrap">
                           {log.accountNumber || "—"}
                         </td>
                         <td className="py-2.5 px-4 text-xs">
-                          <span className="font-semibold text-[#1C1C1E] block">
+                          <span className="font-semibold text-[#182331] block">
                             {log.recipientName}
                           </span>
-                          <span className="text-[11px] text-[#6C6C70] font-mono block">
+                          <span className="text-[11px] text-[#596575] font-mono block">
                             {log.recipientPhone}
                           </span>
                         </td>
-                        <td className="py-2.5 px-4 text-xs text-[#1C1C1E] font-medium max-w-md">
+                        <td className="py-2.5 px-4 text-xs text-[#182331] font-medium max-w-md">
                           <span className="line-clamp-2" title={log.message}>
                             {log.message}
                           </span>
                         </td>
                         <td className="py-2.5 px-4 text-center text-xs font-semibold whitespace-nowrap">
-                          {log.deliveryStatus === "DELIVERED" ? (
-                            <span className="text-[#34C759]">&bull; Delivered</span>
-                          ) : log.deliveryStatus === "FAILED" ? (
-                            <span className="text-[#FF3B30]">&bull; Failed</span>
-                          ) : (
-                            <span className="text-[#FF9500]">&bull; {log.deliveryStatus}</span>
-                          )}
+                          <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-[4px] ${
+                            log.deliveryStatus === "DELIVERED"
+                              ? "text-[#187444] bg-[#EAF7EF]"
+                              : log.deliveryStatus === "FAILED"
+                              ? "text-[#B42332] bg-[#FCEDEF]"
+                              : "text-[#955B08] bg-[#FFF3DE]"
+                          }`}>
+                            {log.deliveryStatus === "DELIVERED" ? "Delivered" : log.deliveryStatus === "FAILED" ? "Failed" : log.deliveryStatus}
+                          </span>
                         </td>
                       </tr>
                     ))
@@ -3095,329 +3173,217 @@ export function SmsRolloutSimulator({
                 </tbody>
               </table>
 
-              {/* Mobile Delivery Logs List (< 768px) */}
-              <div className="block md:hidden divide-y divide-[#E5E5EA]">
+              {/* Mobile Delivery Logs List (< 768px) (Figma Screen 3) */}
+              <div className="block md:hidden p-3.5 space-y-2.5 bg-[#F2F2F7]">
                 {isLoadingLogs ? (
-                  <div className="py-12 text-center text-[#6C6C70]">
+                  <div className="py-12 text-center text-[#596575] bg-white rounded-[14px] border border-[#DDE2E8]">
                     <div className="flex items-center justify-center gap-2">
-                      <AppleSpinner size="sm" />
+                      <AppleSpinner size="sm" className="text-[#155DAA]" />
                       <span className="text-xs">Loading dispatches...</span>
                     </div>
                   </div>
                 ) : logsList.length === 0 ? (
-                  <div className="py-12 text-center text-[#8E8E93] text-xs px-4">
+                  <div className="py-12 text-center text-[#596575] text-xs px-4 bg-white rounded-[14px] border border-[#DDE2E8]">
                     No transmission logs found matching your criteria.
                   </div>
                 ) : (
                   logsList.map((log) => (
-                    <div key={`mob-log-${log.id}`} className="p-3.5 space-y-1.5 hover:bg-[#F8F9FA] transition-colors">
-                      <div className="flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-1.5 font-mono">
-                          <span className="font-bold text-[#007AFF]">{log.accountNumber || "—"}</span>
-                          <span className="text-[#8E8E93]">&bull;</span>
-                          <span className="font-sans font-semibold text-[#1C1C1E]">{log.recipientName}</span>
+                    <div key={`mob-log-${log.id}`} className="bg-white rounded-[14px] border border-[#DDE2E8] p-3.5 space-y-2 shadow-none">
+                      {/* Top Row: Account No & Status Badge */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="font-mono text-xs font-bold text-[#155DAA] truncate">
+                            {log.accountNumber || "—"}
+                          </span>
+                          <span className="text-[11px] text-[#596575] shrink-0">&bull; Notice</span>
                         </div>
-                        <span className={`text-[11px] font-semibold shrink-0 ${
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-[4px] shrink-0 ${
                           log.deliveryStatus === "DELIVERED"
-                            ? "text-[#34C759]"
+                            ? "text-[#187444] bg-[#EAF7EF]"
                             : log.deliveryStatus === "FAILED"
-                            ? "text-[#FF3B30]"
-                            : "text-[#FF9500]"
+                            ? "text-[#B42332] bg-[#FCEDEF]"
+                            : "text-[#955B08] bg-[#FFF3DE]"
                         }`}>
-                          &bull; {log.deliveryStatus === "DELIVERED" ? "Delivered" : log.deliveryStatus === "FAILED" ? "Failed" : log.deliveryStatus}
+                          {log.deliveryStatus === "DELIVERED" ? "Delivered" : log.deliveryStatus === "FAILED" ? "Failed" : log.deliveryStatus}
                         </span>
                       </div>
 
-                      <p className="text-xs text-[#1C1C1E] line-clamp-2 leading-relaxed">
+                      {/* Recipient Headline */}
+                      {log.recipientName ? (
+                        <div className="text-xs font-bold text-[#182331] uppercase">
+                          Account &mdash; {log.recipientName}
+                        </div>
+                      ) : (
+                        <div className="text-xs font-bold text-[#182331] font-mono">
+                          {log.recipientPhone}
+                        </div>
+                      )}
+
+                      {/* Notice Message / Failure reason */}
+                      <p className="text-xs text-[#596575] leading-[145%]">
                         {log.message}
                       </p>
 
-                      <div className="flex items-center justify-between text-[11px] text-[#6C6C70] font-mono pt-1">
+                      {/* Footer: Phone & Timestamp */}
+                      <div className="flex items-center justify-between text-[11px] text-[#596575] font-mono pt-0.5">
                         <span>{log.recipientPhone}</span>
                         <span>{log.createdAtFormatted}</span>
                       </div>
                     </div>
                   ))
                 )}
-              </div>
-            </div>
 
-            {/* Delivery Logs Supabase-Style Table Pagination Bar */}
-            <SupabaseTablePagination
-              currentPage={logsPage}
-              totalPages={Math.max(1, Math.ceil(logsTotal / logsLimit))}
-              totalRecords={logsTotal}
-              pageSize={logsLimit}
-              pageSizeOptions={[25, 50, 100]}
-              onPageChange={handleLogsPageChange}
-              onPageSizeChange={handleLogsPageSizeChange}
-              isLoading={isLoadingLogs}
-              entityLabel="dispatches"
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Message Template Configuration Modal Popup */}
-      {showTemplateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/35 backdrop-blur-md font-sans">
-          <div className="rounded-2xl max-w-2xl w-full shadow-2xl flex flex-col overflow-hidden max-h-[90vh] bg-white border border-[#E5E5EA]">
-            {/* Modal Header */}
-            <div className="px-5 py-3.5 border-b border-[#E5E5EA] bg-[#F8F9FA] flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-[#007AFF]" />
-                <div>
-                  <h3 className="text-sm font-bold text-[#1C1C1E]">
-                    Message Template &amp; Placeholders
-                  </h3>
-                  <p className="text-[11px] text-[#6C6C70]">
-                    Customise the SMS notice text with property details and balance placeholders.
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowTemplateModal(false)}
-                className="text-[#8E8E93] hover:text-[#1C1C1E] p-1 rounded-lg hover:bg-[#E5E5EA] cursor-pointer transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            <div className="p-5 space-y-4 overflow-y-auto flex-1 bg-white">
-              {/* Type and Presets Row */}
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#E5E5EA] pb-3">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-semibold text-[#1C1C1E]">Template Type:</span>
-                  <div className="flex items-center gap-1">
-                    <select
-                      value={activeTemplateType === "RECEIPT" ? "RECEIPT" : targetStatus}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        if (val === "RECEIPT") {
-                          setActiveTemplateType("RECEIPT");
-                        } else {
-                          setActiveTemplateType("BILLING");
-                          handleStatusChange(val as any);
-                        }
-                      }}
-                      className="bg-[#F2F2F7] text-[#007AFF] border border-[#E5E5EA] rounded-md px-2 py-1 text-xs font-medium focus:outline-none focus:border-[#007AFF] cursor-pointer"
-                    >
-                      <option value="UNPAID">Annual Bill (Unpaid)</option>
-                      <option value="ALL">General Notice (All)</option>
-                      <option value="PAID">Settlement Clearance (Paid)</option>
-                      <option value="OVERPAID">Credit Statement (Overpaid)</option>
-                      <option value="RECEIPT">Payment Receipt Notice</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {/* INSERT TOKENS BUTTON & POPOVER */}
-                  <div className="relative">
-                    <button
-                      ref={tokenInserterBtnRef}
-                      type="button"
-                      onClick={() => setShowTokenInserter((prev) => !prev)}
-                      className="h-6 px-2 rounded-md bg-[#F2F2F7] hover:bg-[#E5E5EA] border border-[#E5E5EA] text-[10px] font-semibold text-[#1C1C1E] flex items-center gap-1 transition-colors cursor-pointer"
-                    >
-                      <Code2 className="w-3 h-3 text-[#007AFF]" />
-                      <span>Insert Token</span>
-                      <ChevronDown className="w-2.5 h-2.5" />
-                    </button>
-
-                    {showTokenInserter && (
-                      <div
-                        ref={tokenInserterRef}
-                        className="absolute right-0 top-full mt-1 w-64 z-50 rounded-xl border border-[#E5E5EA] bg-white/95 backdrop-blur-xl shadow-xl p-2 space-y-1 font-sans text-xs"
-                      >
-                        <div className="text-[10px] font-bold text-[#6C6C70] uppercase px-1 pb-1 border-b border-[#E5E5EA]">
-                          Insert Dynamic Token
-                        </div>
-                        <div className="max-h-48 overflow-y-auto space-y-0.5">
-                          {dynamicTokens.map((t) => (
-                            <button
-                              key={t.tag}
-                              type="button"
-                              onClick={() => {
-                                const el = templateTextareaRef.current;
-                                if (el) {
-                                  const start = el.selectionStart;
-                                  const end = el.selectionEnd;
-                                  const text = currentTemplate;
-                                  const updated = text.substring(0, start) + t.tag + text.substring(end);
-                                  if (activeTemplateType === "BILLING") {
-                                    setMessageTemplate(updated);
-                                  } else {
-                                    setReceiptTemplate(updated);
-                                  }
-                                  setShowTokenInserter(false);
-                                  setTimeout(() => {
-                                    el.focus();
-                                    el.setSelectionRange(start + t.tag.length, start + t.tag.length);
-                                  }, 50);
-                                }
-                              }}
-                              className="w-full text-left px-2 py-1 rounded hover:bg-[#F2F2F7] text-[11px] flex items-center justify-between group cursor-pointer"
-                            >
-                              <span className="font-mono text-[#007AFF] font-semibold text-[10px]">{t.tag}</span>
-                              <span className="text-[10px] text-[#6C6C70] group-hover:text-[#1C1C1E]">{t.label}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* SAVED TEMPLATES / PRESETS BUTTON & POPOVER */}
-                  <div className="relative">
-                    <button
-                      ref={savedTemplatesBtnRef}
-                      type="button"
-                      onClick={() => setShowSavedTemplates((prev) => !prev)}
-                      className="h-6 px-2 rounded-md bg-[#F2F2F7] hover:bg-[#E5E5EA] border border-[#E5E5EA] text-[10px] font-medium text-[#1C1C1E] flex items-center gap-1 transition-colors cursor-pointer"
-                    >
-                      <Bookmark className="w-3 h-3 text-[#007AFF]" />
-                      <span>Saved Presets</span>
-                      <ChevronDown className="w-2.5 h-2.5" />
-                    </button>
-
-                    {showSavedTemplates && (
-                      <div
-                        ref={savedTemplatesRef}
-                        className="absolute right-0 top-full mt-1 w-72 z-50 rounded-xl border border-[#E5E5EA] bg-white/95 backdrop-blur-xl shadow-xl p-2 space-y-1 font-sans text-xs"
-                      >
-                        <div className="text-[10px] font-bold text-[#6C6C70] uppercase px-1 pb-1 border-b border-[#E5E5EA]">
-                          Load Template Preset
-                        </div>
-                        <div className="max-h-56 overflow-y-auto space-y-1">
-                          {savedTemplates
-                            .filter((st) => st.type === activeTemplateType)
-                            .map((st) => (
-                              <button
-                                key={st.id}
-                                type="button"
-                                onClick={() => {
-                                  if (activeTemplateType === "BILLING") {
-                                    setMessageTemplate(st.content);
-                                    if ((st as any).filterKey && (st as any).filterKey !== "RECEIPT") {
-                                      setTargetStatus((st as any).filterKey);
-                                    }
-                                  } else {
-                                    setReceiptTemplate(st.content);
-                                  }
-                                  setShowSavedTemplates(false);
-                                }}
-                                className="w-full text-left p-1.5 rounded hover:bg-[#F2F2F7] border border-[#E5E5EA] cursor-pointer transition-colors"
-                              >
-                                <span className="font-semibold text-[#007AFF] text-[11px] block">{st.name}</span>
-                                <span className="text-[10px] text-[#6C6C70] line-clamp-1 font-mono">{st.content}</span>
-                              </button>
-                            ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  <span className="text-[11px] text-[#6C6C70] font-mono">{currentTemplate.length} chars</span>
-                </div>
-              </div>
-
-              {/* Textarea */}
-              <div>
-                <textarea
-                  ref={templateTextareaRef}
-                  value={currentTemplate}
-                  onChange={(e) =>
-                    activeTemplateType === "BILLING"
-                      ? setMessageTemplate(e.target.value)
-                      : setReceiptTemplate(e.target.value)
-                  }
-                  rows={6}
-                  className="w-full p-3 rounded-lg border border-[#E5E5EA] bg-[#F2F2F7] text-xs text-[#1C1C1E] focus:outline-none focus:border-[#007AFF] focus:bg-white resize-y font-mono leading-relaxed"
-                  placeholder="Type or customize your SMS message template here..."
-                />
-              </div>
-
-              {/* Dynamic Tokens Guide Strip */}
-              <div className="space-y-1.5">
-                <span className="text-[10px] font-semibold text-[#6C6C70] uppercase tracking-wider block">
-                  Click token below to insert into template:
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                  {dynamicTokens.map((t) => (
-                    <button
-                      key={t.tag}
-                      type="button"
-                      onClick={() => {
-                        const el = templateTextareaRef.current;
-                        if (el) {
-                          const start = el.selectionStart;
-                          const end = el.selectionEnd;
-                          const text = currentTemplate;
-                          const updated = text.substring(0, start) + t.tag + text.substring(end);
-                          if (activeTemplateType === "BILLING") {
-                            setMessageTemplate(updated);
-                          } else {
-                            setReceiptTemplate(updated);
-                          }
-                          setTimeout(() => {
-                            el.focus();
-                            el.setSelectionRange(start + t.tag.length, start + t.tag.length);
-                          }, 50);
-                        }
-                      }}
-                      className="text-[10px] font-mono px-2 py-0.5 rounded border border-[#E5E5EA] bg-[#F2F2F7] hover:bg-[#E5E5EA] text-[#007AFF] font-medium cursor-pointer transition-colors"
-                      title={t.label}
-                    >
-                      {t.tag}
-                    </button>
-                  ))}
+                {/* Native iOS Pagination Footer for Mobile (< 768px) */}
+                <div className="flex items-center justify-between px-3 py-3 text-xs text-[#596575] font-medium">
+                  <button
+                    type="button"
+                    disabled={logsPage <= 1}
+                    onClick={() => handleLogsPageChange(logsPage - 1)}
+                    className="p-2 -m-2 disabled:opacity-30 text-[#155DAA] cursor-pointer disabled:cursor-not-allowed"
+                    aria-label="Previous Page"
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+                  <span className="font-semibold text-[#182331]">
+                    Page {logsPage} of {Math.max(1, Math.ceil(logsTotal / logsLimit))}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={logsPage >= Math.max(1, Math.ceil(logsTotal / logsLimit))}
+                    onClick={() => handleLogsPageChange(logsPage + 1)}
+                    className="p-2 -m-2 disabled:opacity-30 text-[#155DAA] cursor-pointer disabled:cursor-not-allowed"
+                    aria-label="Next Page"
+                  >
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
                 </div>
               </div>
             </div>
 
-            {/* Modal Footer */}
-            <div className="px-5 py-3 border-t flex items-center justify-between shrink-0 bg-[#F8F9FA] border-[#E5E5EA]">
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowTemplateModal(false)}
-                  className="border border-[#E5E5EA] bg-white text-[#1C1C1E] hover:bg-[#F2F2F7] font-medium h-8 px-3.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (activeTemplateType === "RECEIPT") {
-                      setReceiptTemplate(DEFAULT_RECEIPT_NOTICE_TEMPLATE);
-                    } else {
-                      setMessageTemplate(FILTER_SMS_TEMPLATES[targetStatus] || FILTER_SMS_TEMPLATES.UNPAID);
-                    }
-                  }}
-                  className="text-xs text-[#6C6C70] hover:text-[#007AFF] hover:underline font-medium cursor-pointer"
-                >
-                  Reset to Standard Default
-                </button>
-              </div>
-              <button
-                type="button"
-                onClick={async () => {
-                  await handleSaveTemplate();
-                  setShowTemplateModal(false);
-                }}
-                disabled={isSavingTemplate}
-                className="bg-[#007AFF] hover:bg-[#007AFF]/90 text-white font-semibold shadow-xs h-8 px-4 rounded-lg text-xs flex items-center gap-1.5 cursor-pointer transition-colors"
-              >
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>{isSavingTemplate ? "Saving..." : "Save & Apply Template"}</span>
-              </button>
+            {/* Delivery Logs Supabase-Style Table Pagination Bar (Desktop >= 768px) */}
+            <div className="hidden md:block">
+              <SupabaseTablePagination
+                currentPage={logsPage}
+                totalPages={Math.max(1, Math.ceil(logsTotal / logsLimit))}
+                totalRecords={logsTotal}
+                pageSize={logsLimit}
+                pageSizeOptions={[25, 50, 100]}
+                onPageChange={handleLogsPageChange}
+                onPageSizeChange={handleLogsPageSizeChange}
+                isLoading={isLoadingLogs}
+                entityLabel="dispatches"
+              />
             </div>
           </div>
         </div>
       )}
+
+      {/* Redesigned Responsive Message Template Modal */}
+      <MessageTemplateModal
+        isOpen={showTemplateModal}
+        onClose={() => setShowTemplateModal(false)}
+        activeTemplateType={activeTemplateType}
+        onTemplateTypeChange={(type, status) => {
+          if (type === "RECEIPT") {
+            setActiveTemplateType("RECEIPT");
+          } else {
+            setActiveTemplateType("BILLING");
+            if (status) handleStatusChange(status as any);
+          }
+        }}
+        targetStatus={targetStatus}
+        currentTemplate={currentTemplate}
+        onTemplateChange={(val) => {
+          if (activeTemplateType === "BILLING") {
+            setMessageTemplate(val);
+          } else {
+            setReceiptTemplate(val);
+          }
+        }}
+        savedTemplates={savedTemplates}
+        onApplyPreset={(content, filterKey) => {
+          if (activeTemplateType === "BILLING") {
+            setMessageTemplate(content);
+            if (filterKey && filterKey !== "RECEIPT") {
+              handleStatusChange(filterKey as any);
+            }
+          } else {
+            setReceiptTemplate(content);
+          }
+        }}
+        onSavePreset={(presetName, content) => {
+          const newPreset = {
+            id: `preset_custom_${Date.now()}`,
+            name: presetName,
+            type: activeTemplateType,
+            filterKey: activeTemplateType === "BILLING" ? targetStatus : "RECEIPT",
+            content,
+            savedAt: new Date().toLocaleDateString("en-GB"),
+          };
+          setSavedTemplates((prev) => [newPreset, ...prev]);
+          try {
+            const existingCustom = JSON.parse(
+              localStorage.getItem("kkma_sms_custom_presets") || "[]"
+            );
+            localStorage.setItem(
+              "kkma_sms_custom_presets",
+              JSON.stringify([newPreset, ...existingCustom])
+            );
+          } catch {}
+          onNotify?.(`Preset "${presetName}" saved.`, "success");
+        }}
+        onRenamePreset={(presetId, newName) => {
+          setSavedTemplates((prev) =>
+            prev.map((p) => (p.id === presetId ? { ...p, name: newName } : p))
+          );
+          try {
+            const existingCustom = JSON.parse(
+              localStorage.getItem("kkma_sms_custom_presets") || "[]"
+            );
+            const updated = existingCustom.map((p: any) =>
+              p.id === presetId ? { ...p, name: newName } : p
+            );
+            localStorage.setItem("kkma_sms_custom_presets", JSON.stringify(updated));
+          } catch {}
+          onNotify?.(`Preset renamed to "${newName}".`, "info");
+        }}
+        onDeletePreset={(presetId) => {
+          setSavedTemplates((prev) => prev.filter((p) => p.id !== presetId));
+          try {
+            const existingCustom = JSON.parse(
+              localStorage.getItem("kkma_sms_custom_presets") || "[]"
+            );
+            const updated = existingCustom.filter((p: any) => p.id !== presetId);
+            localStorage.setItem("kkma_sms_custom_presets", JSON.stringify(updated));
+          } catch {}
+        }}
+        onRestorePreset={(preset) => {
+          setSavedTemplates((prev) => [preset, ...prev]);
+          try {
+            const existingCustom = JSON.parse(
+              localStorage.getItem("kkma_sms_custom_presets") || "[]"
+            );
+            localStorage.setItem(
+              "kkma_sms_custom_presets",
+              JSON.stringify([preset, ...existingCustom])
+            );
+          } catch {}
+          onNotify?.(`Preset "${preset.name}" restored.`, "info");
+        }}
+        onResetToDefault={() => {
+          if (activeTemplateType === "RECEIPT") {
+            setReceiptTemplate(DEFAULT_RECEIPT_NOTICE_TEMPLATE);
+          } else {
+            setMessageTemplate(
+              FILTER_SMS_TEMPLATES[targetStatus] || FILTER_SMS_TEMPLATES.UNPAID
+            );
+          }
+          onNotify?.("Reset to standard municipal template.", "info");
+        }}
+        onSave={handleSaveTemplate}
+        isSaving={isSavingTemplate}
+        dynamicTokens={dynamicTokens}
+      />
 
       {/* Security Modal */}
       {showAuthModal && (
@@ -3525,6 +3491,14 @@ export function SmsRolloutSimulator({
                           value={confirmText}
                           onChange={(e) => setConfirmText(e.target.value)}
                           placeholder="CONFIRM"
+                          autoComplete="off"
+                          autoCorrect="off"
+                          autoCapitalize="characters"
+                          spellCheck={false}
+                          data-lpignore="true"
+                          data-1p-ignore="true"
+                          data-bwignore="true"
+                          data-form-type="other"
                           className="w-full h-9 px-3 rounded-lg border border-[#E5E5EA] bg-[#F2F2F7] text-xs text-[#1C1C1E] focus:outline-none focus:border-[#007AFF] focus:bg-white mb-3 uppercase"
                         />
                       </div>
@@ -3535,7 +3509,12 @@ export function SmsRolloutSimulator({
                       onChange={(e) => setAdminPassword(e.target.value)}
                       placeholder="Enter administrator password"
                       autoComplete="new-password"
+                      autoCorrect="off"
+                      autoCapitalize="off"
+                      spellCheck={false}
                       data-lpignore="true"
+                      data-1p-ignore="true"
+                      data-bwignore="true"
                       data-form-type="other"
                       className="w-full h-9 px-3 rounded-lg border border-[#E5E5EA] bg-[#F2F2F7] text-xs text-[#1C1C1E] focus:outline-none focus:border-[#007AFF] focus:bg-white"
                     />

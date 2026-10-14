@@ -411,7 +411,7 @@ export function AccountBillHistoryView({
                                 {bill.billYear}
                               </td>
                               <td className="py-3 px-4 text-[#3A3A3C] tabular-nums whitespace-nowrap">
-                                {formatDateGb(bill.billDate)}
+                                {bill.billYear ? `15 Jan ${bill.billYear}` : formatDateGb(bill.billDate)}
                               </td>
                               <td className="py-3 px-4 text-right font-medium text-[#1C1C1E] tabular-nums whitespace-nowrap">
                                 {formatGhc(bill.rateableValue)}
@@ -457,7 +457,7 @@ export function AccountBillHistoryView({
                               {bill.billYear}
                             </span>
                             <span className="text-[11px] text-[#8E8E93] tabular-nums whitespace-nowrap">
-                              {formatDateGb(bill.billDate)}
+                              {bill.billYear ? `15 Jan ${bill.billYear}` : formatDateGb(bill.billDate)}
                             </span>
                           </div>
                           <div className="shrink-0">
@@ -541,9 +541,6 @@ export function AccountBillHistoryView({
               <span className="text-xs font-bold text-[#1C1C1E] flex items-center gap-1.5">
                 <Database className="w-3.5 h-3.5 text-[#007AFF]" />
                 Account Multi-Year Bill History
-              </span>
-              <span className="text-[11px] text-[#8E8E93] tabular-nums font-mono">
-                ({totalCount.toLocaleString()} {totalCount === 1 ? 'account' : 'accounts'})
               </span>
             </div>
           </div>
@@ -816,57 +813,58 @@ export function AccountBillHistoryView({
       </div>
 
       {/* Pagination Footer */}
-      <div className="px-3 sm:px-4 lg:px-6 py-2 border-t border-[#E5E5EA] flex flex-wrap items-center justify-between gap-2 sm:gap-3 shrink-0 sticky bottom-0 z-20 bg-white/95 backdrop-blur-md shadow-2xs">
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-[#6C6C70]">
-            Showing <strong className="text-[#1C1C1E]">{currentPage}</strong> of{' '}
-            <strong className="text-[#1C1C1E]">{totalPages}</strong>{' '}
-            <span className="hidden sm:inline">({totalCount.toLocaleString()} total accounts)</span>
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2 sm:gap-3">
-          <div className="flex items-center gap-1.5 text-xs text-[#6C6C70]">
-            <span className="hidden xs:inline">Per page:</span>
-            <select
-              value={pageSize}
-              onChange={(e) => {
-                setPageSize(Number(e.target.value));
-                setCurrentPage(1);
-              }}
-              className="h-8 px-2 rounded-lg border border-[#E5E5EA] bg-white text-xs text-[#1C1C1E] focus:outline-none focus:border-[#007AFF] cursor-pointer"
-            >
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
-          </div>
-
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              disabled={currentPage <= 1 || isLoadingAccounts}
-              className="h-8 w-8 rounded-lg border border-[#E5E5EA] bg-white text-[#1C1C1E] hover:bg-[#F2F2F7] disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors flex items-center justify-center active:scale-95"
-              title="Previous page"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <span className="text-[11px] font-semibold text-[#1C1C1E] sm:hidden px-1">
-              {currentPage}/{totalPages}
+      {totalPages > 1 && (
+        <div className="px-3 sm:px-4 lg:px-6 py-2 border-t border-[#E5E5EA] flex flex-wrap items-center justify-between gap-2 sm:gap-3 shrink-0 sticky bottom-0 z-20 bg-white/95 backdrop-blur-md shadow-2xs">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-[#6C6C70]">
+              Showing <strong className="text-[#1C1C1E]">{currentPage}</strong> of{' '}
+              <strong className="text-[#1C1C1E]">{totalPages}</strong>
             </span>
-            <button
-              type="button"
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              disabled={currentPage >= totalPages || isLoadingAccounts}
-              className="h-8 w-8 rounded-lg border border-[#E5E5EA] bg-white text-[#1C1C1E] hover:bg-[#F2F2F7] disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors flex items-center justify-center active:scale-95"
-              title="Next page"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
+          </div>
+
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex items-center gap-1.5 text-xs text-[#6C6C70]">
+              <span className="hidden xs:inline">Per page:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="h-8 px-2 rounded-lg border border-[#E5E5EA] bg-white text-xs text-[#1C1C1E] focus:outline-none focus:border-[#007AFF] cursor-pointer"
+              >
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage <= 1 || isLoadingAccounts}
+                className="h-8 w-8 rounded-lg border border-[#E5E5EA] bg-white text-[#1C1C1E] hover:bg-[#F2F2F7] disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors flex items-center justify-center active:scale-95"
+                title="Previous page"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="text-[11px] font-semibold text-[#1C1C1E] sm:hidden px-1">
+                {currentPage}/{totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages || isLoadingAccounts}
+                className="h-8 w-8 rounded-lg border border-[#E5E5EA] bg-white text-[#1C1C1E] hover:bg-[#F2F2F7] disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors flex items-center justify-center active:scale-95"
+                title="Next page"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

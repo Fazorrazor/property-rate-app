@@ -8,6 +8,9 @@ import {
   Search,
   UploadCloud,
   Download,
+  ChevronLeft,
+  Plus,
+  Calendar,
 } from "lucide-react";
 
 export function AdminDashboardSkeleton() {
@@ -19,11 +22,11 @@ export function AdminDashboardSkeleton() {
         <div className="h-13 flex items-center px-4 border-b border-[#E5E5EA] justify-between shrink-0 bg-[#F8F9FA]">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-7 h-7 rounded-md bg-[#007AFF] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
-              K
+              H
             </div>
             <div className="flex flex-col min-w-0">
               <span className="text-xs font-bold text-[#007AFF] tracking-tight truncate">
-                KKMA Revenue
+                HEINZ Ltd.
               </span>
               <span className="text-[10px] text-[#6C6C70] font-medium leading-none truncate">
                 Console
@@ -38,7 +41,7 @@ export function AdminDashboardSkeleton() {
             Administrative Assembly
           </span>
           <div className="w-full text-xs font-semibold text-[#1C1C1E] bg-[#F2F2F7] border border-[#E5E5EA] rounded-md py-1.5 px-2.5">
-            Kpone-Katamanso (KKMA)
+            HEINZ INTEGRATED SYSTEMS LIMITED
           </div>
         </div>
 
@@ -89,7 +92,7 @@ export function AdminDashboardSkeleton() {
                 Municipal Admin
               </span>
               <span className="text-[10px] text-[#6C6C70] truncate block">
-                KKMA Revenue Unit
+                HEINZ INTEGRATED SYSTEMS LIMITED
               </span>
             </div>
           </div>
@@ -103,9 +106,9 @@ export function AdminDashboardSkeleton() {
         <header className="bg-white/80 border-b border-[#E5E5EA] px-4 h-13 flex items-center justify-between shrink-0 lg:hidden z-20">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-md bg-[#007AFF] text-white flex items-center justify-center font-bold text-xs">
-              K
+              H
             </div>
-            <span className="text-xs font-bold text-[#007AFF]">KKMA Revenue</span>
+            <span className="text-xs font-bold text-[#007AFF]">HEINZ Ltd.</span>
           </div>
         </header>
 
@@ -432,6 +435,260 @@ export function SettingsSkeleton() {
             <div className="h-20 bg-[#F8F9FA] border border-[#E5E5EA] rounded-lg" />
             <div className="h-20 bg-[#F8F9FA] border border-[#E5E5EA] rounded-lg" />
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Loading skeleton matching View 1: Ratepayer Accounts Directory (when NO user is selected)
+ */
+export function PaymentsDirectorySkeleton() {
+  return (
+    <div className="w-full flex-1 min-h-0 flex flex-col gap-2.5 sm:gap-3 p-3 sm:px-6 lg:px-8 sm:py-3 overflow-hidden select-none animate-pulse">
+      {/* 1. Static Search Toolbar Shell */}
+      <div className="w-full bg-white border border-[#E8E8ED] rounded-[14px] px-3.5 py-3 sm:px-5 sm:py-3.5 shadow-xs shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5 flex-1 max-w-md">
+          <div className="relative w-full">
+            <Search className="w-4 h-4 absolute left-3 top-2.5 text-[#8E8E93]" />
+            <div className="w-full pl-9 pr-8 py-2 bg-[#F5F5F7] border border-[#E8E8ED] rounded-xl text-xs text-[#8E8E93] flex items-center">
+              Search ratepayer accounts, names, phones...
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
+          <div className="h-4 w-32 bg-[#E5E5EA] rounded" />
+        </div>
+      </div>
+
+      {/* 2. Standalone Table & Mobile List Container */}
+      <div className="w-full flex-1 min-h-0 bg-white border border-[#E8E8ED] rounded-[14px] shadow-xs flex flex-col overflow-hidden relative">
+        <div className="w-full flex-1 min-h-0 overflow-y-auto no-scrollbar flex flex-col">
+          {/* Desktop Table Headers */}
+          <table className="hidden sm:table w-full text-left border-collapse min-w-[760px]">
+            <thead className="bg-[#F9F9FB] text-[11px] font-semibold text-[#8E8E93] uppercase tracking-wider sticky top-0 z-10 border-b border-[#E8E8ED]">
+              <tr>
+                <th className="py-2.5 px-4 lg:px-6">Account No &amp; Name</th>
+                <th className="py-2.5 px-4">Telephone &amp; Address</th>
+                <th className="py-2.5 px-4">Classification</th>
+                <th className="py-2.5 px-4 text-right">Outstanding Balance</th>
+                <th className="py-2.5 px-4 text-center">Status</th>
+                <th className="py-2.5 px-4 lg:px-6 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#E8E8ED]">
+              {Array.from({ length: 7 }).map((_, i) => (
+                <tr key={`dir-skel-${i}`}>
+                  <td className="py-3 px-4 lg:px-6 space-y-1">
+                    <div className="h-3.5 w-24 bg-[#E5E5EA] rounded" />
+                    <div className="h-4 w-36 bg-[#F2F2F7] rounded" />
+                  </td>
+                  <td className="py-3 px-4 space-y-1">
+                    <div className="h-3.5 w-28 bg-[#E5E5EA] rounded" />
+                    <div className="h-3 w-40 bg-[#F2F2F7] rounded" />
+                  </td>
+                  <td className="py-3 px-4">
+                    <div className="h-3.5 w-20 bg-[#E5E5EA] rounded" />
+                  </td>
+                  <td className="py-3 px-4 text-right">
+                    <div className="h-4 w-20 bg-[#E5E5EA] rounded ml-auto" />
+                  </td>
+                  <td className="py-3 px-4 text-center">
+                    <div className="h-3.5 w-14 bg-[#E5E5EA] rounded mx-auto" />
+                  </td>
+                  <td className="py-3 px-4 lg:px-6 text-right">
+                    <div className="h-3.5 w-16 bg-[#007AFF]/20 rounded ml-auto" />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {/* Mobile Tiles (< 640px) */}
+          <div className="block sm:hidden divide-y divide-[#E8E8ED]">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={`dir-mob-skel-${i}`} className="p-3.5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="h-4 w-24 bg-[#E5E5EA] rounded" />
+                  <div className="h-4 w-16 bg-[#E5E5EA] rounded" />
+                </div>
+                <div className="h-4 w-36 bg-[#F2F2F7] rounded" />
+                <div className="flex items-center justify-between pt-1">
+                  <div className="h-3.5 w-28 bg-[#F2F2F7] rounded" />
+                  <div className="h-3.5 w-14 bg-[#007AFF]/20 rounded" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Loading skeleton matching View 2: Account Payments Ledger (when a user IS selected)
+ */
+export function PaymentsUserRecordsSkeleton() {
+  return (
+    <div className="w-full flex-1 min-h-0 flex flex-col gap-2.5 sm:gap-3 p-3 sm:px-6 lg:px-8 sm:py-3 overflow-hidden select-none animate-pulse">
+      {/* Top Standalone Card: Apple Navigation & Profile Summary */}
+      <div className="w-full bg-white border border-[#E8E8ED] rounded-2xl p-3.5 sm:p-5 shadow-xs shrink-0 space-y-3.5">
+        {/* iOS Level 1: Navigation Link & Action Bar */}
+        <div className="flex items-center justify-between gap-2.5">
+          <div className="flex items-center gap-1 text-[13px] font-semibold text-[#007AFF] opacity-80">
+            <ChevronLeft className="w-4 h-4 stroke-[2.5]" />
+            <span>Back</span>
+          </div>
+          <div className="px-3.5 py-1.5 rounded-lg bg-[#007AFF]/30 text-transparent font-semibold text-xs flex items-center gap-1.5 min-h-[38px] w-28" />
+        </div>
+
+        {/* iOS Level 2: Biodata & Metrics Card (Reduced Height ~12%) */}
+        <div className="relative bg-[#FAFAFC] border border-[#E8E8ED] rounded-xl p-3 sm:px-4 sm:py-3 flex flex-col gap-2.5">
+          {/* Floated redirect icon placeholder */}
+          <div className="absolute top-2.5 right-2.5 sm:top-3 sm:right-3 w-5 h-5 bg-[#E5E5EA] rounded" />
+
+          {/* Ratepayer Biodata Header */}
+          <div className="space-y-1.5 pr-12 sm:pr-24">
+            <div className="h-4 sm:h-4.5 w-48 bg-[#E5E5EA] rounded" />
+            <div className="h-3 w-36 bg-[#F2F2F7] rounded" />
+          </div>
+
+          <div className="border-t border-[#E8E8ED]" />
+
+          {/* Financial Metrics */}
+          <div className="grid grid-cols-2 gap-3 sm:gap-6 items-start">
+            <div className="space-y-1">
+              <span className="text-[10px] sm:text-[11px] font-semibold text-[#8E8E93] uppercase tracking-wider block">
+                Outstanding balance
+              </span>
+              <div className="h-5 sm:h-5.5 w-24 bg-[#E5E5EA] rounded" />
+            </div>
+            <div className="space-y-1">
+              <span className="text-[10px] sm:text-[11px] font-semibold text-[#8E8E93] uppercase tracking-wider block">
+                Total paid
+              </span>
+              <div className="h-5 sm:h-5.5 w-28 bg-[#E5E5EA] rounded" />
+              <div className="h-2.5 w-36 bg-[#F2F2F7] rounded" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Standalone Payments Ledger Card Container */}
+      <div className="w-full flex-1 min-h-0 bg-white border border-[#E8E8ED] rounded-[14px] shadow-xs flex flex-col overflow-hidden relative">
+        {/* Channel Filter Tabs */}
+        <div className="flex items-center gap-5 sm:gap-7 px-4 pt-2.5 border-b border-[#E8E8ED] shrink-0 text-xs font-semibold bg-[#FAFAFC]">
+          <span className="pb-2.5 text-[#007AFF] font-bold border-b-2 border-[#007AFF]">All</span>
+          <span className="pb-2.5 text-[#8E8E93]">Online</span>
+          <span className="pb-2.5 text-[#8E8E93]">In-person</span>
+        </div>
+
+        {/* Ledger Table & Cards */}
+        <div className="w-full flex-1 min-h-0 overflow-y-auto no-scrollbar flex flex-col">
+          <table className="hidden sm:table w-full text-left border-collapse min-w-[760px]">
+            <thead className="bg-[#F9F9FB] text-[11px] font-semibold text-[#8E8E93] uppercase tracking-wider sticky top-0 z-10 border-b border-[#E8E8ED]">
+              <tr>
+                <th className="py-2.5 px-4 lg:px-6">Date &amp; Time</th>
+                <th className="py-2.5 px-4">Receipt / GCR No</th>
+                <th className="py-2.5 px-4">Channel</th>
+                <th className="py-2.5 px-4">Payment Method</th>
+                <th className="py-2.5 px-4 text-right">Amount Paid</th>
+                <th className="py-2.5 px-4 text-center">Status</th>
+                <th className="py-2.5 px-4 lg:px-6 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#E8E8ED]">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <tr key={`rec-skel-${i}`}>
+                  <td className="py-3 px-4 lg:px-6"><div className="h-3.5 w-24 bg-[#E5E5EA] rounded" /></td>
+                  <td className="py-3 px-4"><div className="h-3.5 w-20 bg-[#E5E5EA] rounded font-mono" /></td>
+                  <td className="py-3 px-4"><div className="h-3.5 w-16 bg-[#E5E5EA] rounded" /></td>
+                  <td className="py-3 px-4"><div className="h-3.5 w-14 bg-[#E5E5EA] rounded" /></td>
+                  <td className="py-3 px-4 text-right"><div className="h-4 w-20 bg-[#E5E5EA] rounded ml-auto" /></td>
+                  <td className="py-3 px-4 text-center"><div className="h-3.5 w-16 bg-[#E5E5EA] rounded mx-auto" /></td>
+                  <td className="py-3 px-4 lg:px-6 text-right"><div className="h-3.5 w-14 bg-[#007AFF]/20 rounded ml-auto" /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {/* Mobile Tiles (< 640px) */}
+          <div className="block sm:hidden divide-y divide-[#E8E8ED]">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={`rec-mob-skel-${i}`} className="p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="h-4 w-20 bg-[#E5E5EA] rounded" />
+                  <div className="h-3.5 w-16 bg-[#E5E5EA] rounded" />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="h-3.5 w-28 bg-[#F2F2F7] rounded" />
+                  <div className="h-3.5 w-14 bg-[#F2F2F7] rounded" />
+                </div>
+                <div className="flex items-center justify-between pt-1 border-t border-[#F5F5F7]">
+                  <div className="h-4 w-24 bg-[#E5E5EA] rounded" />
+                  <div className="h-3.5 w-16 bg-[#007AFF]/20 rounded" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Loading skeleton matching Officer Statement View (when statements are loading)
+ */
+export function StatementsViewSkeleton() {
+  return (
+    <div className="w-full flex-1 min-h-0 flex flex-col p-3 sm:px-6 lg:px-8 sm:py-3 gap-3 overflow-hidden select-none animate-pulse">
+      {/* 1. Statement Controls / Summary Header Bar */}
+      <div className="w-full bg-white border border-[#E8E8ED] rounded-xl p-3 sm:px-4 sm:py-3 shadow-xs shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="space-y-1">
+          <div className="h-4 sm:h-5 w-44 bg-[#E5E5EA] rounded" />
+          <div className="h-3 w-32 bg-[#F2F2F7] rounded" />
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="h-8 w-28 bg-[#E5E5EA] rounded-lg" />
+          <div className="h-8 w-24 bg-[#007AFF]/20 rounded-lg" />
+        </div>
+      </div>
+
+      {/* 2. Financial Overview KPI Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-4 shrink-0">
+        <div className="bg-white border border-[#E8E8ED] rounded-xl p-3 space-y-1">
+          <span className="text-[10px] font-semibold text-[#8E8E93] uppercase tracking-wider block">Total Billed</span>
+          <div className="h-5 w-24 bg-[#E5E5EA] rounded" />
+        </div>
+        <div className="bg-white border border-[#E8E8ED] rounded-xl p-3 space-y-1">
+          <span className="text-[10px] font-semibold text-[#8E8E93] uppercase tracking-wider block">Total Paid</span>
+          <div className="h-5 w-24 bg-[#E5E5EA] rounded" />
+        </div>
+        <div className="bg-white border border-[#E8E8ED] rounded-xl p-3 space-y-1">
+          <span className="text-[10px] font-semibold text-[#8E8E93] uppercase tracking-wider block">Balance Due</span>
+          <div className="h-5 w-24 bg-[#E5E5EA] rounded" />
+        </div>
+      </div>
+
+      {/* 3. Statement Ledger Table Container */}
+      <div className="w-full flex-1 min-h-0 bg-white border border-[#E8E8ED] rounded-xl shadow-xs flex flex-col overflow-hidden">
+        <div className="p-3 border-b border-[#E8E8ED] flex items-center justify-between bg-[#F9F9FB]">
+          <div className="h-4 w-36 bg-[#E5E5EA] rounded" />
+          <div className="h-3.5 w-20 bg-[#E5E5EA] rounded" />
+        </div>
+        <div className="w-full flex-1 min-h-0 overflow-y-auto no-scrollbar p-3 space-y-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={`stmt-skel-${i}`} className="p-2.5 border border-[#F2F2F7] rounded-lg flex items-center justify-between">
+              <div className="space-y-1">
+                <div className="h-3.5 w-24 bg-[#E5E5EA] rounded" />
+                <div className="h-3 w-40 bg-[#F2F2F7] rounded" />
+              </div>
+              <div className="h-4 w-20 bg-[#E5E5EA] rounded" />
+            </div>
+          ))}
         </div>
       </div>
     </div>

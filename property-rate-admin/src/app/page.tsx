@@ -8,10 +8,10 @@ import { redirect } from "next/navigation";
 import { verifyAdminSession } from "@/app/actions";
 import AdminDashboardClient from "@/app/AdminDashboardClient";
 
-type NavTab = "RATEPAYERS" | "REGISTRY" | "PAID_USERS" | "FEE_PAYMENTS" | "SMS_CENTER" | "AUDIT_LOGS" | "SETTINGS";
+type NavTab = "STATEMENTS" | "PAYMENTS" | "ACCOUNTS" | "SMS_CENTER" | "AUDIT_LOGS" | "RATEPAYERS" | "REGISTRY" | "PAID_USERS" | "FEE_PAYMENTS" | "SETTINGS";
 
-const VALID_TABS: NavTab[] = ["RATEPAYERS", "REGISTRY", "PAID_USERS", "FEE_PAYMENTS", "SMS_CENTER", "AUDIT_LOGS", "SETTINGS"];
-const OFFICER_ALLOWED_TABS: NavTab[] = ["RATEPAYERS", "PAID_USERS", "FEE_PAYMENTS"];
+const VALID_TABS: NavTab[] = ["STATEMENTS", "PAYMENTS", "ACCOUNTS", "SMS_CENTER", "AUDIT_LOGS", "RATEPAYERS", "REGISTRY", "PAID_USERS", "FEE_PAYMENTS", "SETTINGS"];
+const OFFICER_ALLOWED_TABS: NavTab[] = ["STATEMENTS", "PAYMENTS"];
 
 import { OfficerStatementView } from "@/components/OfficerStatementView";
 
@@ -23,7 +23,7 @@ export default async function AdminDashboardPage({
   // Verify the session server-side (uses memory cache, so this is fast)
   const admin = await verifyAdminSession();
   if (!admin) {
-    redirect("/login?expired=true");
+    redirect("/login");
   }
 
   const isOfficer = admin.role === "OFFICER";
@@ -36,6 +36,7 @@ export default async function AdminDashboardPage({
   if (isOfficer) {
     const cookieStore = await cookies();
     const sectionCookie = cookieStore.get("kkma_officer_active_section")?.value;
+    const accountCookie = cookieStore.get("kkma_officer_statement_account")?.value;
     const sectionParam = typeof resolvedParams.section === "string" 
       ? resolvedParams.section 
       : typeof resolvedParams.tab === "string" 
@@ -47,19 +48,27 @@ export default async function AdminDashboardPage({
         ? "PAYMENTS"
         : "STATEMENT";
 
+    const effectiveAccountNo = initialAccountNo || (accountCookie && accountCookie.trim() ? accountCookie.trim() : undefined);
+
     return (
       <OfficerStatementView
         initialAdmin={{ id: admin.id, username: admin.username, name: admin.name, role: admin.role }}
-        initialAccountNo={initialAccountNo}
+        initialAccountNo={effectiveAccountNo}
         initialSection={initialSection}
       />
     );
   }
 
-  // Read the tab cookie written by handleTabChange on the client
+  // Read the tab param or cookie written by handleTabChange on the client
   const cookieStore = await cookies();
   const tabCookie = cookieStore.get("admin_active_tab")?.value as NavTab | undefined;
-  const initialTab: NavTab = tabCookie && VALID_TABS.includes(tabCookie) ? tabCookie : "RATEPAYERS";
+  const tabParam = typeof resolvedParams.tab === "string" ? resolvedParams.tab.toUpperCase() : undefined;
+  const initialTab: NavTab =
+    tabParam && VALID_TABS.includes(tabParam as NavTab)
+      ? (tabParam as NavTab)
+      : tabCookie && VALID_TABS.includes(tabCookie)
+      ? tabCookie
+      : "STATEMENTS";
 
   return (
     <AdminDashboardClient

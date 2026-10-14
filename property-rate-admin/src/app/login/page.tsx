@@ -4,8 +4,8 @@ import AdminLoginForm from '@/components/AdminLoginForm';
 import { Building2 } from 'lucide-react';
 
 export const metadata = {
-  title: 'Sign In | Kpone-Katamanso Municipal Assembly',
-  description: 'Revenue administration portal for authorized municipal officers.',
+  title: 'Sign In | HEINZ INTEGRATED SYSTEMS LIMITED',
+  description: 'Revenue administration portal for authorized HEINZ INTEGRATED SYSTEMS LIMITED officers.',
 };
 
 export default async function AdminLoginPage() {
@@ -25,11 +25,8 @@ export default async function AdminLoginPage() {
             <Building2 className="w-5 h-5" />
           </div>
           <div className="space-y-0.5">
-            <p className="text-[10px] font-semibold tracking-wider uppercase text-[#6C6C70]">
-              Republic of Ghana
-            </p>
-            <h1 className="text-lg sm:text-xl font-bold tracking-tight text-[#1C1C1E]">
-              Kpone-Katamanso Municipal Assembly
+            <h1 className="text-base sm:text-lg font-bold tracking-tight text-[#1C1C1E]">
+              HEINZ INTEGRATED SYSTEMS LIMITED
             </h1>
             <p className="text-[11px] text-[#8E8E93] font-medium">
               Revenue Administration Portal

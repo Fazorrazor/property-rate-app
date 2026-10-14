@@ -70,6 +70,12 @@ export default function AdminLoginForm() {
       const res = await adminLogin(cleanUsername, cleanPassword, rememberMe);
       if (res.success) {
         setStatus('success');
+        if (typeof window !== 'undefined') {
+          try {
+            const expiry = Date.now() + 7 * 60 * 1000;
+            localStorage.setItem('heinz_admin_session_expiry', expiry.toString());
+          } catch {}
+        }
         setTimeout(() => {
           window.location.href = '/';
         }, 400);
@@ -90,6 +96,7 @@ export default function AdminLoginForm() {
       autoComplete="off"
       data-lpignore="true"
       data-1p-ignore="true"
+      data-bwignore="true"
       data-form-type="other"
     >
       {/* Anti-autofill Decoy Honeypots */}
@@ -140,6 +147,7 @@ export default function AdminLoginForm() {
             autoComplete="off"
             data-lpignore="true"
             data-1p-ignore="true"
+            data-bwignore="true"
             data-form-type="other"
             autoCapitalize="none"
             autoCorrect="off"
@@ -170,6 +178,7 @@ export default function AdminLoginForm() {
             autoComplete="new-password"
             data-lpignore="true"
             data-1p-ignore="true"
+            data-bwignore="true"
             data-form-type="other"
             required
             disabled={isPending}

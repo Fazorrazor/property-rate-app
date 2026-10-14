@@ -79,6 +79,17 @@ export function RatepayerDossierSheet({
   const [activeTab, setActiveTab] = useState<DossierTab>("PROPERTIES");
   const [localReceipts, setLocalReceipts] = useState<AdminPropertyReceipt[]>([]);
 
+  // Lock background viewport scrolling when dossier sheet is active
+  useEffect(() => {
+    if (isOpen) {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
+    }
+  }, [isOpen]);
+
 
   // Bill image state per property
   const [localBillImages, setLocalBillImages] = useState<Record<string, string | null>>({});
@@ -215,7 +226,7 @@ export function RatepayerDossierSheet({
       {isOpen && (
         <motion.div 
           key="ratepayer-dossier-wrapper"
-          className="fixed inset-0 z-[60] flex justify-end pointer-events-auto"
+          className="fixed inset-0 z-[10000] flex justify-end pointer-events-auto"
         >
           {/* Backdrop */}
           <motion.div
@@ -704,7 +715,7 @@ export function RatepayerDossierSheet({
 
           {/* Bill Scan Upload Confirmation Modal */}
           {billConfirmUpload && (
-            <div className="fixed inset-0 z-60 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="fixed inset-0 z-[10001] bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 pointer-events-auto">
               <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}

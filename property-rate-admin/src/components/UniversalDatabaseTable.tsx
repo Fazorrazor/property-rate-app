@@ -209,9 +209,6 @@ export function UniversalDatabaseTable({
                 <Database className="w-3.5 h-3.5 text-[#007AFF]" />
                 {tableDef.label}
               </span>
-              <span className="text-[11px] text-[#8E8E93] tabular-nums font-mono">
-                ({totalCount.toLocaleString()} {totalCount === 1 ? 'record' : 'records'})
-              </span>
             </div>
           </div>
 
@@ -226,6 +223,14 @@ export function UniversalDatabaseTable({
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={`Search ${tableDef.name}...`}
                 className="w-full pl-8 pr-7 py-1.5 bg-[#F2F2F7] border border-[#E5E5EA] rounded-lg text-xs text-[#1C1C1E] placeholder-[#8E8E93] focus:outline-none focus:border-[#007AFF] focus:bg-white transition-colors"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                data-lpignore="true"
+                data-1p-ignore="true"
+                data-bwignore="true"
+                data-form-type="other"
               />
               {searchQuery && (
                 <button
@@ -480,57 +485,59 @@ export function UniversalDatabaseTable({
       </div>
 
       {/* Table Pagination Bar */}
-      <div className="sticky bottom-0 z-20 px-3 sm:px-4 lg:px-6 py-2 border-t border-[#E5E5EA] flex flex-wrap items-center justify-between gap-2 sm:gap-3 bg-white/95 backdrop-blur-md shrink-0 text-xs text-[#6C6C70] shadow-2xs">
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          <span className="text-[11px] hidden xs:inline">Rows:</span>
-          <select
-            value={pageSize}
-            onChange={(e) => {
-              setPageSize(Number(e.target.value));
-              setCurrentPage(1);
-            }}
-            className="h-8 px-2 bg-white border border-[#E5E5EA] rounded-lg text-xs text-[#1C1C1E] focus:outline-none focus:border-[#007AFF] cursor-pointer"
-          >
-            <option value={25}>25</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-          </select>
-          <span className="text-[#E5E5EA]">•</span>
-          <span className="text-[11px] tabular-nums font-sans">
-            Showing {totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1}–
-            {Math.min(currentPage * pageSize, totalCount)} of {totalCount.toLocaleString()}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] tabular-nums hidden sm:inline">
-            Page {currentPage} of {totalPages}
-          </span>
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-              disabled={currentPage <= 1 || isLoading}
-              className="h-8 w-8 rounded-lg border border-[#E5E5EA] bg-white text-[#1C1C1E] hover:bg-[#F2F2F7] disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors flex items-center justify-center active:scale-95"
-              title="Previous page"
+      {totalPages > 1 && (
+        <div className="sticky bottom-0 z-20 px-3 sm:px-4 lg:px-6 py-2 border-t border-[#E5E5EA] flex flex-wrap items-center justify-between gap-2 sm:gap-3 bg-white/95 backdrop-blur-md shrink-0 text-xs text-[#6C6C70] shadow-2xs">
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <span className="text-[11px] hidden xs:inline">Rows:</span>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+              className="h-8 px-2 bg-white border border-[#E5E5EA] rounded-lg text-xs text-[#1C1C1E] focus:outline-none focus:border-[#007AFF] cursor-pointer"
             >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <span className="text-[11px] font-semibold text-[#1C1C1E] sm:hidden px-1">
-              {currentPage}/{totalPages}
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+            <span className="text-[#E5E5EA]">•</span>
+            <span className="text-[11px] tabular-nums font-sans">
+              Showing {totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1}–
+              {Math.min(currentPage * pageSize, totalCount)} of {totalCount.toLocaleString()}
             </span>
-            <button
-              type="button"
-              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-              disabled={currentPage >= totalPages || isLoading}
-              className="h-8 w-8 rounded-lg border border-[#E5E5EA] bg-white text-[#1C1C1E] hover:bg-[#F2F2F7] disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors flex items-center justify-center active:scale-95"
-              title="Next page"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] tabular-nums hidden sm:inline">
+              Page {currentPage} of {totalPages}
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                disabled={currentPage <= 1 || isLoading}
+                className="h-8 w-8 rounded-lg border border-[#E5E5EA] bg-white text-[#1C1C1E] hover:bg-[#F2F2F7] disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors flex items-center justify-center active:scale-95"
+                title="Previous page"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="text-[11px] font-semibold text-[#1C1C1E] sm:hidden px-1">
+                {currentPage}/{totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                disabled={currentPage >= totalPages || isLoading}
+                className="h-8 w-8 rounded-lg border border-[#E5E5EA] bg-white text-[#1C1C1E] hover:bg-[#F2F2F7] disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors flex items-center justify-center active:scale-95"
+                title="Next page"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

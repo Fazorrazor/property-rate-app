@@ -20,6 +20,7 @@ import {
   UploadCloud,
   Settings,
   CreditCard,
+  ChevronLeft,
   ChevronRight,
   ChevronDown,
   LogOut,
@@ -70,6 +71,9 @@ import { AccountStatementDialog } from "@/components/AccountStatementDialog";
 import { AccountStatementReportView } from "@/components/AccountStatementReportView";
 import { OfficerStatementView } from "@/components/OfficerStatementView";
 import PaymentsSection from "@/components/PaymentsSection";
+import { AccountsBiodataSection } from "@/components/AccountsBiodataSection";
+import { SigningOutScreen } from "@/components/SigningOutScreen";
+import { SessionTimer } from "@/components/SessionTimer";
 import { DATABASE_TABLE_DEFINITIONS } from "@/lib/database-tables-config";
 
 const PropertyModal = dynamic(
@@ -90,11 +94,14 @@ const SmsRolloutSimulator = dynamic(
   }
 );
 
-type NavTab = "REGISTRY" | "RATEPAYERS" | "PAID_USERS" | "FEE_PAYMENTS" | "SMS_CENTER" | "AUDIT_LOGS" | "SETTINGS";
+type NavTab = "STATEMENTS" | "PAYMENTS" | "ACCOUNTS" | "SMS_CENTER" | "AUDIT_LOGS" | "REGISTRY" | "RATEPAYERS" | "PAID_USERS" | "FEE_PAYMENTS" | "SETTINGS";
 
-const OFFICER_ALLOWED_TABS: NavTab[] = ["RATEPAYERS", "PAID_USERS", "FEE_PAYMENTS"];
+const OFFICER_ALLOWED_TABS: NavTab[] = ["STATEMENTS", "PAYMENTS"];
 
-const NAV_TABS: { key: NavTab; label: string; shortLabel: string; icon: any }[] = [
+const ALL_NAV_TABS: { key: NavTab; label: string; shortLabel: string; icon: any }[] = [
+  { key: "STATEMENTS", label: "Statements", shortLabel: "Statements", icon: FileText },
+  { key: "PAYMENTS", label: "Payments", shortLabel: "Payments", icon: Receipt },
+  { key: "ACCOUNTS", label: "Accounts", shortLabel: "Accounts", icon: Users },
   { key: "RATEPAYERS", label: "Property Owners", shortLabel: "Owners", icon: Users },
   { key: "REGISTRY", label: "Properties", shortLabel: "Properties", icon: Building2 },
   { key: "PAID_USERS", label: "Paid Ratepayers", shortLabel: "Paid Users", icon: CreditCard },
@@ -102,6 +109,13 @@ const NAV_TABS: { key: NavTab; label: string; shortLabel: string; icon: any }[] 
   { key: "SMS_CENTER", label: "Send SMS Bills", shortLabel: "SMS Bills", icon: MessageSquare },
   { key: "AUDIT_LOGS", label: "Activity Log", shortLabel: "Activity", icon: ShieldCheck },
   { key: "SETTINGS", label: "SMS & App Settings", shortLabel: "Settings", icon: Settings },
+];
+
+const NAV_TABS: { key: NavTab; label: string; shortLabel: string; icon: any }[] = [
+  { key: "STATEMENTS", label: "Statements", shortLabel: "Statements", icon: FileText },
+  { key: "PAYMENTS", label: "Payments", shortLabel: "Payments", icon: Receipt },
+  { key: "ACCOUNTS", label: "Accounts", shortLabel: "Accounts", icon: Users },
+  { key: "SMS_CENTER", label: "Send SMS Bills", shortLabel: "SMS Bills", icon: MessageSquare },
 ];
 
 interface AdminDashboardClientProps {
@@ -145,7 +159,9 @@ export default function AdminDashboardClient({ initialTab, initialAdmin, initial
   const isAssemblyOfficer = currentAdmin?.role === "OFFICER";
 
   // Active Tab State — seeded from server cookie so Frame 0 HTML is already correct
-  const [activeTab, setActiveTab] = useState<NavTab>(initialTab);
+  const [activeTab, setActiveTab] = useState<NavTab>(
+    NAV_TABS.some((t) => t.key === initialTab) ? initialTab : "STATEMENTS"
+  );
 
   // Paid Ratepayers Directory States
   const [paidUsers, setPaidUsers] = useState<AdminPaidUserRecord[]>([]);
@@ -193,6 +209,7 @@ export default function AdminDashboardClient({ initialTab, initialAdmin, initial
   const [manualAccountSearch, setManualAccountSearch] = useState("");
 
   // Reports Suite States (Figma 3:3195, 3:3312, 3:3741)
+  const [statementAccountParam, setStatementAccountParam] = useState<string | undefined>(initialAccountNo);
   const [isReportsPopoverOpen, setIsReportsPopoverOpen] = useState(false);
   const [isAccountStatementDialogOpen, setIsAccountStatementDialogOpen] = useState(false);
   const [statementAccountNo, setStatementAccountNo] = useState<string | null>(null);
@@ -232,19 +249,21 @@ export default function AdminDashboardClient({ initialTab, initialAdmin, initial
             localStorage.setItem("admin_current_user", JSON.stringify(admin));
           } catch {}
           if (admin.role === "OFFICER") {
-            setActiveTab((prev) => (OFFICER_ALLOWED_TABS.includes(prev) ? prev : "RATEPAYERS"));
+            setActiveTab((prev) => (OFFICER_ALLOWED_TABS.includes(prev) ? prev : "STATEMENTS"));
           }
         } else {
           try {
             localStorage.removeItem("admin_current_user");
+            localStorage.removeItem("heinz_admin_session_expiry");
           } catch {}
-          window.location.href = "/login?expired=true";
+          window.location.href = "/login";
         }
       } catch {
         try {
           localStorage.removeItem("admin_current_user");
+          localStorage.removeItem("heinz_admin_session_expiry");
         } catch {}
-        window.location.href = "/login?expired=true";
+        window.location.href = "/login";
       }
     };
 
@@ -265,7 +284,7 @@ export default function AdminDashboardClient({ initialTab, initialAdmin, initial
 
 
   // Helper: Synchronize state with URL search params and localStorage
-  const updateUrlAndStorage = (key: string, value: string, storageKey: string) => {
+  const updateUrlAndStorage = (key: string, value: string, storageKey: string, push: boolean = false) => {
     try {
       if (value && value !== "ALL") {
         localStorage.setItem(storageKey, value);
@@ -279,14 +298,18 @@ export default function AdminDashboardClient({ initialTab, initialAdmin, initial
         params.delete(key);
       }
       const newUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ""}`;
-      window.history.replaceState(null, "", newUrl);
+      if (push) {
+        window.history.pushState({ [key]: value }, "", newUrl);
+      } else {
+        window.history.replaceState(null, "", newUrl);
+      }
     } catch {
       // non-fatal
     }
   };
 
   // Tab persistence, Deep link synchronization, & Cookie write for server-side refresh
-  const handleTabChange = (newTab: NavTab) => {
+  const handleTabChange = (newTab: NavTab, targetAccount?: string) => {
     if (isAssemblyOfficer && !OFFICER_ALLOWED_TABS.includes(newTab)) {
       return;
     }
@@ -301,12 +324,41 @@ export default function AdminDashboardClient({ initialTab, initialAdmin, initial
     if (typeof window !== "undefined") {
       window.scrollTo({ top: 0, behavior: "instant" });
     }
-    updateUrlAndStorage("tab", newTab, "admin_active_tab");
-    // Write a plain (non-httpOnly) cookie so the Next.js server component can read it
-    // on page refresh and pass the correct initialTab, eliminating the dashboard flash.
-    try {
-      document.cookie = `admin_active_tab=${newTab}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`;
-    } catch {}
+
+    if (targetAccount && targetAccount.trim()) {
+      const cleanAcc = targetAccount.trim();
+      setStatementAccountParam(cleanAcc);
+      try {
+        localStorage.setItem("kkma_officer_statement_account", cleanAcc);
+        document.cookie = `kkma_officer_statement_account=${encodeURIComponent(cleanAcc)}; path=/; max-age=86400; SameSite=Lax`;
+        const params = new URLSearchParams(window.location.search);
+        params.set("tab", newTab);
+        params.set("account", cleanAcc);
+        const newUrl = `${window.location.pathname}?${params.toString()}`;
+        window.history.pushState({ tab: newTab, account: cleanAcc }, "", newUrl);
+        localStorage.setItem("admin_active_tab", newTab);
+        document.cookie = `admin_active_tab=${newTab}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`;
+      } catch {}
+    } else {
+      setStatementAccountParam(undefined);
+      try {
+        localStorage.removeItem("kkma_officer_statement_account");
+        document.cookie = "kkma_officer_statement_account=; path=/; max-age=0; SameSite=Lax";
+        const params = new URLSearchParams(window.location.search);
+        params.set("tab", newTab);
+        params.delete("account");
+        params.delete("accountNumber");
+        params.delete("accountNo");
+        params.delete("start");
+        params.delete("end");
+        params.delete("dossier");
+        const newUrl = `${window.location.pathname}?${params.toString()}`;
+        window.history.pushState({ tab: newTab }, "", newUrl);
+        localStorage.setItem("admin_active_tab", newTab);
+        document.cookie = `admin_active_tab=${newTab}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`;
+      } catch {}
+    }
+
     requestAnimationFrame(() => {
       setTimeout(() => {
         isNavigatingRef.current = false;
@@ -330,6 +382,54 @@ export default function AdminDashboardClient({ initialTab, initialAdmin, initial
       return () => clearTimeout(timer);
     }
   }, [toast]);
+
+  // Hardware/Device & Browser Back/Forward navigation listener
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handlePopState = () => {
+      try {
+        const params = new URLSearchParams(window.location.search);
+
+        // Handle dossier modal back navigation
+        if (!params.has("dossier") && isDossierOpen) {
+          setIsDossierOpen(false);
+          setSelectedRatepayerDossier(null);
+          setPreviewRatepayer(null);
+        }
+
+        // Handle tab back navigation
+        const rawTabParam = params.get("tab") as NavTab | null;
+        const validTab: NavTab = rawTabParam && ALL_NAV_TABS.some((t) => t.key === rawTabParam)
+          ? rawTabParam
+          : "STATEMENTS";
+
+        if (validTab !== activeTab) {
+          if (!isAssemblyOfficer || OFFICER_ALLOWED_TABS.includes(validTab)) {
+            setActiveTab(validTab);
+            document.cookie = `admin_active_tab=${validTab}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`;
+          }
+        }
+
+        // Handle account selection back navigation
+        const accParam = params.get("account") || params.get("accountNumber") || params.get("accountNo");
+        if (accParam && accParam.trim()) {
+          setStatementAccountParam(accParam.trim());
+        } else {
+          setStatementAccountParam(undefined);
+          try {
+            localStorage.removeItem("kkma_officer_statement_account");
+            document.cookie = "kkma_officer_statement_account=; path=/; max-age=0; SameSite=Lax";
+          } catch {}
+        }
+      } catch {
+        // non-fatal
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [isDossierOpen, activeTab, isAssemblyOfficer]);
 
   // Filter & Search states
   const [searchQuery, setSearchQuery] = useState("");
@@ -394,9 +494,31 @@ export default function AdminDashboardClient({ initialTab, initialAdmin, initial
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showPropertyModal, setShowPropertyModal] = useState(false);
   const [manualAmount, setManualAmount] = useState("");
-  const [manualMethod, setManualMethod] = useState("Counter Cash Treasury");
+  const [manualMethod, setManualMethod] = useState("Cash");
   const [paymentAdminPassword, setPaymentAdminPassword] = useState("");
   const [showPaymentPassword, setShowPaymentPassword] = useState(false);
+
+  // Global Modal Active State for Background Interaction & Scroll Shielding
+  const isAnyModalActive = Boolean(
+    selectedAccount ||
+    showBatchModal ||
+    showPaymentModal ||
+    showPropertyModal ||
+    showSmsAuthModal ||
+    showCsvImportModal ||
+    isAccountStatementDialogOpen ||
+    isDossierOpen
+  );
+
+  useEffect(() => {
+    if (isAnyModalActive) {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
+    }
+  }, [isAnyModalActive]);
 
   // Batch Rollout States
   const [residentialRate, setResidentialRate] = useState("0.005");
@@ -885,6 +1007,13 @@ export default function AdminDashboardClient({ initialTab, initialAdmin, initial
     setSelectedRatepayerDossier(null);
     setIsDossierOpen(true);
     setIsFetchingDossier(true);
+    if (typeof window !== "undefined") {
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.set("dossier", userId);
+        window.history.pushState({ dossier: userId }, "", url.pathname + url.search);
+      } catch {}
+    }
 
     getRatepayerHistory(userId)
       .then((dossier) => {
@@ -1248,257 +1377,133 @@ export default function AdminDashboardClient({ initialTab, initialAdmin, initial
   const selectedPaidList = selectedPropertiesList.filter((p) => p.status === "PAID");
 
   if (isAssemblyOfficer) {
-    return <OfficerStatementView initialAdmin={currentAdmin} initialAccountNo={initialAccountNo} />;
+    return (
+      <OfficerStatementView
+        initialAdmin={currentAdmin}
+        initialAccountNo={initialAccountNo}
+      />
+    );
   }
 
   return (
 
-    <div className="h-dvh w-full bg-white text-[#1C1C1E] flex flex-col lg:flex-row font-sans relative overflow-hidden">
-      {/* Mobile navigation handled via FloatingMobileDock Bottom Sheet */}
+    <div className="h-[100dvh] max-h-[100dvh] w-full bg-[#F5F5F7] text-[#1D1D1F] flex flex-col font-sans antialiased overflow-hidden selection:bg-[#007AFF]/20 selection:text-[#007AFF]">
+      {/* Dedicated Apple-Style Fullscreen Signing Out Experience */}
+      <AnimatePresence>
+        {isLoggingOut && (
+          <SigningOutScreen userName={currentAdmin?.name || currentAdmin?.username} />
+        )}
+      </AnimatePresence>
 
-      {/* Desktop Sidebar Anchor (Fixed 56px footprint so main workspace never jumps or shifts) */}
-      <div className="hidden lg:block w-14 shrink-0 relative z-50">
-        <aside
-          onMouseEnter={() => setIsSidebarExpanded(true)}
-          onMouseLeave={() => setIsSidebarExpanded(false)}
-          className={`h-dvh fixed top-0 left-0 z-50 flex flex-col bg-white border-r border-[#E5E5EA] transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] overflow-hidden font-sans ${
-            isSidebarExpanded ? "w-64 shadow-2xl" : "w-14 shadow-2xs"
-          }`}
-        >
-          {/* Header */}
-          <div className="h-13 flex items-center px-3.5 border-b border-[#E5E5EA] shrink-0 gap-2.5 overflow-hidden">
-            <div className="w-7 h-7 rounded-md bg-[#007AFF] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
-              H
-            </div>
-            <div className={`flex flex-col min-w-0 transition-opacity duration-200 ${isSidebarExpanded ? "opacity-100" : "opacity-0 pointer-events-none w-0"}`}>
-              <span className="text-xs font-bold text-[#1C1C1E] tracking-tight">Heinz</span>
-              <span className="text-[10px] text-[#6C6C70] truncate leading-tight whitespace-nowrap">
-                Revenue Administration
-              </span>
-            </div>
-            {isSidebarExpanded && (
-              <span className="text-[10px] text-[#6C6C70] uppercase font-mono font-medium shrink-0 ml-auto transition-opacity duration-200">
-                Admin
-              </span>
-            )}
+      {/* Heinz Administrator Minimalist Top Bar (Locked / Flex-shrink: 0 - Officer Profile Standard) */}
+      <header className="relative w-full flex items-center justify-between gap-4 no-print border-b border-[#E8E8ED] px-4 sm:px-6 lg:px-8 py-2.5 shrink-0 bg-white min-h-[48px] z-40">
+        {/* Brand Identity permanently anchored on the left */}
+        <div className="flex items-center gap-2.5 shrink-0">
+          <div className="w-7 h-7 rounded-lg bg-[#007AFF] flex items-center justify-center text-white shadow-xs shrink-0 font-bold text-xs">
+            H
           </div>
+          <div className="flex flex-col">
+            <h1 className="text-[15px] sm:text-[16px] font-bold text-[#1D1D1F] tracking-tight leading-snug select-none">
+              HEINZ Ltd.
+            </h1>
+          </div>
+        </div>
 
-          {/* Navigation Links (Zero Pills - Clean Google Enterprise / Supabase Standard) */}
-          <nav className="flex flex-col flex-1 px-2 py-3 gap-1 overflow-y-auto overflow-x-hidden" aria-label="Main Navigation">
-
-            {visibleNavTabs.map((tab) => {
-              const isActive = activeTab === tab.key;
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.key}
-                  type="button"
-                  onClick={() => handleTabChange(tab.key)}
-                  title={!isSidebarExpanded ? tab.label : undefined}
-                  className={`relative h-10 px-2.5 text-left text-xs font-medium transition-colors cursor-pointer focus:outline-none rounded-lg flex items-center group overflow-hidden ${
-                    isActive
-                      ? "bg-[#007AFF]/10 text-[#007AFF] font-semibold"
-                      : "text-[#6C6C70] hover:text-[#1C1C1E] hover:bg-[#F2F2F7]"
-                  } ${isSidebarExpanded ? "w-full justify-between" : "w-10 mx-auto justify-center"}`}
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <Icon className={`w-4 h-4 shrink-0 transition-colors ${isActive ? "text-[#007AFF]" : "text-[#6C6C70] group-hover:text-[#1C1C1E]"}`} />
-                    <span className={`truncate whitespace-nowrap transition-all duration-200 ${isSidebarExpanded ? "opacity-100 max-w-[160px]" : "opacity-0 max-w-0 pointer-events-none"}`}>
-                      {tab.label}
-                    </span>
-                  </div>
-                  {isActive && (
-                    <motion.div
-                      layoutId="activeTabIndicatorSidebar"
-                      className="absolute left-0 top-1.5 bottom-1.5 w-[3.5px] bg-[#007AFF] rounded-r"
-                      transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                    />
-                  )}
-                </button>
-              );
-            })}
-
-            {/* Reports Menu in Sidebar (Figma 3:3195, 3:3295) */}
-            <div className="relative mt-1 pt-1 border-t border-[#E5E5EA]">
+        {/* Desktop Navigation Links (Clean Typographic Standard with Bottom Accent - Hidden on Mobile) */}
+        <nav className="hidden sm:flex items-center gap-1 sm:gap-3" aria-label="Main Navigation">
+          {visibleNavTabs.map((tab) => {
+            const isActive = activeTab === tab.key;
+            const Icon = tab.icon;
+            return (
               <button
+                key={tab.key}
                 type="button"
-                onClick={() => setIsReportsPopoverOpen((prev) => !prev)}
-                title={!isSidebarExpanded ? "Reports & Statements" : undefined}
-                className={`relative h-10 px-2.5 text-left text-xs font-medium transition-colors cursor-pointer focus:outline-none rounded-lg flex items-center group overflow-hidden ${
-                  isReportsPopoverOpen || isStatementReportActive
-                    ? "bg-[#007AFF]/10 text-[#007AFF] font-semibold"
-                    : "text-[#6C6C70] hover:text-[#1C1C1E] hover:bg-[#F2F2F7]"
-                } ${isSidebarExpanded ? "w-full justify-between" : "w-10 mx-auto justify-center"}`}
+                onClick={() => handleTabChange(tab.key)}
+                className={`relative px-3 py-2 text-[13px] font-medium transition-colors cursor-pointer flex items-center gap-1.5 focus:outline-none ${
+                  isActive
+                    ? "text-[#007AFF] font-semibold"
+                    : "text-[#6E6E73] hover:text-[#1D1D1F]"
+                }`}
               >
-                <div className="flex items-center gap-3 min-w-0">
-                  <FileText className={`w-4 h-4 shrink-0 transition-colors ${isReportsPopoverOpen || isStatementReportActive ? "text-[#007AFF]" : "text-[#6C6C70] group-hover:text-[#1C1C1E]"}`} />
-                  <span className={`truncate whitespace-nowrap transition-all duration-200 ${isSidebarExpanded ? "opacity-100 max-w-[160px]" : "opacity-0 max-w-0 pointer-events-none"}`}>
-                    Reports
-                  </span>
-                </div>
-                {isSidebarExpanded && (
-                  <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isReportsPopoverOpen ? "rotate-180 text-[#007AFF]" : "text-[#8E8E93]"}`} />
+                <Icon className={`w-4 h-4 shrink-0 ${isActive ? "text-[#007AFF]" : "text-[#8E8E93]"}`} />
+                <span>{tab.label}</span>
+                {isActive && (
+                  <motion.div
+                    layoutId="heinzActiveNavUnderline"
+                    className="absolute bottom-0 inset-x-1.5 h-[2px] bg-[#007AFF] rounded-full"
+                    transition={{ type: "spring", stiffness: 450, damping: 35 }}
+                  />
                 )}
               </button>
+            );
+          })}
+        </nav>
 
-              {/* Reports Popover (Figma 3:3295) */}
-              <AnimatePresence>
-                {isReportsPopoverOpen && (
-                  <motion.div
-                    ref={reportsPopoverRef}
-                    initial={{ opacity: 0, scale: 0.95, y: -4 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95, y: -4 }}
-                    transition={{ duration: 0.15, ease: "easeOut" }}
-                    className="absolute left-full ml-2 bottom-0 w-[268px] bg-white/95 backdrop-blur-2xl border border-[#E5E5EA] shadow-2xl rounded-[10px] p-1.5 z-50 flex flex-col gap-0.5 font-sans"
-                  >
-                    <div className="px-3 py-2 text-[11px] font-medium text-[#737378]">
-                      Financial reports
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        handleTabChange(isAssemblyOfficer ? "RATEPAYERS" : "REGISTRY");
-                        setIsStatementReportActive(false);
-                        setIsReportsPopoverOpen(false);
-                      }}
-                      className="w-full flex items-center justify-between px-3 py-2.5 rounded-[6px] text-xs text-[#1D1D1F] hover:bg-[#F2F2F5] transition-colors cursor-pointer text-left"
-                    >
-                      <span>Property Listings</span>
-                      <Building2 className="w-4 h-4 text-[#8E8E93]" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsAccountStatementDialogOpen(true);
-                        setIsReportsPopoverOpen(false);
-                      }}
-                      className="w-full flex items-center justify-between px-3 py-2.5 rounded-[6px] text-xs font-medium text-[#007AFF] bg-[#EAF3FF] hover:bg-[#E0EEFF] transition-colors cursor-pointer text-left"
-                    >
-                      <span>Statements</span>
-                      <FileText className="w-4 h-4 text-[#007AFF]" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        handleTabChange("FEE_PAYMENTS");
-                        setIsStatementReportActive(false);
-                        setIsReportsPopoverOpen(false);
-                      }}
-                      className="w-full flex items-center justify-between px-3 py-2.5 rounded-[6px] text-xs text-[#1D1D1F] hover:bg-[#F2F2F5] transition-colors cursor-pointer text-left"
-                    >
-                      <span>Revenue Summary</span>
-                      <Receipt className="w-4 h-4 text-[#8E8E93]" />
-                    </button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          </nav>
-
-          {/* User & Sign Out Footer */}
-          <div className="p-2 border-t border-[#E5E5EA] shrink-0 bg-[#F8F9FA] overflow-hidden">
-            {isSidebarExpanded && (
-              <div className="px-2 py-1.5 text-xs transition-opacity duration-200">
-                <span className="text-[#6C6C70] block text-[10px]">
-                  {isAssemblyOfficer ? "Municipal Officer" : "Logged in Administrator"}
-                </span>
-                <span className="font-semibold text-[#1C1C1E] truncate block">
-                  {currentAdmin?.username || currentAdmin?.name || "Heinz"}
-                </span>
-              </div>
-            )}
-
-            <button
-              type="button"
-              disabled={isLoggingOut}
-              onClick={async () => {
-                setIsLoggingOut(true);
-                try {
-                  await adminLogout();
-                } finally {
-                  window.location.href = '/login';
+        {/* Right Action: Admin Identity, Session Timer & Sign Out */}
+        <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
+          <span className="hidden sm:inline text-xs font-medium text-[#6E6E73]">
+            {currentAdmin?.username || currentAdmin?.name || "Heinz"}
+          </span>
+          <SessionTimer
+            initialMinutes={7}
+            onExpire={async () => {
+              setIsLoggingOut(true);
+              try {
+                if (typeof window !== "undefined") {
+                  try {
+                    localStorage.removeItem("admin_current_user");
+                    localStorage.removeItem("heinz_admin_session_expiry");
+                    document.cookie = "admin_session=; path=/; max-age=0; SameSite=Lax";
+                    document.cookie = "admin_session_expires_at=; path=/; max-age=0; SameSite=Lax";
+                  } catch {}
                 }
-              }}
-              title={!isSidebarExpanded ? "Sign Out" : undefined}
-              aria-label="Sign out of administration portal"
-              className={`h-9 text-xs font-medium text-[#6C6C70] hover:text-[#FF3B30] hover:bg-[#E5E5EA] rounded-lg transition-colors focus:outline-none cursor-pointer flex items-center disabled:opacity-60 disabled:cursor-not-allowed overflow-hidden ${
-                isSidebarExpanded ? "w-full px-2.5 gap-2.5" : "w-10 mx-auto justify-center"
-              }`}
-            >
-              {isLoggingOut ? (
-                <AppleSpinner size="sm" className="shrink-0 text-[#007AFF]" />
-              ) : (
-                <LogOut className="w-4 h-4 shrink-0 text-[#6C6C70] group-hover:text-[#FF3B30]" />
-              )}
-              <span className={`whitespace-nowrap transition-opacity duration-200 ${isSidebarExpanded ? "opacity-100" : "opacity-0 pointer-events-none w-0"}`}>
-                {isLoggingOut ? "Signing out..." : "Sign Out"}
-              </span>
-            </button>
-          </div>
-        </aside>
-      </div>
+                await Promise.all([
+                  adminLogout(),
+                  new Promise((resolve) => setTimeout(resolve, 850)),
+                ]);
+              } finally {
+                window.location.href = "/login";
+              }
+            }}
+          />
+          <button
+            type="button"
+            onClick={async () => {
+              setIsLoggingOut(true);
+              try {
+                if (typeof window !== "undefined") {
+                  try {
+                    localStorage.removeItem("admin_current_user");
+                    localStorage.removeItem("heinz_admin_session_expiry");
+                    document.cookie = "admin_session=; path=/; max-age=0; SameSite=Lax";
+                    document.cookie = "admin_session_expires_at=; path=/; max-age=0; SameSite=Lax";
+                  } catch {}
+                }
+                await Promise.all([
+                  adminLogout(),
+                  new Promise((resolve) => setTimeout(resolve, 850)),
+                ]);
+              } finally {
+                window.location.href = "/login";
+              }
+            }}
+            disabled={isLoggingOut}
+            className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-[#6E6E73] hover:text-[#FF3B30] transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+            title="Sign Out"
+            aria-label="Sign out of administration portal"
+          >
+            {isLoggingOut ? (
+              <AppleSpinner size="xs" className="text-[#007AFF]" />
+            ) : (
+              <LogOut className="w-3.5 h-3.5" />
+            )}
+            <span>{isLoggingOut ? "Signing out..." : "Sign Out"}</span>
+          </button>
+        </div>
+      </header>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 h-full min-h-0 overflow-hidden pb-[calc(3.5rem+env(safe-area-inset-bottom,0px))] lg:pb-0">
-        {/* Mobile App Header */}
-        <header className="bg-white/80 backdrop-blur-xl border-b border-[#E5E5EA] shadow-2xs px-3.5 sm:px-4 h-13 flex items-center justify-between shrink-0 lg:hidden font-sans z-40 sticky top-0">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-7 h-7 rounded-md bg-[#007AFF] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
-              {isAssemblyOfficer ? "A" : "H"}
-            </div>
-            <div className="flex flex-col min-w-0">
-              <span className="text-xs font-bold text-[#007AFF] tracking-tight truncate">
-                {isAssemblyOfficer ? "KKMA Revenue" : "Heinz Revenue"}
-              </span>
-              <span className="text-[10px] text-[#6C6C70] font-medium leading-none truncate">
-                {visibleNavTabs.find(t => t.key === activeTab)?.shortLabel || "Console"}
-              </span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-            {activeTab === "REGISTRY" && !isAssemblyOfficer && (
-              <button
-                type="button"
-                onClick={() => setShowBatchModal(true)}
-                className="h-8 px-2.5 rounded-lg border border-[#E5E5EA] bg-[#F2F2F7] hover:bg-[#E5E5EA] text-[#007AFF] font-semibold text-[11px] flex items-center gap-1 cursor-pointer focus:outline-none transition-colors"
-                title="Generate & Send Annual Bills"
-              >
-                <RefreshCw className="w-3 h-3 text-[#007AFF]" />
-                <span className="hidden sm:inline">Send Annual Bills</span>
-              </button>
-            )}
-
-
-            <div className="flex items-center gap-1.5 shrink-0">
-              <span className="text-[11px] font-semibold text-[#1C1C1E] truncate max-w-[80px] sm:max-w-[120px]">
-                {currentAdmin?.username || "Heinz"}
-              </span>
-              <button
-                type="button"
-                disabled={isLoggingOut}
-                onClick={async () => {
-                  setIsLoggingOut(true);
-                  try {
-                    await adminLogout();
-                  } finally {
-                    window.location.href = '/login';
-                  }
-                }}
-                className="p-2 -mr-1 text-[#8E8E93] hover:text-[#FF3B30] hover:bg-[#F2F2F7] rounded-lg cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center focus:outline-none transition-colors"
-                title="Sign Out"
-                aria-label="Sign out of administration portal"
-              >
-                {isLoggingOut ? (
-                  <AppleSpinner size="xs" className="text-[#007AFF]" />
-                ) : (
-                  <LogOut className="w-4 h-4" />
-                )}
-              </button>
-            </div>
-          </div>
-        </header>
+      <div className="flex-1 flex flex-col min-w-0 h-full min-h-0 overflow-hidden">
 
         {/* SMS Rollout Progress Bar (Slim Banner when Active) */}
         {smsJobId && smsJobProgress && (
@@ -1573,7 +1578,74 @@ export default function AdminDashboardClient({ initialTab, initialAdmin, initial
             />
           ) : (
           <div className="flex-1 min-h-0 w-full flex flex-col overflow-hidden h-full">
-            {/* Top Modern KPI Cards (Compact Whimsical Fluid Wave Design) - Collapses smoothly on mobile scroll */}
+            {/* TAB: STATEMENTS (OFFICER MINIMALIST STANDARD) */}
+            {activeTab === "STATEMENTS" && (
+              <OfficerStatementView
+                hideHeader={true}
+                initialAdmin={currentAdmin}
+                initialAccountNo={statementAccountParam}
+                onNavigateToPayments={(accNo) => {
+                  setStatementAccountParam(accNo);
+                  handleTabChange("PAYMENTS", accNo);
+                }}
+              />
+            )}
+
+            {/* TAB: PAYMENTS (OFFICER MINIMALIST STANDARD) */}
+            {(activeTab === "PAYMENTS" || activeTab === "FEE_PAYMENTS") && (
+              <div className="flex-1 min-h-0 w-full overflow-hidden flex flex-col">
+                <PaymentsSection
+                  currentAdmin={currentAdmin}
+                  initialAccountNo={statementAccountParam}
+                  onSelectAccount={(accNo) => {
+                    setStatementAccountParam(accNo || undefined);
+                    if (typeof window !== "undefined") {
+                      try {
+                        const url = new URL(window.location.href);
+                        if (accNo) {
+                          url.searchParams.set("account", accNo);
+                        } else {
+                          url.searchParams.delete("account");
+                          url.searchParams.delete("accountNumber");
+                          url.searchParams.delete("accountNo");
+                        }
+                        window.history.replaceState(null, "", url.pathname + (url.search || ""));
+                      } catch {}
+                    }
+                  }}
+                  onOpenStatement={(accNo: string) => {
+                    handleTabChange("STATEMENTS", accNo);
+                  }}
+                />
+              </div>
+            )}
+
+            {/* TAB: ACCOUNTS (BIODATA MANAGEMENT) */}
+            {activeTab === "ACCOUNTS" && (
+              <div className="flex-1 min-h-0 w-full overflow-hidden flex flex-col">
+                <AccountsBiodataSection
+                  currentAdmin={currentAdmin}
+                  initialAccountNo={statementAccountParam}
+                  onOpenStatement={(accNo) => handleTabChange("STATEMENTS", accNo)}
+                  onSelectAccount={(accNo) => {
+                    setStatementAccountParam(accNo || undefined);
+                    if (typeof window !== "undefined") {
+                      try {
+                        const url = new URL(window.location.href);
+                        if (accNo) {
+                          url.searchParams.set("account", accNo);
+                        } else {
+                          url.searchParams.delete("account");
+                          url.searchParams.delete("accountNumber");
+                          url.searchParams.delete("accountNo");
+                        }
+                        window.history.replaceState(null, "", url.pathname + (url.search || ""));
+                      } catch {}
+                    }
+                  }}
+                />
+              </div>
+            )}
             {activeTab === "REGISTRY" && !isAssemblyOfficer && (
               <div
                 className={`shrink-0 overflow-hidden [overflow-anchor:none] will-change-transform transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
@@ -1709,6 +1781,7 @@ export default function AdminDashboardClient({ initialTab, initialAdmin, initial
                         spellCheck={false}
                         data-lpignore="true"
                         data-1p-ignore="true"
+                        data-bwignore="true"
                         data-form-type="other"
                         placeholder="Search properties, accounts, owners..."
                         value={searchQuery}
@@ -2176,6 +2249,14 @@ export default function AdminDashboardClient({ initialTab, initialAdmin, initial
                             : `Search ${DATABASE_TABLE_DEFINITIONS[selectedRatepayerTable]?.name || selectedRatepayerTable}...`
                         }
                         className="w-full pl-8 pr-8 py-2 sm:py-1.5 bg-[#F2F2F7] border border-[#E5E5EA] rounded-lg text-xs text-[#1C1C1E] placeholder-[#8E8E93] focus:outline-none focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] focus:bg-white transition-colors"
+                        autoComplete="off"
+                        autoCorrect="off"
+                        autoCapitalize="off"
+                        spellCheck={false}
+                        data-lpignore="true"
+                        data-1p-ignore="true"
+                        data-bwignore="true"
+                        data-form-type="other"
                       />
                       {((selectedRatepayerTable === "Property" && ratepayerSearchQuery) || (selectedRatepayerTable !== "Property" && universalTableSearchQuery)) && (
                         <button
@@ -2338,6 +2419,13 @@ export default function AdminDashboardClient({ initialTab, initialAdmin, initial
                         inputMode="search"
                         name="paid_users_search_filter"
                         autoComplete="off"
+                        autoCorrect="off"
+                        autoCapitalize="off"
+                        spellCheck={false}
+                        data-lpignore="true"
+                        data-1p-ignore="true"
+                        data-bwignore="true"
+                        data-form-type="other"
                         placeholder="Search paid ratepayers, accounts..."
                         value={paidUsersSearchQuery}
                         onChange={(e) => setPaidUsersSearchQuery(e.target.value)}
@@ -2723,6 +2811,14 @@ export default function AdminDashboardClient({ initialTab, initialAdmin, initial
                           onChange={(e) => setFeePaymentsSearchQuery(e.target.value)}
                           placeholder="Search fee payments, receipts..."
                           className="w-full pl-8 pr-8 py-2 sm:py-1.5 bg-[#F2F2F7] border border-[#E5E5EA] rounded-lg text-xs text-[#1C1C1E] placeholder-[#8E8E93] focus:outline-none focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] focus:bg-white transition-colors"
+                          autoComplete="off"
+                          autoCorrect="off"
+                          autoCapitalize="off"
+                          spellCheck={false}
+                          data-lpignore="true"
+                          data-1p-ignore="true"
+                          data-bwignore="true"
+                          data-form-type="other"
                         />
                         {feePaymentsSearchQuery && (
                           <button
@@ -2772,7 +2868,7 @@ export default function AdminDashboardClient({ initialTab, initialAdmin, initial
                   <div className="flex-1 min-h-0 overflow-y-auto">
                     <PaymentsSection
                       currentAdmin={currentAdmin}
-                      onOpenStatement={(accNo) => {
+                      onOpenStatement={(accNo: string) => {
                         setStatementAccountNo(accNo);
                         setIsStatementReportActive(true);
                       }}
@@ -2847,6 +2943,7 @@ export default function AdminDashboardClient({ initialTab, initialAdmin, initial
                       spellCheck={false}
                       data-lpignore="true"
                       data-1p-ignore="true"
+                      data-bwignore="true"
                       data-form-type="other"
                       placeholder="Search activity log, administrator..."
                       value={auditLogSearchQuery}
@@ -3069,9 +3166,48 @@ export default function AdminDashboardClient({ initialTab, initialAdmin, initial
 
         {/* Static Grounded Footer */}
         <footer className="shrink-0 h-8 bg-white/80 backdrop-blur-md border-t border-[#E5E5EA] px-6 hidden lg:flex items-center justify-between text-[11px] text-[#8E8E93] font-sans">
-          <span>KKMA Revenue</span>
+          <span>HEINZ INTEGRATED SYSTEMS LIMITED</span>
         </footer>
       </div>
+
+      {/* Apple-Style Mobile Bottom Navigation Bar (Authentic iOS UITabBar Standard) */}
+      <nav
+        className="sm:hidden shrink-0 w-full z-40 bg-white/85 backdrop-blur-2xl border-t border-[#E5E5EA] shadow-[0_-1px_3px_rgba(0,0,0,0.03)] pb-[env(safe-area-inset-bottom,0px)] select-none no-print"
+        aria-label="Mobile Bottom Navigation"
+      >
+        <div className="h-[52px] flex items-center justify-around px-2 w-full">
+          {visibleNavTabs.map((tab) => {
+            const isActive = activeTab === tab.key;
+            const Icon = tab.icon;
+            return (
+              <button
+                key={`mobile-tab-${tab.key}`}
+                type="button"
+                onClick={() => handleTabChange(tab.key)}
+                className="flex-1 flex flex-col items-center justify-center py-1 min-h-[48px] focus:outline-none cursor-pointer transition-all active:scale-95"
+                role="tab"
+                aria-selected={isActive}
+                aria-label={tab.label}
+              >
+                <Icon
+                  className={`w-5 h-5 shrink-0 transition-colors ${
+                    isActive ? "text-[#007AFF]" : "text-[#8E8E93]"
+                  }`}
+                />
+                <span
+                  className={`text-[10px] tracking-tight mt-0.5 leading-none transition-colors ${
+                    isActive
+                      ? "text-[#007AFF] font-semibold"
+                      : "text-[#8E8E93] font-medium"
+                  }`}
+                >
+                  {tab.shortLabel || tab.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
 
 
       {/* PROPERTY ASSESSMENT DOSSIER SIDE SHEET */}
@@ -3079,7 +3215,7 @@ export default function AdminDashboardClient({ initialTab, initialAdmin, initial
         {selectedAccount && (
           <motion.div 
             key="property-drawer-wrapper"
-            className="fixed inset-0 z-50 flex justify-end pointer-events-auto"
+            className="fixed inset-0 z-[10000] flex justify-end pointer-events-auto"
           >
             <motion.div
               key="property-drawer-backdrop"
@@ -3113,10 +3249,11 @@ export default function AdminDashboardClient({ initialTab, initialAdmin, initial
                         setReturnToRatepayerDossier(null);
                         handleOpenRatepayerDossier(target.id, target.preview);
                       }}
-                      className="inline-flex items-center gap-1.5 text-xs text-[#007AFF] hover:text-[#0062CC] font-medium mb-1.5 cursor-pointer transition-colors"
+                      className="inline-flex items-center gap-1 text-xs text-[#007AFF] hover:text-[#0062CC] font-semibold mb-1.5 cursor-pointer transition-colors"
+                      title="Back"
                     >
-                      <ArrowLeft className="w-3.5 h-3.5" />
-                      <span>Back to Ratepayer Dossier ({returnToRatepayerDossier.name})</span>
+                      <ChevronLeft className="w-4 h-4 stroke-[2.5]" />
+                      <span>Back</span>
                     </button>
                   )}
                   <div className="flex items-center gap-2">
@@ -3405,6 +3542,15 @@ export default function AdminDashboardClient({ initialTab, initialAdmin, initial
           setIsDossierOpen(false);
           setSelectedRatepayerDossier(null);
           setPreviewRatepayer(null);
+          if (typeof window !== "undefined") {
+            try {
+              const url = new URL(window.location.href);
+              if (url.searchParams.has("dossier")) {
+                url.searchParams.delete("dossier");
+                window.history.pushState(null, "", url.pathname + (url.search || ""));
+              }
+            } catch {}
+          }
         }}
         onSelectProperty={(acc, origin) => {
           if (origin) {
@@ -3440,7 +3586,7 @@ export default function AdminDashboardClient({ initialTab, initialAdmin, initial
       {/* ANNUAL BATCH BILLING MODAL */}
       <AnimatePresence>
         {showBatchModal && (
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 font-sans">
+          <div className="fixed inset-0 z-[10000] flex items-end sm:items-center justify-center p-0 sm:p-4 font-sans pointer-events-auto">
             {/* Smooth Fading Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
@@ -3510,6 +3656,14 @@ export default function AdminDashboardClient({ initialTab, initialAdmin, initial
                         onChange={(e) => setResidentialRate(e.target.value)}
                         aria-label="Residential Rate Factor"
                         className="w-full h-9 px-3 rounded-lg border border-[#E5E5EA] bg-white text-xs text-[#1C1C1E] focus:outline-none focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] transition-colors"
+                        autoComplete="off"
+                        autoCorrect="off"
+                        autoCapitalize="off"
+                        spellCheck={false}
+                        data-lpignore="true"
+                        data-1p-ignore="true"
+                        data-bwignore="true"
+                        data-form-type="other"
                       />
                     </div>
                     <div className="space-y-1">
@@ -3521,6 +3675,14 @@ export default function AdminDashboardClient({ initialTab, initialAdmin, initial
                         onChange={(e) => setCommercialRate(e.target.value)}
                         aria-label="Commercial Rate Factor"
                         className="w-full h-9 px-3 rounded-lg border border-[#E5E5EA] bg-white text-xs text-[#1C1C1E] focus:outline-none focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] transition-colors"
+                        autoComplete="off"
+                        autoCorrect="off"
+                        autoCapitalize="off"
+                        spellCheck={false}
+                        data-lpignore="true"
+                        data-1p-ignore="true"
+                        data-bwignore="true"
+                        data-form-type="other"
                       />
                     </div>
                     <div className="space-y-1">
@@ -3531,6 +3693,14 @@ export default function AdminDashboardClient({ initialTab, initialAdmin, initial
                         onChange={(e) => setDueDate(e.target.value)}
                         aria-label="Statutory Due Date"
                         className="w-full h-9 px-3 rounded-lg border border-[#E5E5EA] bg-white text-xs text-[#1C1C1E] focus:outline-none focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] transition-colors"
+                        autoComplete="off"
+                        autoCorrect="off"
+                        autoCapitalize="off"
+                        spellCheck={false}
+                        data-lpignore="true"
+                        data-1p-ignore="true"
+                        data-bwignore="true"
+                        data-form-type="other"
                       />
                     </div>
                     <div className="space-y-1">
@@ -3558,6 +3728,8 @@ export default function AdminDashboardClient({ initialTab, initialAdmin, initial
                           autoComplete="new-password"
                           data-lpignore="true"
                           data-1p-ignore="true"
+                          data-bwignore="true"
+                          data-form-type="other"
                           value={batchAdminPassword}
                           onChange={(e) => setBatchAdminPassword(e.target.value)}
                           aria-label="Administrator Authorization Password"
@@ -3604,7 +3776,7 @@ export default function AdminDashboardClient({ initialTab, initialAdmin, initial
       {/* RECORD PAYMENT MODAL */}
       <AnimatePresence>
         {showPaymentModal && (
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 font-sans">
+          <div className="fixed inset-0 z-[10000] flex items-end sm:items-center justify-center p-0 sm:p-4 font-sans pointer-events-auto">
             {/* Smooth Fading Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
@@ -3695,6 +3867,14 @@ export default function AdminDashboardClient({ initialTab, initialAdmin, initial
                         }
                       }}
                       className="w-full h-10 px-3 rounded-lg border border-[#E5E5EA] bg-white text-xs font-mono font-semibold text-[#1C1C1E] focus:outline-none focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] transition-colors"
+                      autoComplete="off"
+                      autoCorrect="off"
+                      autoCapitalize="off"
+                      spellCheck={false}
+                      data-lpignore="true"
+                      data-1p-ignore="true"
+                      data-bwignore="true"
+                      data-form-type="other"
                     />
                   </div>
                   <p className="text-[10px] text-[#8E8E93]">
@@ -3714,6 +3894,14 @@ export default function AdminDashboardClient({ initialTab, initialAdmin, initial
                   onChange={(e) => setManualAmount(e.target.value)}
                   aria-label="Payment Amount in Ghanaian Cedi"
                   className="w-full h-10 px-3 rounded-lg border border-[#E5E5EA] bg-white text-xs font-semibold text-[#1C1C1E] focus:outline-none focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] transition-colors"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  data-bwignore="true"
+                  data-form-type="other"
                 />
               </div>
 
@@ -3725,10 +3913,8 @@ export default function AdminDashboardClient({ initialTab, initialAdmin, initial
                   aria-label="Select Payment Channel"
                   className="w-full h-10 px-3 rounded-lg border border-[#E5E5EA] bg-white text-xs text-[#1C1C1E] focus:outline-none focus:border-[#007AFF] transition-colors"
                 >
-                  <option>Counter Cash Treasury</option>
-                  <option>Assembly Direct Cheque</option>
-                  <option>GCB Bank Direct Deposit</option>
-                  <option>Ecobank Treasury Deposit</option>
+                  <option>Cash</option>
+                  <option>Cheque</option>
                 </select>
               </div>
 
@@ -3748,6 +3934,8 @@ export default function AdminDashboardClient({ initialTab, initialAdmin, initial
                     autoComplete="new-password"
                     data-lpignore="true"
                     data-1p-ignore="true"
+                    data-bwignore="true"
+                    data-form-type="other"
                     value={paymentAdminPassword}
                     onChange={(e) => setPaymentAdminPassword(e.target.value)}
                     aria-label="Password"
@@ -3837,7 +4025,7 @@ export default function AdminDashboardClient({ initialTab, initialAdmin, initial
       {/* HIGH-SECURITY SMS AUTHORIZATION MODAL (INDIVIDUAL & SELECTIVE TARGETS) */}
       <AnimatePresence>
         {showSmsAuthModal && smsAuthTargetAccounts.length > 0 && (
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 font-sans">
+          <div className="fixed inset-0 z-[10000] flex items-end sm:items-center justify-center p-0 sm:p-4 font-sans pointer-events-auto">
             {/* Smooth Fading Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
@@ -3948,6 +4136,7 @@ export default function AdminDashboardClient({ initialTab, initialAdmin, initial
                     autoComplete="new-password"
                     data-lpignore="true"
                     data-1p-ignore="true"
+                    data-bwignore="true"
                     data-form-type="other"
                     value={smsAuthPassword}
                     onChange={(e) => {
@@ -4046,18 +4235,6 @@ export default function AdminDashboardClient({ initialTab, initialAdmin, initial
         }}
       />
 
-      {/* Persistent Unified Floating Mobile Navigation Dock */}
-      <FloatingMobileDock
-        activeTab={activeTab}
-        onSelectTab={handleTabChange}
-        allowedTabs={isAssemblyOfficer ? OFFICER_ALLOWED_TABS : undefined}
-        hasActiveAlert={Boolean(
-          smsJobProgress &&
-            (smsJobProgress.failedCount > 0 ||
-              smsJobProgress.status === "FAILED" ||
-              smsJobProgress.status === "RUNNING")
-        )}
-      />
 
     </div>
   );
