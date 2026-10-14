@@ -7,43 +7,14 @@ export function middleware(request: NextRequest) {
   const isPortalAccessOnly = request.cookies.get('portal_access_only')?.value === 'true' || Boolean(tokenParam);
   const authSession = request.cookies.get('auth_session')?.value || tokenParam;
 
-  // Handle Tokenized Direct Access (Instant Citizen Login via SMS deep link)
+  // Handle Tokenized Direct Access (route through /auth/access for validation)
   if (tokenParam) {
-    // If navigating directly to the access verification portal, let /auth/access handle token validation and session minting cleanly
     if (pathname.startsWith('/auth/access')) {
       return NextResponse.next();
     }
-
-    const existingAuth = request.cookies.get('auth_session')?.value;
-    if (!existingAuth) {
-      const requestHeaders = new Headers(request.headers);
-      const existingCookie = requestHeaders.get('cookie') || '';
-      requestHeaders.set('cookie', `${existingCookie ? existingCookie + '; ' : ''}auth_session=${tokenParam}; portal_access_only=true`);
-
-      const response = NextResponse.next({
-        request: {
-          headers: requestHeaders,
-        },
-      });
-
-      response.cookies.set('auth_session', tokenParam, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 60 * 60 * 24 * 365,
-        path: '/',
-      });
-
-      response.cookies.set('portal_access_only', 'true', {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 60 * 60 * 24 * 30,
-        path: '/',
-      });
-
-      return response;
-    }
+    const accessUrl = new URL('/auth/access', request.url);
+    accessUrl.searchParams.set('token', tokenParam);
+    return NextResponse.redirect(accessUrl);
   }
 
   const hasDirectDeepLink = Boolean(tokenParam || searchParams.get('accountNumber') || searchParams.get('propertyId'));

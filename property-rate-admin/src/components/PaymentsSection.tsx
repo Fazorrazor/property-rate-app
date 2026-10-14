@@ -17,11 +17,11 @@ import {
   CheckCircle2,
   AlertTriangle,
   Globe,
-  Lock,
   ArrowUpRight,
   Send,
   Phone,
   MessageSquare,
+  UploadCloud,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AppleSpinner } from "@/components/ui/AppleSpinner";
@@ -30,6 +30,10 @@ import { PaymentsDirectorySkeleton, PaymentsUserRecordsSkeleton } from "@/compon
 // Dynamic code-split: PaymentReceiptModal and print/share logic are kept out of initial bundle
 const PaymentReceiptModal = dynamic(
   () => import("@/components/PaymentReceiptModal").then((mod) => mod.PaymentReceiptModal),
+  { ssr: false }
+);
+const PaymentUploadModal = dynamic(
+  () => import("@/components/PaymentUploadModal").then((mod) => mod.PaymentUploadModal),
   { ssr: false }
 );
 
@@ -246,6 +250,8 @@ export function PaymentsSection({
     return "ACCOUNTS";
   };
   const [mainTab, setMainTab] = useState<"ACCOUNTS" | "ONLINE">(getInitialMainTab);
+  const [showPaymentUploadModal, setShowPaymentUploadModal] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const handleMainTabChange = (tab: "ACCOUNTS" | "ONLINE") => {
     setMainTab(tab);
@@ -313,7 +319,7 @@ export function PaymentsSection({
     return () => {
       isCancelled = true;
     };
-  }, [mainTab, deferredOnlineSearchQuery, onlineStatusFilter, onlineCurrentPage]);
+  }, [mainTab, deferredOnlineSearchQuery, onlineStatusFilter, onlineCurrentPage, refreshTrigger]);
 
   // Keep activeAccountNo in sync with prop updates without snapping back against local user clears
   const prevInitialAccountNoRef = useRef(initialAccountNo);
@@ -501,7 +507,6 @@ export function PaymentsSection({
   const [recordReceiptNo, setRecordReceiptNo] = useState("");
   const [recordChannel, setRecordChannel] = useState("Cash");
   const [recordSettlementType, setRecordSettlementType] = useState<"TOTAL" | "ARREARS">("TOTAL");
-  const [recordPassword, setRecordPassword] = useState("");
   const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
   const [recordError, setRecordError] = useState<string | null>(null);
 
@@ -569,7 +574,7 @@ export function PaymentsSection({
     return () => {
       isCancelled = true;
     };
-  }, [deferredSearchQuery, currentPage, initialAccountNo]);
+  }, [deferredSearchQuery, currentPage, initialAccountNo, refreshTrigger]);
 
   // Reset page to 1 when search query changes
   useEffect(() => {
@@ -628,10 +633,6 @@ export function PaymentsSection({
       setRecordError("Please enter the physical GCR booklet receipt number.");
       return;
     }
-    if (!recordPassword.trim()) {
-      setRecordError("Officer authorization password is required.");
-      return;
-    }
 
     setIsSubmittingPayment(true);
     try {
@@ -641,7 +642,6 @@ export function PaymentsSection({
         receiptNumber: recordReceiptNo.trim(),
         paymentMethod: recordChannel,
         settlementType: recordSettlementType,
-        adminPassword: recordPassword,
       });
 
       if (res.success) {
@@ -658,7 +658,6 @@ export function PaymentsSection({
 
         setRecordAmount("");
         setRecordReceiptNo("");
-        setRecordPassword("");
 
         // Optimistically update selectedAccount balance
         if (res.updatedProperty) {
@@ -892,7 +891,7 @@ export function PaymentsSection({
                 </div>
 
                 {/* 1. Standalone Static Search Toolbar for Online Payments */}
-                <div className="w-full bg-white border border-[#E8E8ED] rounded-[14px] px-3.5 py-3 sm:px-5 sm:py-3.5 shadow-xs shrink-0 flex items-center gap-3">
+                <div className="w-full bg-white border border-[#E8E8ED] rounded-[14px] px-3.5 py-3 sm:px-5 sm:py-3.5 shadow-xs shrink-0 flex items-center justify-between gap-3">
                   <div className="relative w-full max-w-md">
                     <Search className="w-4 h-4 absolute left-3 top-2.5 text-[#8E8E93]" />
                     <input
@@ -912,6 +911,16 @@ export function PaymentsSection({
                       </button>
                     )}
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowPaymentUploadModal(true)}
+                    className="h-9 px-3.5 rounded-xl border border-[#D2D2D7] bg-white hover:bg-[#F5F5F7] text-[#1D1D1F] font-semibold text-xs flex items-center gap-1.5 cursor-pointer shrink-0 transition-all shadow-xs"
+                    title="Upload Payment Records"
+                  >
+                    <UploadCloud className="w-4 h-4 text-[#007AFF]" />
+                    <span>Upload Payments</span>
+                  </button>
                 </div>
 
                 {/* 2. Standalone Table Container for Online Payments */}
@@ -1134,7 +1143,7 @@ export function PaymentsSection({
             ) : (
               <>
                 {/* 1. Standalone Static Search Toolbar Container (Detached from Table) */}
-                <div className="w-full bg-white border border-[#E8E8ED] rounded-[14px] px-3.5 py-3 sm:px-5 sm:py-3.5 shadow-xs shrink-0 flex items-center gap-3">
+                <div className="w-full bg-white border border-[#E8E8ED] rounded-[14px] px-3.5 py-3 sm:px-5 sm:py-3.5 shadow-xs shrink-0 flex items-center justify-between gap-3">
                   <div className="relative w-full max-w-md">
                     <Search className="w-4 h-4 absolute left-3 top-2.5 text-[#8E8E93]" />
                     <input
@@ -1154,6 +1163,16 @@ export function PaymentsSection({
                       </button>
                     )}
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowPaymentUploadModal(true)}
+                    className="h-9 px-3.5 rounded-xl border border-[#D2D2D7] bg-white hover:bg-[#F5F5F7] text-[#1D1D1F] font-semibold text-xs flex items-center gap-1.5 cursor-pointer shrink-0 transition-all shadow-xs"
+                    title="Upload Payment Records"
+                  >
+                    <UploadCloud className="w-4 h-4 text-[#007AFF]" />
+                    <span>Upload Payments</span>
+                  </button>
                 </div>
 
                 {/* 2. Standalone Table & Mobile List Container (Consumes all available space) */}
@@ -1340,7 +1359,6 @@ export function PaymentsSection({
                     setIsRecordModalOpen(true);
                     setRecordAmount("");
                     setRecordReceiptNo("");
-                    setRecordPassword("");
                     setRecordError(null);
                   }}
                   className="px-3.5 py-1.5 rounded-lg bg-[#007AFF] hover:bg-[#0066D6] text-white font-semibold text-xs flex items-center gap-1.5 shadow-[0px_1px_3px_0px_rgba(0,122,255,0.25)] transition-all cursor-pointer active:scale-98 min-h-[38px]"
@@ -1541,7 +1559,6 @@ export function PaymentsSection({
                   setIsRecordModalOpen(false);
                   setRecordAmount("");
                   setRecordReceiptNo("");
-                  setRecordPassword("");
                   setRecordError(null);
                 }}
                 className="w-7 h-7 rounded-lg flex items-center justify-center text-[#8E8E93] hover:text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors"
@@ -1640,26 +1657,6 @@ export function PaymentsSection({
                 </select>
               </div>
 
-              {/* Password */}
-              <div className="space-y-1 pt-2 border-t border-[#E8E8ED]">
-                <div className="flex items-center gap-1.5">
-                  <Lock className="w-3.5 h-3.5 text-[#007AFF]" />
-                  <label className="font-semibold text-[#1D1D1F] text-xs">
-                    Password *
-                  </label>
-                </div>
-                <input
-                  type="password"
-                  required
-                  autoComplete="new-password"
-                  name="officer_confirmation_secret"
-                  value={recordPassword}
-                  onChange={(e) => setRecordPassword(e.target.value)}
-                  placeholder="Password"
-                  className="w-full px-3 py-2 bg-white border border-[#D2D2D7] rounded-xl text-xs text-[#1D1D1F] outline-none focus:border-[#007AFF]"
-                />
-              </div>
-
               <div className="pt-2 flex items-center justify-end gap-2.5">
                 <button
                   type="button"
@@ -1668,7 +1665,6 @@ export function PaymentsSection({
                     setIsRecordModalOpen(false);
                     setRecordAmount("");
                     setRecordReceiptNo("");
-                    setRecordPassword("");
                     setRecordError(null);
                   }}
                   className="px-3.5 py-2 rounded-xl border border-[#D2D2D7] text-[#1D1D1F] font-semibold hover:bg-[#F5F5F7] transition-all cursor-pointer"
@@ -1860,6 +1856,16 @@ export function PaymentsSection({
           />
         )}
       </AnimatePresence>
+
+      {/* MODAL 3: PAYMENT RECORDS CSV UPLOAD (APPLE HIG COMPLIANT) */}
+      <PaymentUploadModal
+        isOpen={showPaymentUploadModal}
+        onClose={() => setShowPaymentUploadModal(false)}
+        onSuccess={(count, total) => {
+          showToast(`Successfully imported ${count} payments (${formatGhc(total)})`, "success");
+          setRefreshTrigger((prev) => prev + 1);
+        }}
+      />
     </div>
   );
 }

@@ -61,6 +61,15 @@ The most successful and enduring designs are based on a deep understanding of ho
 
 ---
 
+## 2.1 Strict Requirement: Zero Visible Scrollbar UI
+
+- **UNDER NO CIRCUMSTANCES render visible browser-native or custom scrollbar bars, thumbs, or tracks (`scrollbar-none` / zero-chrome standard).**
+- All scrollable views, data tables, mobile account cards, modal dialogs, drawers, and root shells across both Citizen App and Admin Portal must hide visual scrollbar chrome entirely (`scrollbar-width: none !important; -ms-overflow-style: none !important; ::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }`).
+- 100% natural touch scrolling, mouse-wheel scrolling, trackpad inertia, and keyboard navigation MUST remain active, smooth, and unobstructed.
+- Root page shells must strictly prevent body/window-level scrolling (`h-[100dvh] max-h-[100dvh] overflow-hidden` on `html, body`) so that outer browser scrollbars never appear. Only internal layout containers are permitted to scroll.
+
+---
+
 ## 3. Strict Requirement: Dynamic Responsive Layouts (No Hardcoding)
 
 - **UNDER NO CIRCUMSTANCES use hardcoded or arbitrary magic numbers (like `w-[92%]`, `pb-[104px]`, etc.) to force elements into alignment.**

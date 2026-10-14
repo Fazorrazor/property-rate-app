@@ -21,6 +21,12 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - Navigation tabs must use clean typographic links with subtle underline indicators or left border accents, never rounded pill containers.
 - All monetary amounts must strictly use Ghanaian Cedi (`GH₵`), with no dollar signs (`$`) anywhere in the application.
 
+## STRICT REQUIREMENT: ZERO VISIBLE SCROLLBAR UI
+- **Under NO circumstances render visible browser-native or custom scrollbar tracks, thumbs, or scroll chrome anywhere in the UI.**
+- All scrollable containers (data tables, mobile card lists, side drawers, dialogs, and main layout workspaces) must hide scrollbar UI completely (`scrollbar-width: none !important; -ms-overflow-style: none !important; ::-webkit-scrollbar { display: none !important; }`).
+- Scrolling functionality (touch gestures, mouse wheel, trackpad inertia, keyboard navigation) must remain 100% smooth and unobstructed.
+- Root layout shells must strictly enforce `h-[100dvh] max-h-[100dvh] overflow-hidden` on `html, body` to eliminate outer page scrollbars. All scrolling must be contained strictly inside internal view panels.
+
 ## MANDATORY UI COPY: PLAIN, FRIENDLY LANGUAGE (ZERO JARGON)
 - **Strictly Prohibit "Parcel" / "Parcels"**: Under NO circumstances use the word "parcel" or "parcels" in any user-facing text, tables, modals, badges, or buttons. Always use plain, friendly language: **"Property"**, **"Properties"**, or **"Property Account"**.
 - **Strictly Prohibit "Dossier"**: Under NO circumstances use the word "dossier" in user-facing copy. Always use plain, friendly terms: **"Ratepayer Profile"**, **"Owner Profile"**, or **"Property Details"**.
@@ -150,5 +156,24 @@ All implementations across both the Citizen App and the Admin Portal must adhere
 6. **Security Anomaly & Brute-Force Monitoring**:
    - Repeated authentication failures (e.g., velocity limit of 3–5 failures in a short window) must trigger rate-limiting security guards rather than silently dumping failed attempts to log disks.
 
+## MOBILE & DESKTOP PERFORMANCE BUDGET & FRAME RATE RULES (MANDATORY STANDARD)
 
+1. **Strict 60 FPS Frame Budget on 4x CPU Throttling**:
+   - All modals, bottom sheets, drawers, and transition elements must maintain a steady 60 FPS (<16.7ms per frame, 0 frames > 20ms) on a production build under 4x CPU slowdown.
+   - Long tasks during modal open/close animations must be 0 tasks > 50ms.
 
+2. **Prohibit Animated Backdrop Blur**:
+   - Under NO circumstances animate the blur radius or opacity of a blurred surface directly.
+   - Constrained devices (`navigator.hardwareConcurrency <= 4`, `navigator.deviceMemory <= 4`, or `prefers-reduced-transparency`) must automatically fall back to a high-performance flat semi-transparent scrim (`bg-black/60`).
+
+3. **Background List & Row Isolation**:
+   - Opening or closing a modal/sheet must NEVER trigger re-renders of background table rows, mobile list tiles, or metrics bars.
+   - All list rows and items must be wrapped in `React.memo` with stable event handler references (`useCallback`).
+
+4. **Dynamic Code-Splitting & Lazy Loading**:
+   - Heavy detail modals, receipts, share engines, and print routines must be code-split with `next/dynamic` (`ssr: false`) and prefetched on trigger hover/touch-start.
+   - Under NO circumstances dynamically inject `<style jsx global>` or runtime stylesheets during modal render. All print and sheet rules must reside in static CSS.
+
+5. **Scroll & Drag Gesture Isolation**:
+   - Drag gestures must be explicitly isolated using `useDragControls` attached strictly to dedicated drag handles (`touch-none` and `onPointerDown`), setting `dragListener={false}` on modal bodies.
+   - Modal scroll containers must enforce `contain: layout paint style`, `overscroll-behavior: contain`, `-webkit-overflow-scrolling: touch`, and `touch-action: pan-y`.

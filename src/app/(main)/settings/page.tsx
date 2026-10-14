@@ -105,6 +105,7 @@ export default function SettingsPage() {
             autoComplete="off"
             data-lpignore="true"
             data-1p-ignore="true"
+            data-bwignore="true"
             data-form-type="other"
           >
             {/* Anti-autofill Decoy Honeypot */}
@@ -118,6 +119,7 @@ export default function SettingsPage() {
                 autoComplete="off"
                 data-lpignore="true"
                 data-1p-ignore="true"
+                data-bwignore="true"
                 data-form-type="other"
                 autoCorrect="off"
                 autoCapitalize="characters"

@@ -139,7 +139,7 @@ function VerifyCheckoutContent() {
             onClick={() => window.history.back()}
             className="mt-4 px-5 py-2.5 rounded-xl bg-[#4B1426] hover:bg-[#3E101F] text-white font-medium text-xs transition-colors shadow-sm"
           >
-            Back to Payment
+            Back
           </button>
         </motion.div>
       )}

@@ -32,15 +32,19 @@ const securityHeaders = [
       "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://va.vercel-scripts.com https://js.paystack.co",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com data:",
-      "img-src 'self' data: blob: https://* http://*",
+      "img-src 'self' data: blob: https:",
       "connect-src 'self' https://*.supabase.co https://*.hubtel.com https://api.twilio.com https://sms.arkesel.com https://*.vercel-insights.com https://va.vercel-scripts.com https://api.paystack.co",
       "frame-src 'self' https://checkout.paystack.com",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
       "frame-ancestors 'self'",
     ].join("; "),
   },
 ];
 
 const nextConfig: NextConfig = {
+  poweredByHeader: false,
   async redirects() {
     return [
       {

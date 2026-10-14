@@ -9,13 +9,13 @@ const roboto = Roboto({
 });
 
 export const metadata: Metadata = {
-  title: "Heinz Tax Portal",
+  title: "HEINZ INTEGRATED SYSTEMS LIMITED",
   description: "Secure, offline-capable municipal property tax collection portal.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Heinz Tax",
+    title: "HEINZ Ltd.",
   },
   formatDetection: {
     telephone: false,

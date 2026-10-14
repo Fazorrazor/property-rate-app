@@ -180,7 +180,10 @@ export async function loginWithPhone(phoneNumberInput: string) {
       path: '/',
     });
     
-    cookieStore.set('pending_auth_otp', otp, {
+    const otpSecret = process.env.AUTH_SECRET || process.env.PAYSTACK_SECRET_KEY || 'kkma-otp-secret-salt';
+    const otpHash = crypto.createHmac('sha256', otpSecret).update(`${cleanPhone}:${otp}`).digest('hex');
+
+    cookieStore.set('pending_auth_otp_hash', otpHash, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
@@ -213,10 +216,11 @@ export async function verifyOtpAndLogin(otp: string, explicitPhone?: string) {
     const cookieStore = await cookies();
     const phoneToVerify =
       explicitPhone?.replace(/\D/g, '') || cookieStore.get('pending_auth_phone')?.value;
-    const storedOtp = cookieStore.get('pending_auth_otp')?.value;
+    const storedOtpHash = cookieStore.get('pending_auth_otp_hash')?.value;
+    const legacyStoredOtp = cookieStore.get('pending_auth_otp')?.value;
 
     // Strict non-empty validation to prevent undefined === undefined bypass
-    if (!cleanOtp || !storedOtp || !phoneToVerify) {
+    if (!cleanOtp || (!storedOtpHash && !legacyStoredOtp) || !phoneToVerify) {
       return { success: false, error: 'Authentication code has expired or is invalid. Please request a new code.' };
     }
 
@@ -228,12 +232,27 @@ export async function verifyOtpAndLogin(otp: string, explicitPhone?: string) {
       return { success: false, error: `Account verification locked due to failed attempts. Please wait ${waitSec}s.` };
     }
 
-    if (cleanOtp !== storedOtp) {
+    const otpSecret = process.env.AUTH_SECRET || process.env.PAYSTACK_SECRET_KEY || 'kkma-otp-secret-salt';
+    const computedHash = crypto.createHmac('sha256', otpSecret).update(`${phoneToVerify}:${cleanOtp}`).digest('hex');
+
+    let isValid = false;
+    if (storedOtpHash) {
+      const computedBuf = Buffer.from(computedHash, 'utf8');
+      const storedBuf = Buffer.from(storedOtpHash, 'utf8');
+      isValid = computedBuf.length === storedBuf.length && crypto.timingSafeEqual(computedBuf, storedBuf);
+    } else if (legacyStoredOtp) {
+      const cleanBuf = Buffer.from(cleanOtp, 'utf8');
+      const legacyBuf = Buffer.from(legacyStoredOtp, 'utf8');
+      isValid = cleanBuf.length === legacyBuf.length && crypto.timingSafeEqual(cleanBuf, legacyBuf);
+    }
+
+    if (!isValid) {
       if (verifyLimit) {
         verifyLimit.count += 1;
         if (verifyLimit.count >= 5) {
           verifyLimit.lockedUntil = now + 15 * 60 * 1000;
           cookieStore.delete('pending_auth_otp');
+          cookieStore.delete('pending_auth_otp_hash');
           return { success: false, error: 'Too many incorrect attempts. Verification locked for 15 minutes.' };
         }
       } else {
@@ -244,6 +263,10 @@ export async function verifyOtpAndLogin(otp: string, explicitPhone?: string) {
 
     // Clear verification rate limit on success
     otpVerifyRateLimitMap.delete(phoneToVerify);
+    cookieStore.delete('pending_auth_otp');
+    cookieStore.delete('pending_auth_otp_hash');
+    cookieStore.delete('pending_auth_phone');
+    cookieStore.delete('pending_auth_sent_at');
 
     let user = await prisma.user.findUnique({
       where: { phoneNumber: phoneToVerify },
@@ -327,7 +350,7 @@ export async function resendOtp() {
       }
     }
 
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otp = crypto.randomInt(100000, 999999).toString();
 
     if (process.env.NODE_ENV !== 'production') {
       const maskedPhone = phone.replace(/(\d{3})\d+(\d{3})/, '$1****$2');
@@ -340,7 +363,10 @@ export async function resendOtp() {
       `Your Property Rate Portal new login code is: ${otp}. Do not share this code with anyone.`
     );
 
-    cookieStore.set('pending_auth_otp', otp, {
+    const otpSecret = process.env.AUTH_SECRET || process.env.PAYSTACK_SECRET_KEY || 'kkma-otp-secret-salt';
+    const otpHash = crypto.createHmac('sha256', otpSecret).update(`${phone}:${otp}`).digest('hex');
+
+    cookieStore.set('pending_auth_otp_hash', otpHash, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
@@ -401,8 +427,8 @@ export async function claimAccessGrant(token: string) {
 
     const cleanToken = token.trim();
 
-    // Check if demo token in development/simulator
-    if (cleanToken.startsWith('demo_')) {
+    // Check if demo token in development/simulator (never in production)
+    if (process.env.NODE_ENV !== 'production' && cleanToken.startsWith('demo_')) {
       const dest = cleanToken.includes('_ckt_') ? 'checkout' : 'dashboard';
       const acc = cleanToken.replace(/^demo_(ast|ckt)_/, '');
       return {
@@ -564,7 +590,7 @@ export async function claimAccessGrant(token: string) {
     }
 
     if (!reuseSession || !sessionTokenToUse) {
-      sessionTokenToUse = `dev_${Math.random().toString(36).substring(2, 15)}_${Math.random().toString(36).substring(2, 15)}`;
+      sessionTokenToUse = `ses_${crypto.randomBytes(24).toString('base64url')}_${Date.now()}`;
       await prisma.session.create({
         data: {
           token: sessionTokenToUse,
@@ -1148,27 +1174,6 @@ export async function getCheckoutData(
       deterministicUser = await resolvePropertyUser(cleanPropertyId, user);
     }
 
-    if (deterministicUser && !user) {
-      try {
-        const cookieStore = await cookies();
-        const existingToken = cookieStore.get('auth_session')?.value;
-        if (!existingToken) {
-          const sessionToken = `ses_${Math.random().toString(36).substring(2, 12)}_${Date.now()}`;
-          await prisma.session.create({
-            data: { token: sessionToken, userId: deterministicUser.id },
-          }).catch(() => {});
-          cookieStore.set('auth_session', sessionToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
-            maxAge: 60 * 60 * 24 * 365,
-            path: '/',
-          });
-        }
-      } catch {
-        // Non-blocking
-      }
-    }
 
     const resolvedUserPhone = deterministicUser?.phoneNumber || targetProp?.owner?.mobileNumber || targetProp?.owner?.tel || '';
     const resolvedUserName = deterministicUser?.name || targetProp?.owner?.name || user?.name || ownerName || '';

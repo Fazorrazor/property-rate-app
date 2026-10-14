@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { prisma } from '@/lib/db';
 import { PaymentGateway } from '@/lib/payments/gateway';
 
@@ -76,11 +77,21 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  // Validate incoming webhook key if gateway secret is configured
+  // Validate incoming webhook key
   const expectedSecret = process.env.USSD_AUTH_SECRET;
-  if (expectedSecret) {
+  if (!expectedSecret) {
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[SECURITY ALERT] USSD_AUTH_SECRET is not configured in production environment.');
+      return NextResponse.json({ error: 'USSD gateway unconfigured or disabled.' }, { status: 503 });
+    }
+  } else {
     const authHeader = req.headers.get('x-ussd-auth-key') || req.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
-    if (!authHeader || authHeader !== expectedSecret) {
+    if (!authHeader) {
+      return NextResponse.json({ error: 'Unauthorized USSD gateway request' }, { status: 401 });
+    }
+    const expBuf = Buffer.from(expectedSecret, 'utf8');
+    const actBuf = Buffer.from(authHeader, 'utf8');
+    if (expBuf.length !== actBuf.length || !crypto.timingSafeEqual(expBuf, actBuf)) {
       return NextResponse.json({ error: 'Unauthorized USSD gateway request' }, { status: 401 });
     }
   }

@@ -125,6 +125,13 @@ export function OTPInput({ length = 6, onComplete, disabled = false }: OTPInputP
               type="text"
               inputMode="numeric"
               autoComplete="one-time-code"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              data-lpignore="true"
+              data-1p-ignore="true"
+              data-bwignore="true"
+              data-form-type="other"
               maxLength={1}
               value={digit}
               disabled={disabled}

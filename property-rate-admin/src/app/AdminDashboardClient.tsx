@@ -495,8 +495,6 @@ export default function AdminDashboardClient({ initialTab, initialAdmin, initial
   const [showPropertyModal, setShowPropertyModal] = useState(false);
   const [manualAmount, setManualAmount] = useState("");
   const [manualMethod, setManualMethod] = useState("Cash");
-  const [paymentAdminPassword, setPaymentAdminPassword] = useState("");
-  const [showPaymentPassword, setShowPaymentPassword] = useState(false);
 
   // Global Modal Active State for Background Interaction & Scroll Shielding
   const isAnyModalActive = Boolean(
@@ -1196,18 +1194,13 @@ export default function AdminDashboardClient({ initialTab, initialAdmin, initial
       showToast("Please enter a valid payment amount.", "error");
       return;
     }
-    if (!paymentAdminPassword.trim()) {
-      showToast("Security authorization password is required.", "error");
-      return;
-    }
 
     setIsProcessing(true);
     try {
-      const res = await recordManualCashPayment(targetAccountNo, num, manualMethod, paymentAdminPassword);
+      const res = await recordManualCashPayment(targetAccountNo, num, manualMethod);
       if (res.success) {
         setShowPaymentModal(false);
         setManualAmount("");
-        setPaymentAdminPassword("");
         setManualAccountSearch("");
         showToast(`Payment recorded successfully. GCR Receipt #${res.receiptNumber}`, "success");
 
@@ -3574,7 +3567,6 @@ export default function AdminDashboardClient({ initialTab, initialAdmin, initial
             setSelectedAccount(null);
             setManualAccountSearch(acc);
           }
-          setPaymentAdminPassword("");
           setShowPaymentModal(true);
         }}
         onOpenStatement={(acc) => {
@@ -3916,40 +3908,6 @@ export default function AdminDashboardClient({ initialTab, initialAdmin, initial
                   <option>Cash</option>
                   <option>Cheque</option>
                 </select>
-              </div>
-
-              {/* Password */}
-              <div className="space-y-1 pt-2 border-t border-[#E5E5EA]">
-                <div className="flex items-center gap-1.5">
-                  <ShieldCheck className="w-3.5 h-3.5 text-[#007AFF]" />
-                  <label className="text-[#1C1C1E] font-semibold text-xs block">
-                    Password *
-                  </label>
-                </div>
-                <div className="relative">
-                  <input
-                    required
-                    type={showPaymentPassword ? "text" : "password"}
-                    name="municipal_manual_settlement_auth_key"
-                    autoComplete="new-password"
-                    data-lpignore="true"
-                    data-1p-ignore="true"
-                    data-bwignore="true"
-                    data-form-type="other"
-                    value={paymentAdminPassword}
-                    onChange={(e) => setPaymentAdminPassword(e.target.value)}
-                    aria-label="Password"
-                    placeholder="Password"
-                    className="w-full h-10 px-3 pr-9 rounded-lg border border-[#E5E5EA] bg-white text-xs font-semibold text-[#1C1C1E] focus:outline-none focus:border-[#007AFF] focus:ring-1 focus:ring-[#007AFF] transition-colors"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPaymentPassword(!showPaymentPassword)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8E8E93] hover:text-[#1C1C1E] p-1 cursor-pointer"
-                  >
-                    {showPaymentPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                  </button>
-                </div>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#E5E5EA]">

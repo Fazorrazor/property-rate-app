@@ -3115,14 +3115,6 @@ export async function recordManualCashPayment(
             return { success: false, error: 'Unauthorized session. Please sign in to authorize payment settlement.' };
         }
 
-        if (!adminPassword) {
-            return { success: false, error: 'Security authorization password is required to authorize payment settlement.' };
-        }
-        const isAuthorized = verifyPassword(adminPassword, admin.passwordHash);
-        if (!isAuthorized) {
-            return { success: false, error: 'Incorrect security authorization password. Settlement authorization rejected.' };
-        }
-
         const property = await prisma.property.findUnique({
             where: { accountNumber },
             include: { users: true, receipts: true },
@@ -5604,14 +5596,6 @@ export async function recordInPersonPayment(params: {
       return { success: false, error: 'Unauthorized session. Please sign in to record payment.' };
     }
 
-    if (!params.adminPassword) {
-      return { success: false, error: 'Security authorization password is required.' };
-    }
-    const isAuthorized = verifyPassword(params.adminPassword, admin.passwordHash);
-    if (!isAuthorized) {
-      return { success: false, error: 'Incorrect authorization password. Settelement authorization rejected.' };
-    }
-
     const cleanAcc = (params.accountNumber || '').trim();
     if (!cleanAcc) {
       return { success: false, error: 'Property account number is required.' };
@@ -6106,6 +6090,194 @@ export async function getAccountRemainingBalance(accountNo: string): Promise<num
     return 0;
   }
 }
+
+export async function importPaymentRecordsBatch(
+  rows: any[],
+  adminPassword?: string
+): Promise<{
+  success: boolean;
+  error?: string;
+  importedCount?: number;
+  skippedCount?: number;
+  totalAmount?: number;
+}> {
+  try {
+    const admin = await requireAdminSession();
+    if (!admin) {
+      return { success: false, error: 'Unauthorized session. Please sign in to import payment records.' };
+    }
+
+    if (adminPassword) {
+      const isAuthorized = verifyPassword(adminPassword, admin.passwordHash);
+      if (!isAuthorized) {
+        return { success: false, error: 'Incorrect administrator security password. Batch payment import rejected.' };
+      }
+    }
+
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return { success: false, error: 'No payment records provided in import batch.' };
+    }
+
+    let importedCount = 0;
+    let skippedCount = 0;
+    let totalImportedAmount = 0;
+
+    for (const r of rows) {
+      const accountNumber = (
+        r.accountNumber ||
+        r['Account Number'] ||
+        r['account_no'] ||
+        r['AccountNo'] ||
+        r['Account'] ||
+        ''
+      ).trim();
+
+      const rawAmount = r.amount !== undefined ? r.amount : (r['Amount'] !== undefined ? r['Amount'] : (r['Amount Paid'] !== undefined ? r['Amount Paid'] : r['amount_paid']));
+      const cleanAmountStr = String(rawAmount || '').replace(/[^0-9.]/g, '');
+      const numAmount = Number(cleanAmountStr);
+
+      if (!accountNumber || isNaN(numAmount) || numAmount <= 0) {
+        skippedCount++;
+        continue;
+      }
+
+      // Find property in adminDb
+      const property = await adminDb.property.findUnique({
+        where: { accountNumber },
+      });
+
+      if (!property) {
+        skippedCount++;
+        continue;
+      }
+
+      const rawReceiptNo = (
+        r.receiptNumber ||
+        r['Receipt Number'] ||
+        r['Receipt'] ||
+        r['GCR'] ||
+        r['gcrNr'] ||
+        r['gcr_nr'] ||
+        ''
+      ).trim();
+
+      const receiptNo = rawReceiptNo || `PAY-UP-${Date.now().toString(36).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
+      const pmtMethod = (r.paymentMethod || r['Payment Method'] || r['Mode'] || r['Channel'] || 'Bank / Bulk Upload').trim();
+      const datePaidStr = (r.paymentDate || r['Payment Date'] || r['Date'] || new Date().toISOString()).trim();
+      let datePaid = new Date();
+      if (!isNaN(Date.parse(datePaidStr))) {
+        datePaid = new Date(datePaidStr);
+      }
+
+      // Sequential Municipal Debt Waterfall
+      const currArr = Number(property.currentArrears !== undefined ? property.currentArrears : (property.arrears || 0));
+      const currFee = Number(property.currentFee || property.current_bill || 0);
+      const prevPaidCycle = Number(property.totalPaidCycle !== undefined ? property.totalPaidCycle : (property.amountPaidLastYear || 0));
+
+      const arrearsDeduction = Math.min(currArr, numAmount);
+      const newCurrentArrears = Math.max(0, Number((currArr - arrearsDeduction).toFixed(2)));
+      const remainingPayment = Math.max(0, Number((numAmount - arrearsDeduction).toFixed(2)));
+      const feeDeduction = Math.min(currFee, remainingPayment);
+      const newCurrentFee = Math.max(0, Number((currFee - feeDeduction).toFixed(2)));
+
+      const newTotalPaidCycle = Number((prevPaidCycle + numAmount).toFixed(2));
+      const prevAmountPaid = Number(property.amount_paid !== undefined ? property.amount_paid : (property.amountPaidLastYear || 0));
+      const newAmountPaid = Number((prevAmountPaid + numAmount).toFixed(2));
+      const newTotalDue = Math.max(0, Number((newCurrentArrears + newCurrentFee).toFixed(2)));
+      const newStatus: 'PAID' | 'PARTIALLY_PAID' | 'UNPAID' = newTotalDue <= 0 ? 'PAID' : 'PARTIALLY_PAID';
+
+      // 1. Update Property
+      await adminDb.property.update({
+        where: { id: property.id },
+        data: {
+          currentArrears: newCurrentArrears,
+          current_arrears: newCurrentArrears,
+          totalPaidCycle: newTotalPaidCycle,
+          total_paid_cycle: newTotalPaidCycle,
+          amount_paid: newAmountPaid,
+          amountPaidLastYear: newAmountPaid,
+          currentFee: newCurrentFee,
+          current_bill: newCurrentFee,
+          totalAmountDue: newTotalDue,
+          outstanding_amt: newTotalDue,
+          status: newStatus,
+        },
+      });
+
+      // 2. Create Receipt
+      try {
+        await adminDb.receipt.create({
+          data: {
+            userId: property.ownerId || 'OFFICE_SETTLEMENT',
+            propertyId: property.id,
+            amount: numAmount,
+            settlementType: 'TOTAL',
+            paymentMethod: pmtMethod,
+            status: 'PAID',
+            isPhysicalIssued: Boolean(rawReceiptNo),
+            receiptNumber: receiptNo,
+            collectorName: admin.name || admin.username,
+            cashierName: admin.name || admin.username,
+            datePaid: datePaid.toISOString(),
+          },
+        });
+      } catch (rErr) {
+        console.warn('[importPaymentRecordsBatch] receipt create notice:', rErr);
+      }
+
+      // 3. Create FeePayment record for cadastre consistency
+      try {
+        await supabase.from('FeePayment').insert([{
+          id: `fp_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`,
+          accountNo: property.accountNumber,
+          arrearsPd: arrearsDeduction,
+          curAmtPd: feeDeduction,
+          amtPaid: numAmount,
+          datePaid: datePaid.toISOString(),
+          pmtMode: pmtMethod,
+          gcrNr: receiptNo,
+          collectorsCollectorId: admin.username || admin.id,
+          cashiersCashierId: admin.username || admin.id,
+          propertyId: property.id,
+          transactionId: receiptNo,
+        }]);
+      } catch (fpErr) {
+        console.warn('[importPaymentRecordsBatch] FeePayment insert notice:', fpErr);
+      }
+
+      importedCount++;
+      totalImportedAmount += numAmount;
+    }
+
+    // 4. Audit Log
+    try {
+      await adminDb.auditLog.create({
+        data: {
+          action: 'BATCH_PAYMENT_IMPORT',
+          entityType: 'Receipt',
+          entityId: admin.id,
+          details: `Imported ${importedCount} payment records totaling GH₵ ${totalImportedAmount.toFixed(2)} via batch upload (skipped ${skippedCount}).`,
+          adminId: admin.id,
+        },
+      });
+    } catch (audErr) {
+      console.warn('[importPaymentRecordsBatch] Audit log notice:', audErr);
+    }
+
+    revalidatePath('/payments');
+
+    return {
+      success: true,
+      importedCount,
+      skippedCount,
+      totalAmount: totalImportedAmount,
+    };
+  } catch (error: any) {
+    console.error('Error importing payment records batch:', error);
+    return { success: false, error: error.message || 'Failed to process payment batch import.' };
+  }
+}
+
 
 
 

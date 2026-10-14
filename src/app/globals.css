@@ -1,25 +1,51 @@
 @import "tailwindcss";
 
 :root {
-  --background: #F4F7F6;
-  --foreground: #121212;
+  --background: #F2F2F7;
+  --foreground: #000000;
   
-  --primary: #121330;
-  --primary-hover: #000000;
+  --primary: #007AFF;
+  --primary-hover: #0062CC;
   --on-primary: #FFFFFF;
   
   --surface: #FFFFFF;
-  --surface-subtle: #F8F9FA;
-  --on-surface: #121212;
-  --on-surface-muted: #717171;
-  --on-surface-subtle: #80868B;
+  --surface-subtle: #F2F2F7;
+  --on-surface: #000000;
+  --on-surface-muted: #8E8E93;
+  --on-surface-subtle: #C7C7CC;
   
-  --accent-mulberry: #121212;
-  --accent-mulberry-light: #F4F7F6;
-  --accent-mulberry-border: #E8EAED;
+  --accent-blue: #007AFF;
+  --status-red: #FF3B30;
+  --status-green: #34C759;
+  --status-amber: #FF9500;
+  --status-gray: #8E8E93;
   
-  --border-light: #DADCE0;
-  --border-subtle: #E8EAED;
+  --border-light: rgba(60, 60, 67, 0.18);
+  --border-subtle: rgba(60, 60, 67, 0.12);
+}
+
+.dark {
+  --background: #000000;
+  --foreground: #FFFFFF;
+  
+  --primary: #0A84FF;
+  --primary-hover: #0071E3;
+  --on-primary: #FFFFFF;
+  
+  --surface: #1C1C1E;
+  --surface-subtle: #2C2C2E;
+  --on-surface: #FFFFFF;
+  --on-surface-muted: #98989D;
+  --on-surface-subtle: #48484A;
+  
+  --accent-blue: #0A84FF;
+  --status-red: #FF453A;
+  --status-green: #30D158;
+  --status-amber: #FF9F0A;
+  --status-gray: #98989D;
+  
+  --border-light: rgba(255, 255, 255, 0.15);
+  --border-subtle: rgba(255, 255, 255, 0.1);
 }
 
 @layer base {
@@ -140,5 +166,69 @@ input[type="password"]::-ms-clear {
   display: none !important;
   width: 0 !important;
   height: 0 !important;
+}
+
+/* Zero Visible Scrollbar UI Standard (Apple HIG / Zero-Chrome Fluid UX)
+   Hides all visible scrollbar chrome globally across all browsers (WebKit, Firefox, IE/Edge)
+   while preserving 100% natural touch swiping, mouse wheel, trackpad, and keyboard scrollability.
+   Ensures all current and future components render with zero visible scrollbar chrome. */
+html,
+body,
+* {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+*::-webkit-scrollbar,
+::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+}
+
+.scrollbar-none::-webkit-scrollbar,
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.font-tabular {
+  font-variant-numeric: tabular-nums slashed-zero;
+}
+
+/* Print Stylesheet for Official Municipal Receipts */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  
+  header,
+  nav,
+  button,
+  input,
+  .no-print {
+    display: none !important;
+  }
+  
+  .print-only {
+    display: block !important;
+  }
+
+  .print-card {
+    border: none !important;
+    box-shadow: none !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+  }
+
+  details,
+  [data-disclosure-content] {
+    display: block !important;
+    height: auto !important;
+    opacity: 1 !important;
+  }
 }
 

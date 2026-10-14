@@ -945,6 +945,14 @@ function CheckoutContent() {
                         if (detected) setNetwork(detected);
                       }}
                       placeholder="024 000 0000"
+                      autoComplete="off"
+                      autoCorrect="off"
+                      autoCapitalize="off"
+                      spellCheck={false}
+                      data-lpignore="true"
+                      data-1p-ignore="true"
+                      data-bwignore="true"
+                      data-form-type="other"
                       className="w-full h-9 px-3 rounded-lg bg-surface-subtle border border-border-light/80 text-xs font-medium text-foreground focus:outline-none focus:border-[#007AFF] focus:bg-surface focus:ring-1 focus:ring-[#007AFF] transition-all placeholder:text-on-surface-muted/50"
                     />
                   </div>
@@ -973,6 +981,14 @@ function CheckoutContent() {
                         setIsHubtelVerified(false);
                       }}
                       placeholder="Kwame Mensah"
+                      autoComplete="off"
+                      autoCorrect="off"
+                      autoCapitalize="words"
+                      spellCheck={false}
+                      data-lpignore="true"
+                      data-1p-ignore="true"
+                      data-bwignore="true"
+                      data-form-type="other"
                       className="w-full h-9 px-3 rounded-lg bg-surface-subtle border border-border-light/80 text-xs font-medium text-foreground focus:outline-none focus:border-[#007AFF] focus:bg-surface focus:ring-1 focus:ring-[#007AFF] transition-all placeholder:text-on-surface-muted/50"
                     />
                   </div>
@@ -1067,6 +1083,13 @@ function CheckoutContent() {
                   inputMode="numeric"
                   pattern="[0-9]*"
                   autoComplete="one-time-code"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  data-bwignore="true"
+                  data-form-type="other"
                   maxLength={6}
                   autoFocus
                   value={otpCode}
@@ -1353,6 +1376,14 @@ function CheckoutContent() {
                     value={tempAmount}
                     onChange={(e) => setTempAmount(e.target.value)}
                     placeholder={actualBill.toString()}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
+                    data-lpignore="true"
+                    data-1p-ignore="true"
+                    data-bwignore="true"
+                    data-form-type="other"
                     className={`w-full h-11 pl-12 pr-4 rounded-xl bg-surface-subtle border text-sm font-semibold text-foreground focus:outline-none transition-colors ${
                       tempValidationError
                         ? "border-red-500 focus:border-red-500"
